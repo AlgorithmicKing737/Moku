@@ -44,7 +44,7 @@
 
   function fmtTime(ts: number | null): string {
     if (ts === null) return "—";
-    return new Date(ts).toLocaleTimeString();
+    return new Date(ts).toLocaleString([], { dateStyle: "medium", timeStyle: "medium" });
   }
 
   async function forceTokenRefresh() {

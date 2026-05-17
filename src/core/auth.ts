@@ -266,7 +266,6 @@ export const uiAuth = {
       clientMutationId: payload.clientMutationId ?? existing.clientMutationId,
       ...withExpiryFromSettings(payload.accessToken, jwt),
       refreshToken: existing.refreshToken,
-      refreshExpiresAt: existing.refreshExpiresAt,
     });
   },
   clearToken: () => {
@@ -577,11 +576,10 @@ export async function loginUI(user: string, pass: string): Promise<void> {
   };
 
   uiAuth.setLoginSession(preliminarySession, null);
+  updateSettings({ serverAuthMode: "UI_LOGIN", serverAuthUser: user, serverAuthPass: "" });
 
   const jwt = await getJwtSettings(true).catch(() => null);
   uiAuth.setLoginSession(preliminarySession, jwt);
-
-  updateSettings({ serverAuthMode: "UI_LOGIN", serverAuthUser: user, serverAuthPass: "" });
 }
 
 export async function loginBasic(user: string, pass: string): Promise<void> {
