@@ -2,6 +2,7 @@
   import ThreeDCard from "@shared/manga/ThreeDCard.svelte";
   import { store, addToast } from "@store/state.svelte";
   import { cache } from "@core/cache/index";
+  import { getUiAuthDebugStatus, refreshUiAccessToken, type UiAuthDebugStatus } from "@core/auth";
   import { invoke } from "@tauri-apps/api/core";
 
   interface PerfSnapshot { cacheEntries: number; cacheKeys: string[]; oldestEntryMs: number | null; newestEntryMs: number | null; }
@@ -12,12 +13,56 @@
   let appVersion      = $state("…");
   let helloAvailable  = $state<boolean | null>(null);
   let helloBusy       = $state(false);
+  let authStatus      = $state<UiAuthDebugStatus | null>(null);
+  let authRefreshBusy = $state(false);
 
   $effect(() => {
     import("@tauri-apps/api/app").then(m => m.getVersion()).then(v => appVersion = v).catch(() => {});
     refreshPerfMetrics();
+    refreshAuthStatus();
     invoke<boolean>("windows_hello_available").then(v => helloAvailable = v).catch(() => helloAvailable = false);
+
+    const timer = setInterval(() => refreshAuthStatus(), 1000);
+    return () => clearInterval(timer);
   });
+
+  function refreshAuthStatus() {
+    authStatus = getUiAuthDebugStatus();
+  }
+
+  function fmtCountdown(ms: number | null): string {
+    if (ms === null) return "—";
+    if (ms <= 0) return "expired";
+    const total = Math.floor(ms / 1000);
+    const hours = Math.floor(total / 3600);
+    const mins = Math.floor((total % 3600) / 60);
+    const secs = total % 60;
+    if (hours > 0) return `${hours}h ${mins}m ${secs}s`;
+    if (mins > 0) return `${mins}m ${secs}s`;
+    return `${secs}s`;
+  }
+
+  function fmtTime(ts: number | null): string {
+    if (ts === null) return "—";
+    return new Date(ts).toLocaleTimeString();
+  }
+
+  async function forceTokenRefresh() {
+    authRefreshBusy = true;
+    try {
+      const token = await refreshUiAccessToken(true);
+      addToast({
+        kind: token ? "success" : "info",
+        title: "UI auth refresh",
+        body: token ? "Refresh succeeded" : "No refreshed token available",
+      });
+    } catch (e: any) {
+      addToast({ kind: "error", title: "UI auth refresh", body: String(e?.message ?? e) });
+    } finally {
+      authRefreshBusy = false;
+      refreshAuthStatus();
+    }
+  }
 
   function refreshPerfMetrics() {
     let entries = 0, oldest: number | null = null, newest: number | null = null;
@@ -75,7 +120,7 @@
       <div class="s-row">
         <div class="s-row-info"><span class="s-label">Fire test toast</span><span class="s-desc">Triggers each kind with realistic content</span></div>
         <div class="s-dev-pill-group">
-          {#each ([["success","S"],["error","E"],["info","I"],["download","D"]] as const) as [kind, label]}
+          {#each ([["success","S"],["error","E"],["info","I"],["download","D"]] as const) as [kind, label] (kind)}
             <button class="s-dev-pill {kind}" onclick={() => addToast({
               kind,
               title: kind === "success" ? "Library updated" : kind === "error" ? "Could not reach server" : kind === "info" ? "Already up to date" : "Download complete",
@@ -122,7 +167,7 @@
         <div class="s-row" style="flex-direction:column;align-items:flex-start;gap:var(--sp-3)">
           <span class="s-desc">3D tilt cards — hover to preview</span>
           <div style="display:flex;gap:var(--sp-3)">
-            {#each [{ title: "Berserk", sub: "Ch. 372", hue: "265" },{ title: "Vinland Saga", sub: "Ch. 208", hue: "200" },{ title: "Dungeon Meshi", sub: "Ch. 97", hue: "140" }] as card}
+            {#each [{ title: "Berserk", sub: "Ch. 372", hue: "265" },{ title: "Vinland Saga", sub: "Ch. 208", hue: "200" },{ title: "Dungeon Meshi", sub: "Ch. 97", hue: "140" }] as card (card.title)}
               <ThreeDCard>
                 <div style="width:72px;height:100px;border-radius:var(--radius-md);background:hsl({card.hue},40%,18%);display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:var(--sp-2)">
                   <span style="font-size:var(--text-2xs);color:var(--text-secondary);text-align:center;line-height:1.2">{card.title}</span>
@@ -155,6 +200,34 @@
           {/if}
         </div>
         <button class="s-btn-icon" onclick={refreshPerfMetrics} title="Refresh cache stats">↺</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="s-section">
+    <p class="s-section-title">Auth (UI Login)</p>
+    <div class="s-section-body">
+      <div class="s-dev-grid">
+        <span class="s-dev-key">Mode</span> <span class="s-dev-val">{authStatus?.mode ?? "—"}</span>
+        <span class="s-dev-key">Session</span> <span class="s-dev-val">{authStatus?.hasSession ? "present" : "none"}</span>
+        <span class="s-dev-key">Refresh token</span> <span class="s-dev-val">{authStatus?.hasRefreshToken ? "present" : "none"}</span>
+        <span class="s-dev-key">Access expires in</span> <span class="s-dev-val">{fmtCountdown(authStatus?.accessExpiresInMs ?? null)}</span>
+        <span class="s-dev-key">Refresh expires in</span> <span class="s-dev-val">{fmtCountdown(authStatus?.refreshExpiresInMs ?? null)}</span>
+        <span class="s-dev-key">Refresh window</span> <span class="s-dev-val">{authStatus?.shouldRefreshSoon ? "open" : "not yet"}</span>
+        <span class="s-dev-key">Refresh in-flight</span> <span class="s-dev-val">{authStatus?.refreshInFlight ? "yes" : "no"}</span>
+      </div>
+      <div class="s-row">
+        <div class="s-row-info">
+          <span class="s-desc">Access expiry at: {fmtTime(authStatus?.accessExpiresAt ?? null)}</span>
+          <span class="s-desc">Refresh expiry at: {fmtTime(authStatus?.refreshExpiresAt ?? null)}</span>
+          <span class="s-desc">Skew window: {Math.round((authStatus?.skewMs ?? 0) / 1000)}s before expiry</span>
+        </div>
+        <div class="s-btn-row">
+          <button class="s-btn" onclick={refreshAuthStatus}>Refresh</button>
+          <button class="s-btn s-btn-accent" onclick={forceTokenRefresh} disabled={authRefreshBusy || authStatus?.mode !== "UI_LOGIN" || !authStatus?.hasRefreshToken}>
+            {authRefreshBusy ? "Refreshing…" : "Force refresh"}
+          </button>
+        </div>
       </div>
     </div>
   </div>
