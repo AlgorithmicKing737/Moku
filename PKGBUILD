@@ -13,17 +13,24 @@ depends=(
 )
 makedepends=(
     'rust'
-    'cargo'
-    'nodejs'
-    'pnpm'
+    'nodejs-pnpm'
 )
+optdepends=(
+    'discord: Discord rich presence'
+)
+options=('!strip')
 source=(
     "$pkgname-$pkgver.tar.gz::https://github.com/moku-project/Moku/archive/refs/tags/v$pkgver.tar.gz"
     "Suwayomi-Server-v2.1.2087.jar::https://github.com/Suwayomi/Suwayomi-Server-preview/releases/download/v2.1.2087/Suwayomi-Server-v2.1.2087.jar"
 )
+noextract=("Suwayomi-Server-v2.1.2087.jar")
 sha256sums=(
     'fc1c8268b812e70e56460c8930ca8ae83bcd30eea5903ddfef4e30a3a9a5c1cc'
     'f589a422674252394c13b289a9c8be691905bf583efb7f4d5f1501ae5e91e6b3'
+)
+b2sums=(
+    'SKIP'
+    'SKIP'
 )
 
 prepare() {
@@ -52,7 +59,7 @@ package() {
     cat > "$pkgdir/usr/lib/moku/tachidesk/default-conf/server.conf" << 'CONF'
 server.ip = "127.0.0.1"
 server.port = 4567
-server.webUIEnabled = true
+server.webUIEnabled = false
 server.initialOpenInBrowserEnabled = false
 server.systemTrayEnabled = false
 server.downloadAsCbz = true
