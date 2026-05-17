@@ -119,28 +119,47 @@ function withExpiryFromSettings(
 }
 
 async function fetchJwtSettings(base: string): Promise<JwtSettings | null> {
-  const res = await fetch(`${base}/api/graphql`, {
-    method: "POST",
-    credentials: "omit",
-    headers: { "Content-Type": "application/json" },
-    body: gqlBody(
-      `query GetJWTSettings {
-         settings {
-           jwtAudience
-           jwtRefreshExpiry
-           jwtTokenExpiry
-         }
-       }`,
-    ),
-    signal: timeoutSignal(5000),
-  });
+  const res = await fetchAuthenticated(
+    `${base}/api/graphql`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: gqlBody(
+        `query GetJWTSettings {
+           settings {
+             jwtAudience
+             jwtRefreshExpiry
+             jwtTokenExpiry
+           }
+         }`,
+      ),
+    },
+    timeoutSignal(5000),
+  );
 
-  if (!res.ok) return null;
+  if (!res.ok) {
+    authDebug("JWT settings fetch failed", { status: res.status });
+    return null;
+  }
+
   const json = await res.json();
-  if (json?.errors?.length) return null;
+  if (json?.errors?.length) {
+    authDebug("JWT settings query error", { errors: json.errors });
+    return null;
+  }
 
   const settings = json?.data?.settings;
-  if (!settings || typeof settings !== "object") return null;
+  if (!settings || typeof settings !== "object") {
+    authDebug("JWT settings missing or invalid", { settings });
+    return null;
+  }
+
+  authDebug("JWT settings fetched", {
+    hasAudience: !!settings.jwtAudience,
+    tokenExpiry: settings.jwtTokenExpiry,
+    refreshExpiry: settings.jwtRefreshExpiry,
+  });
+
   return {
     jwtAudience: typeof settings.jwtAudience === "string" ? settings.jwtAudience : null,
     jwtRefreshExpiry: typeof settings.jwtRefreshExpiry === "string" ? settings.jwtRefreshExpiry : null,
@@ -505,6 +524,12 @@ export function getUiAuthDebugStatus(now = Date.now()): UiAuthDebugStatus {
   const accessExpiresAt = session?.accessExpiresAt ?? null;
   const refreshExpiresAt = session?.refreshExpiresAt ?? null;
 
+  console.log("Calculating debug status", {
+    session,
+    accessExpiresAt,
+    refreshExpiresAt,
+  });
+
   return {
     mode: (store.settings.serverAuthMode ?? "NONE") as AuthMode,
     serverBase: getServerBase(),
@@ -543,15 +568,19 @@ export async function loginUI(user: string, pass: string): Promise<void> {
   const refreshToken: string | undefined = payload?.refreshToken;
   if (!accessToken || !refreshToken) throw new Error(json?.errors?.[0]?.message ?? "Login failed");
 
+  authDebug("login success", { user });
+
+  const preliminarySession = {
+    accessToken,
+    refreshToken,
+    clientMutationId: typeof payload?.clientMutationId === "string" ? payload.clientMutationId : undefined,
+  };
+
+  uiAuth.setLoginSession(preliminarySession, null);
+
   const jwt = await getJwtSettings(true).catch(() => null);
-  uiAuth.setLoginSession(
-    {
-      accessToken,
-      refreshToken,
-      clientMutationId: typeof payload?.clientMutationId === "string" ? payload.clientMutationId : undefined,
-    },
-    jwt,
-  );
+  uiAuth.setLoginSession(preliminarySession, jwt);
+
   updateSettings({ serverAuthMode: "UI_LOGIN", serverAuthUser: user, serverAuthPass: "" });
 }
 
