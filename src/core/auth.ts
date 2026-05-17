@@ -10,25 +10,156 @@ export class AuthRequiredError extends Error {
 }
 
 const TOKEN_KEY = "moku_access_token";
+const UI_SESSION_KEY = "moku_ui_auth_session";
+const TOKEN_REFRESH_SKEW_MS = 30_000;
 
 interface StoredAccessToken {
   base: string;
   token: string;
 }
 
+interface StoredUiAuthSession {
+  base: string;
+  accessToken: string;
+  refreshToken?: string;
+  clientMutationId?: string;
+  accessExpiresAt?: number | null;
+  refreshExpiresAt?: number | null;
+}
+
+interface JwtSettings {
+  jwtAudience?: string | null;
+  jwtRefreshExpiry?: number | null;
+  jwtTokenExpiry?: number | null;
+}
+
 let _accessToken: string | null = null;
 let _accessTokenBase: string | null = null;
+let _uiSession: StoredUiAuthSession | null = null;
+let _refreshPromise: Promise<string | null> | null = null;
+let _jwtSettingsBase: string | null = null;
+let _jwtSettings: JwtSettings | null = null;
+let _jwtSettingsFetchedAt = 0;
+
+function decodeJwtExpiryMs(token: string): number | null {
+  try {
+    const payload = token.split(".")[1];
+    if (!payload) return null;
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), "=");
+    const decoded = atob(padded);
+    const json = JSON.parse(decoded) as { exp?: number };
+    return typeof json.exp === "number" ? json.exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+function isExpired(expiresAt?: number | null, skewMs = TOKEN_REFRESH_SKEW_MS): boolean {
+  if (!expiresAt || !Number.isFinite(expiresAt)) return false;
+  return Date.now() >= expiresAt - skewMs;
+}
+
+function withExpiryFromSettings(
+  accessToken: string,
+  jwt: JwtSettings | null,
+): Pick<StoredUiAuthSession, "accessExpiresAt" | "refreshExpiresAt"> {
+  const now = Date.now();
+  const accessExpiresAt =
+    decodeJwtExpiryMs(accessToken)
+    ?? (typeof jwt?.jwtTokenExpiry === "number" ? now + jwt.jwtTokenExpiry * 1000 : null);
+  const refreshExpiresAt =
+    typeof jwt?.jwtRefreshExpiry === "number" ? now + jwt.jwtRefreshExpiry * 1000 : null;
+  return { accessExpiresAt, refreshExpiresAt };
+}
+
+async function fetchJwtSettings(base: string): Promise<JwtSettings | null> {
+  const res = await fetch(`${base}/api/graphql`, {
+    method: "POST",
+    credentials: "omit",
+    headers: { "Content-Type": "application/json" },
+    body: gqlBody(
+      `query GetJWTSettings {
+         settings {
+           jwtAudience
+           jwtRefreshExpiry
+           jwtTokenExpiry
+         }
+       }`,
+    ),
+    signal: timeoutSignal(5000),
+  });
+
+  if (!res.ok) return null;
+  const json = await res.json();
+  if (json?.errors?.length) return null;
+
+  const settings = json?.data?.settings;
+  if (!settings || typeof settings !== "object") return null;
+  return {
+    jwtAudience: typeof settings.jwtAudience === "string" ? settings.jwtAudience : null,
+    jwtRefreshExpiry: typeof settings.jwtRefreshExpiry === "number" ? settings.jwtRefreshExpiry : null,
+    jwtTokenExpiry: typeof settings.jwtTokenExpiry === "number" ? settings.jwtTokenExpiry : null,
+  };
+}
+
+async function getJwtSettings(force = false): Promise<JwtSettings | null> {
+  const base = getServerBase();
+  const freshEnough = Date.now() - _jwtSettingsFetchedAt < 60_000;
+  if (!force && _jwtSettingsBase === base && _jwtSettings && freshEnough) return _jwtSettings;
+
+  const jwt = await fetchJwtSettings(base);
+  _jwtSettingsBase = base;
+  _jwtSettings = jwt;
+  _jwtSettingsFetchedAt = Date.now();
+  return jwt;
+}
 
 export const uiAuth = {
+  getSession: () => {
+    const base = getServerBase();
+    if (_uiSession && _uiSession.base === base) return _uiSession;
+
+    const stored = readStoredSession();
+    if (!stored) return null;
+    if (stored.base !== base) {
+      sessionStorage.removeItem(UI_SESSION_KEY);
+      sessionStorage.removeItem(TOKEN_KEY);
+      _uiSession = null;
+      _accessToken = null;
+      _accessTokenBase = null;
+      return null;
+    }
+
+    _uiSession = stored;
+    _accessToken = stored.accessToken;
+    _accessTokenBase = stored.base;
+    return _uiSession;
+  },
+  setSession: (session: Omit<StoredUiAuthSession, "base">) => {
+    const base = getServerBase();
+    _uiSession = { ...session, base };
+    _accessToken = session.accessToken;
+    _accessTokenBase = base;
+    sessionStorage.setItem(UI_SESSION_KEY, JSON.stringify(_uiSession));
+    sessionStorage.removeItem(TOKEN_KEY);
+  },
   getToken:   () => {
+    const session = uiAuth.getSession();
+    if (!session) return null;
+
+    if (isExpired(session.accessExpiresAt, 0)) return null;
+
     const base = getServerBase();
     if (_accessToken && _accessTokenBase === base) return _accessToken;
     const stored = readStoredToken();
     if (!stored) return null;
     if (stored.base !== base) {
       sessionStorage.removeItem(TOKEN_KEY);
+      sessionStorage.removeItem(UI_SESSION_KEY);
       _accessToken = null;
       _accessTokenBase = null;
+      _uiSession = null;
       return null;
     }
     _accessToken = stored.token;
@@ -36,15 +167,49 @@ export const uiAuth = {
     return _accessToken;
   },
   setToken:   (t: string) => {
+    const existing = uiAuth.getSession();
+    if (existing?.refreshToken) {
+      uiAuth.setSession({
+        ...existing,
+        accessToken: t,
+        ...withExpiryFromSettings(t, _jwtSettings),
+      });
+      return;
+    }
     const base = getServerBase();
     _accessToken = t;
     _accessTokenBase = base;
     sessionStorage.setItem(TOKEN_KEY, JSON.stringify({ base, token: t }));
   },
+  setLoginSession: (payload: { accessToken: string; refreshToken: string; clientMutationId?: string }, jwt: JwtSettings | null) => {
+    uiAuth.setSession({
+      accessToken: payload.accessToken,
+      refreshToken: payload.refreshToken,
+      clientMutationId: payload.clientMutationId,
+      ...withExpiryFromSettings(payload.accessToken, jwt),
+    });
+  },
+  updateAccessToken: (payload: { accessToken: string; clientMutationId?: string }, jwt: JwtSettings | null) => {
+    const existing = uiAuth.getSession();
+    if (!existing?.refreshToken) {
+      uiAuth.setToken(payload.accessToken);
+      return;
+    }
+    uiAuth.setSession({
+      ...existing,
+      accessToken: payload.accessToken,
+      clientMutationId: payload.clientMutationId ?? existing.clientMutationId,
+      ...withExpiryFromSettings(payload.accessToken, jwt),
+      refreshToken: existing.refreshToken,
+      refreshExpiresAt: existing.refreshExpiresAt,
+    });
+  },
   clearToken: () => {
     _accessToken = null;
     _accessTokenBase = null;
+    _uiSession = null;
     sessionStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(UI_SESSION_KEY);
   },
 };
 
@@ -52,7 +217,7 @@ export const authSession = {
   clearTokens() { uiAuth.clearToken(); },
   hasSession(): boolean {
     const mode = store.settings.serverAuthMode ?? "NONE";
-    if (mode === "UI_LOGIN") return uiAuth.getToken() !== null;
+    if (mode === "UI_LOGIN") return uiAuth.getSession() !== null;
     return true;
   },
 };
@@ -63,6 +228,9 @@ function getServerBase(): string {
 }
 
 function readStoredToken(): StoredAccessToken | null {
+  const session = readStoredSession();
+  if (session) return { base: session.base, token: session.accessToken };
+
   const raw = sessionStorage.getItem(TOKEN_KEY);
   if (raw?.trim()) {
     try {
@@ -77,6 +245,41 @@ function readStoredToken(): StoredAccessToken | null {
   }
 
   return null;
+}
+
+function readStoredSession(): StoredUiAuthSession | null {
+  const raw = sessionStorage.getItem(UI_SESSION_KEY);
+  if (raw?.trim()) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (typeof parsed?.base === "string" && typeof parsed?.accessToken === "string") {
+        return {
+          base: parsed.base,
+          accessToken: parsed.accessToken,
+          refreshToken: typeof parsed.refreshToken === "string" ? parsed.refreshToken : undefined,
+          clientMutationId: typeof parsed.clientMutationId === "string" ? parsed.clientMutationId : undefined,
+          accessExpiresAt: typeof parsed.accessExpiresAt === "number" ? parsed.accessExpiresAt : null,
+          refreshExpiresAt: typeof parsed.refreshExpiresAt === "number" ? parsed.refreshExpiresAt : null,
+        };
+      }
+    } catch {}
+  }
+
+  const legacy = sessionStorage.getItem(TOKEN_KEY);
+  if (!legacy?.trim()) return null;
+
+  try {
+    const parsed = JSON.parse(legacy);
+    if (typeof parsed?.base === "string" && typeof parsed?.token === "string") {
+      const migrated: StoredUiAuthSession = { base: parsed.base, accessToken: parsed.token };
+      sessionStorage.setItem(UI_SESSION_KEY, JSON.stringify(migrated));
+      return migrated;
+    }
+  } catch {}
+
+  const migrated: StoredUiAuthSession = { base: getServerBase(), accessToken: legacy.trim() };
+  sessionStorage.setItem(UI_SESSION_KEY, JSON.stringify(migrated));
+  return migrated;
 }
 
 function timeoutSignal(ms: number): AbortSignal {
@@ -116,18 +319,112 @@ export async function fetchAuthenticated(
   }
 
   if (mode === "UI_LOGIN") {
-    const token = uiAuth.getToken();
+    const token = await getUIAccessToken();
     if (!token) {
       if (skipped) return fetch(url, { ...init, signal, credentials: "omit", headers: baseHeaders });
       throw new AuthRequiredError();
     }
-    return fetch(url, {
+
+    let res = await fetch(url, {
       ...init, signal, credentials: "omit",
       headers: { ...baseHeaders, ...bearerHeader(token) },
     });
+
+    if (res.status !== 401 || skipped) return res;
+
+    const refreshed = await refreshUiAccessToken(true);
+    if (!refreshed) return res;
+
+    res = await fetch(url, {
+      ...init, signal, credentials: "omit",
+      headers: { ...baseHeaders, ...bearerHeader(refreshed) },
+    });
+    return res;
   }
 
   return fetch(url, { ...init, signal, credentials: "omit" });
+}
+
+export async function getUIAccessToken(forceRefresh = false): Promise<string | null> {
+  const session = uiAuth.getSession();
+  if (!session) return null;
+  if (forceRefresh || isExpired(session.accessExpiresAt)) {
+    return refreshUiAccessToken(true);
+  }
+  return session.accessToken;
+}
+
+export async function refreshUiAccessToken(force = false): Promise<string | null> {
+  const session = uiAuth.getSession();
+  if (!session) return null;
+  if (!session.refreshToken) {
+    if (force && isExpired(session.accessExpiresAt, 0)) return null;
+    return session.accessToken;
+  }
+
+  if (!force && !isExpired(session.accessExpiresAt)) return session.accessToken;
+  if (isExpired(session.refreshExpiresAt)) {
+    uiAuth.clearToken();
+    return null;
+  }
+
+  if (_refreshPromise) return _refreshPromise;
+
+  _refreshPromise = (async () => {
+    const base = getServerBase();
+    const jwt = await getJwtSettings().catch(() => null);
+
+    const res = await fetch(`${base}/api/graphql`, {
+      method: "POST",
+      credentials: "omit",
+      headers: { "Content-Type": "application/json" },
+      body: gqlBody(
+        `mutation RefreshToken($refreshToken: String!, $clientMutationId: String) {
+           refreshToken(input: { refreshToken: $refreshToken, clientMutationId: $clientMutationId }) {
+             accessToken
+             clientMutationId
+           }
+         }`,
+        { refreshToken: session.refreshToken, clientMutationId: session.clientMutationId ?? undefined },
+      ),
+      signal: timeoutSignal(5000),
+    });
+
+    if (!res.ok) {
+      if (res.status === 401 || res.status === 403) {
+        uiAuth.clearToken();
+        return null;
+      }
+      throw new Error(`Token refresh failed (${res.status})`);
+    }
+
+    const json = await res.json();
+    const refreshed = json?.data?.refreshToken;
+    const nextAccessToken: string | undefined = refreshed?.accessToken;
+    if (!nextAccessToken) {
+      const msg = json?.errors?.[0]?.message;
+      if (msg && /unauthorized|unauthenticated|forbidden/i.test(msg)) {
+        uiAuth.clearToken();
+        return null;
+      }
+      throw new Error(msg ?? "Token refresh failed");
+    }
+
+    uiAuth.updateAccessToken(
+      {
+        accessToken: nextAccessToken,
+        clientMutationId: typeof refreshed?.clientMutationId === "string"
+          ? refreshed.clientMutationId
+          : session.clientMutationId,
+      },
+      jwt,
+    );
+    return nextAccessToken;
+  })().finally(() => {
+    _refreshPromise = null;
+  });
+
+  return _refreshPromise;
 }
 
 export async function loginUI(user: string, pass: string): Promise<void> {
@@ -136,7 +433,11 @@ export async function loginUI(user: string, pass: string): Promise<void> {
     headers: { "Content-Type": "application/json" },
     body: gqlBody(
       `mutation Login($username: String!, $password: String!) {
-         login(input: { username: $username, password: $password }) { accessToken }
+         login(input: { username: $username, password: $password }) {
+           accessToken
+           refreshToken
+           clientMutationId
+         }
        }`,
       { username: user, password: pass },
     ),
@@ -144,9 +445,20 @@ export async function loginUI(user: string, pass: string): Promise<void> {
   });
   if (!res.ok) throw new Error(`Login request failed (${res.status})`);
   const json = await res.json();
-  const token: string | undefined = json?.data?.login?.accessToken;
-  if (!token) throw new Error(json?.errors?.[0]?.message ?? "Login failed");
-  uiAuth.setToken(token);
+  const payload = json?.data?.login;
+  const accessToken: string | undefined = payload?.accessToken;
+  const refreshToken: string | undefined = payload?.refreshToken;
+  if (!accessToken || !refreshToken) throw new Error(json?.errors?.[0]?.message ?? "Login failed");
+
+  const jwt = await getJwtSettings(true).catch(() => null);
+  uiAuth.setLoginSession(
+    {
+      accessToken,
+      refreshToken,
+      clientMutationId: typeof payload?.clientMutationId === "string" ? payload.clientMutationId : undefined,
+    },
+    jwt,
+  );
   updateSettings({ serverAuthMode: "UI_LOGIN", serverAuthUser: user, serverAuthPass: "" });
 }
 
@@ -170,7 +482,7 @@ export async function probeServer(): Promise<"ok" | "auth_required" | "unreachab
   const base = getServerBase();
   const mode = store.settings.serverAuthMode ?? "NONE";
   const s    = store.settings;
-  const token = uiAuth.getToken();
+  const token = mode === "UI_LOGIN" ? await getUIAccessToken() : null;
 
   if (mode === "UI_LOGIN" && !token) return "auth_required";
 
