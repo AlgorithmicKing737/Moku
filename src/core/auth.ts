@@ -30,8 +30,8 @@ interface StoredUiAuthSession {
 
 interface JwtSettings {
   jwtAudience?: string | null;
-  jwtRefreshExpiry?: number | null;
-  jwtTokenExpiry?: number | null;
+  jwtRefreshExpiry?: string | null;
+  jwtTokenExpiry?: string | null;
 }
 
 export interface UiAuthDebugStatus {
@@ -65,6 +65,26 @@ function authDebug(event: string, fields?: Record<string, unknown>) {
   console.debug(`[auth] ${event}`);
 }
 
+function parseIsoDuration(duration: string): number | null {
+  try {
+    const match = duration.match(
+      /^P(?:(\d+)Y)?(?:(\d+)M)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:([\d.]+)S)?)?$/
+    );
+    if (!match) return null;
+    const [, years, months, days, hours, minutes, seconds] = match;
+    let ms = 0;
+    if (years) ms += parseInt(years) * 365.25 * 24 * 60 * 60 * 1000;
+    if (months) ms += parseInt(months) * 30.44 * 24 * 60 * 60 * 1000;
+    if (days) ms += parseInt(days) * 24 * 60 * 60 * 1000;
+    if (hours) ms += parseInt(hours) * 60 * 60 * 1000;
+    if (minutes) ms += parseInt(minutes) * 60 * 1000;
+    if (seconds) ms += parseFloat(seconds) * 1000;
+    return ms;
+  } catch {
+    return null;
+  }
+}
+
 function decodeJwtExpiryMs(token: string): number | null {
   try {
     const payload = token.split(".")[1];
@@ -91,9 +111,10 @@ function withExpiryFromSettings(
   const now = Date.now();
   const accessExpiresAt =
     decodeJwtExpiryMs(accessToken)
-    ?? (typeof jwt?.jwtTokenExpiry === "number" ? now + jwt.jwtTokenExpiry * 1000 : null);
+    ?? (typeof jwt?.jwtTokenExpiry === "string" ? now + (parseIsoDuration(jwt.jwtTokenExpiry) ?? 0) : null);
   const refreshExpiresAt =
-    typeof jwt?.jwtRefreshExpiry === "number" ? now + jwt.jwtRefreshExpiry * 1000 : null;
+    typeof jwt?.jwtRefreshExpiry === "string" ? now + (parseIsoDuration(jwt.jwtRefreshExpiry) ?? 0) : null;
+  console.log("Calculated token expiry", { accessExpiresAt, refreshExpiresAt }, jwt);
   return { accessExpiresAt, refreshExpiresAt };
 }
 
@@ -122,8 +143,8 @@ async function fetchJwtSettings(base: string): Promise<JwtSettings | null> {
   if (!settings || typeof settings !== "object") return null;
   return {
     jwtAudience: typeof settings.jwtAudience === "string" ? settings.jwtAudience : null,
-    jwtRefreshExpiry: typeof settings.jwtRefreshExpiry === "number" ? settings.jwtRefreshExpiry : null,
-    jwtTokenExpiry: typeof settings.jwtTokenExpiry === "number" ? settings.jwtTokenExpiry : null,
+    jwtRefreshExpiry: typeof settings.jwtRefreshExpiry === "string" ? settings.jwtRefreshExpiry : null,
+    jwtTokenExpiry: typeof settings.jwtTokenExpiry === "string" ? settings.jwtTokenExpiry : null,
   };
 }
 
@@ -133,6 +154,7 @@ async function getJwtSettings(force = false): Promise<JwtSettings | null> {
   if (!force && _jwtSettingsBase === base && _jwtSettings && freshEnough) return _jwtSettings;
 
   const jwt = await fetchJwtSettings(base);
+  console.log(jwt);
   _jwtSettingsBase = base;
   _jwtSettings = jwt;
   _jwtSettingsFetchedAt = Date.now();
