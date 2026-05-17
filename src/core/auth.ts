@@ -12,6 +12,7 @@ export class AuthRequiredError extends Error {
 const TOKEN_KEY = "moku_access_token";
 const UI_SESSION_KEY = "moku_ui_auth_session";
 const TOKEN_REFRESH_SKEW_MS = 30_000;
+const AUTH_DEBUG = Boolean((import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV);
 
 interface StoredAccessToken {
   base: string;
@@ -33,6 +34,20 @@ interface JwtSettings {
   jwtTokenExpiry?: number | null;
 }
 
+export interface UiAuthDebugStatus {
+  mode: AuthMode;
+  serverBase: string;
+  hasSession: boolean;
+  hasRefreshToken: boolean;
+  accessExpiresAt: number | null;
+  refreshExpiresAt: number | null;
+  accessExpiresInMs: number | null;
+  refreshExpiresInMs: number | null;
+  shouldRefreshSoon: boolean;
+  refreshInFlight: boolean;
+  skewMs: number;
+}
+
 let _accessToken: string | null = null;
 let _accessTokenBase: string | null = null;
 let _uiSession: StoredUiAuthSession | null = null;
@@ -40,6 +55,15 @@ let _refreshPromise: Promise<string | null> | null = null;
 let _jwtSettingsBase: string | null = null;
 let _jwtSettings: JwtSettings | null = null;
 let _jwtSettingsFetchedAt = 0;
+
+function authDebug(event: string, fields?: Record<string, unknown>) {
+  if (!AUTH_DEBUG) return;
+  if (fields) {
+    console.debug(`[auth] ${event}`, fields);
+    return;
+  }
+  console.debug(`[auth] ${event}`);
+}
 
 function decodeJwtExpiryMs(token: string): number | null {
   try {
@@ -364,11 +388,24 @@ export async function refreshUiAccessToken(force = false): Promise<string | null
 
   if (!force && !isExpired(session.accessExpiresAt)) return session.accessToken;
   if (isExpired(session.refreshExpiresAt)) {
+    authDebug("refresh skipped: refresh token expired", {
+      force,
+      refreshExpiresAt: session.refreshExpiresAt ?? null,
+    });
     uiAuth.clearToken();
     return null;
   }
 
-  if (_refreshPromise) return _refreshPromise;
+  if (_refreshPromise) {
+    authDebug("refresh joined existing request");
+    return _refreshPromise;
+  }
+
+  authDebug("refresh start", {
+    force,
+    accessExpiresAt: session.accessExpiresAt ?? null,
+    refreshExpiresAt: session.refreshExpiresAt ?? null,
+  });
 
   _refreshPromise = (async () => {
     const base = getServerBase();
@@ -392,9 +429,11 @@ export async function refreshUiAccessToken(force = false): Promise<string | null
 
     if (!res.ok) {
       if (res.status === 401 || res.status === 403) {
+        authDebug("refresh rejected by server", { status: res.status });
         uiAuth.clearToken();
         return null;
       }
+      authDebug("refresh failed with HTTP error", { status: res.status });
       throw new Error(`Token refresh failed (${res.status})`);
     }
 
@@ -404,9 +443,11 @@ export async function refreshUiAccessToken(force = false): Promise<string | null
     if (!nextAccessToken) {
       const msg = json?.errors?.[0]?.message;
       if (msg && /unauthorized|unauthenticated|forbidden/i.test(msg)) {
+        authDebug("refresh rejected by GraphQL error", { message: msg });
         uiAuth.clearToken();
         return null;
       }
+      authDebug("refresh returned no access token", { message: msg ?? null });
       throw new Error(msg ?? "Token refresh failed");
     }
 
@@ -419,12 +460,42 @@ export async function refreshUiAccessToken(force = false): Promise<string | null
       },
       jwt,
     );
+    authDebug("refresh success", {
+      nextAccessExpiresAt: uiAuth.getSession()?.accessExpiresAt ?? null,
+    });
     return nextAccessToken;
-  })().finally(() => {
-    _refreshPromise = null;
-  });
+  })()
+    .catch((e: unknown) => {
+      authDebug("refresh threw error", {
+        message: e instanceof Error ? e.message : String(e),
+      });
+      throw e;
+    })
+    .finally(() => {
+      _refreshPromise = null;
+    });
 
   return _refreshPromise;
+}
+
+export function getUiAuthDebugStatus(now = Date.now()): UiAuthDebugStatus {
+  const session = uiAuth.getSession();
+  const accessExpiresAt = session?.accessExpiresAt ?? null;
+  const refreshExpiresAt = session?.refreshExpiresAt ?? null;
+
+  return {
+    mode: (store.settings.serverAuthMode ?? "NONE") as AuthMode,
+    serverBase: getServerBase(),
+    hasSession: !!session,
+    hasRefreshToken: !!session?.refreshToken,
+    accessExpiresAt,
+    refreshExpiresAt,
+    accessExpiresInMs: accessExpiresAt ? accessExpiresAt - now : null,
+    refreshExpiresInMs: refreshExpiresAt ? refreshExpiresAt - now : null,
+    shouldRefreshSoon: isExpired(accessExpiresAt),
+    refreshInFlight: _refreshPromise !== null,
+    skewMs: TOKEN_REFRESH_SKEW_MS,
+  };
 }
 
 export async function loginUI(user: string, pass: string): Promise<void> {
