@@ -32,6 +32,77 @@ build-options:
     CARGO_HOME: /run/build/moku/cargo
 
 modules:
+  - name: intltool
+    buildsystem: autotools
+    sources:
+      - type: archive
+        url: https://launchpad.net/intltool/trunk/0.51.0/+download/intltool-0.51.0.tar.gz
+        sha256: 67c74d94196b153b774ab9f89b2fa6c6ba79352407037c8c14d5aeb334e959cd
+
+  - name: libdbusmenu
+    buildsystem: autotools
+    build-options:
+      cflags: -Wno-error
+      env:
+        HAVE_VALGRIND_FALSE: '#'
+        HAVE_VALGRIND_TRUE: ''
+    config-opts:
+      - --with-gtk=3
+      - --disable-static
+      - --disable-dumper
+      - --disable-tests
+      - --disable-gtk-doc
+      - --disable-vala
+      - --disable-introspection
+    cleanup:
+      - /include
+      - /libexec
+      - /lib/pkgconfig
+      - /lib/*.la
+      - /share/doc
+      - /share/libdbusmenu
+      - /share/gtk-doc
+      - /share/gir-1.0
+    sources:
+      - type: archive
+        url: https://launchpad.net/libdbusmenu/16.04/16.04.0/+download/libdbusmenu-16.04.0.tar.gz
+        sha256: b9cc4a2acd74509435892823607d966d424bd9ad5d0b00938f27240a1bfa878a
+
+  - name: libayatana-ido
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DENABLE_TESTS=OFF
+      - -DGSETTINGS_COMPILE=OFF
+    sources:
+      - type: git
+        url: https://github.com/AyatanaIndicators/ayatana-ido.git
+        tag: 0.10.3
+
+  - name: libayatana-indicator
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DENABLE_TESTS=OFF
+      - -DGSETTINGS_COMPILE=OFF
+    sources:
+      - type: git
+        url: https://github.com/AyatanaIndicators/libayatana-indicator.git
+        tag: 0.9.4
+
+  - name: libayatana-appindicator
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DENABLE_TESTS=OFF
+      - -DENABLE_BINDINGS_MONO=OFF
+      - -DENABLE_BINDINGS_VALA=OFF
+      - -DGSETTINGS_COMPILE=OFF
+    sources:
+      - type: git
+        url: https://github.com/AyatanaIndicators/libayatana-appindicator.git
+        tag: 0.5.93
+      - type: shell
+        commands:
+          - sed -i '/add_subdirectory(docs)/d' CMakeLists.txt
+
   - name: openjdk
     buildsystem: simple
     build-commands:
@@ -52,9 +123,6 @@ modules:
       - type: inline
         dest-filename: catch_abort.c
         contents: |
-          // Linux only:
-          // Attempts to catch SIGTRAP and exit the thread instead of bringing down the whole process
-
           #define _GNU_SOURCE
           #include <stdio.h>
           #include <dlfcn.h>
@@ -117,19 +185,16 @@ modules:
         DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/Tachidesk"
         mkdir -p "$DATA_DIR"
 
-        # Seed conf on first run
         if [ ! -f "$DATA_DIR/server.conf" ]; then
           cp /app/tachidesk/default-conf/server.conf "$DATA_DIR/server.conf"
         fi
 
-        # Force-patch the three keys that cause JCEF/GUI crashes every launch.
         sed -i \
           -e 's|server\.webUIEnabled.*|server.webUIEnabled = false|' \
           -e 's|server\.initialOpenInBrowserEnabled.*|server.initialOpenInBrowserEnabled = false|' \
           -e 's|server\.systemTrayEnabled.*|server.systemTrayEnabled = false|' \
           "$DATA_DIR/server.conf"
 
-        # Append keys if absent
         grep -q 'server\.webUIEnabled'                "$DATA_DIR/server.conf" || echo 'server.webUIEnabled = true'                >> "$DATA_DIR/server.conf"
         grep -q 'server\.initialOpenInBrowserEnabled' "$DATA_DIR/server.conf" || echo 'server.initialOpenInBrowserEnabled = false' >> "$DATA_DIR/server.conf"
         grep -q 'server\.systemTrayEnabled'           "$DATA_DIR/server.conf" || echo 'server.systemTrayEnabled = false'           >> "$DATA_DIR/server.conf"
@@ -166,10 +231,10 @@ modules:
         CARGO_HOME: /run/build/moku/cargo
         XDG_DATA_HOME: /run/build/moku/xdg-data
         TAURI_SKIP_DEVSERVER_CHECK: 'true'
-        PKG_CONFIG_PATH: /usr/lib/pkgconfig:/usr/share/pkgconfig
+        PKG_CONFIG_PATH: /usr/lib/pkgconfig:/usr/share/pkgconfig:/app/lib/pkgconfig
     build-commands:
       - tar -xzf frontend-dist.tar.gz
-      - . /usr/lib/sdk/rust-stable/enable.sh && PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/share/pkgconfig cargo build --release --manifest-path src-tauri/Cargo.toml
+      - . /usr/lib/sdk/rust-stable/enable.sh && PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/share/pkgconfig:/app/lib/pkgconfig cargo build --release --manifest-path src-tauri/Cargo.toml
       - install -Dm755 src-tauri/target/release/moku /app/bin/moku
       - install -Dm644 packaging/io.github.moku_project.Moku.desktop /app/share/applications/io.github.moku_project.Moku.desktop
       - install -Dm644 src-tauri/icons/32x32.png /app/share/icons/hicolor/32x32/apps/io.github.moku_project.Moku.png
