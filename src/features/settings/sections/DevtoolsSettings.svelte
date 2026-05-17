@@ -33,10 +33,22 @@
   function fmtCountdown(ms: number | null): string {
     if (ms === null) return "—";
     if (ms <= 0) return "expired";
+
     const total = Math.floor(ms / 1000);
+    const month = 30 * 24 * 60 * 60;
+    const day = 24 * 60 * 60;
+    const hour = 60 * 60;
+    const minute = 60;
+
+    const months = Math.floor(total / month);
+    const days = Math.floor((total % month) / day);
     const hours = Math.floor(total / 3600);
-    const mins = Math.floor((total % 3600) / 60);
+    const remainingHours = Math.floor((total % day) / hour);
+    const mins = Math.floor((total % hour) / minute);
     const secs = total % 60;
+
+    if (months > 0) return days > 0 ? `${months}mo ${days}d` : `${months}mo`;
+    if (days > 0) return remainingHours > 0 ? `${days}d ${remainingHours}h` : `${days}d`;
     if (hours > 0) return `${hours}h ${mins}m ${secs}s`;
     if (mins > 0) return `${mins}m ${secs}s`;
     return `${secs}s`;
