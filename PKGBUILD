@@ -1,5 +1,5 @@
 pkgname=moku
-pkgver=0.9.3
+pkgver=0.9.4
 pkgrel=1
 pkgdesc="Native Linux manga reader frontend for Suwayomi-Server"
 arch=('x86_64')
@@ -13,27 +13,46 @@ depends=(
 )
 makedepends=(
     'rust'
-    'cargo'
-    'nodejs'
     'pnpm'
 )
+optdepends=(
+    'discord: Discord rich presence'
+)
+options=('!strip')
 source=(
     "$pkgname-$pkgver.tar.gz::https://github.com/moku-project/Moku/archive/refs/tags/v$pkgver.tar.gz"
     "Suwayomi-Server-v2.1.2087.jar::https://github.com/Suwayomi/Suwayomi-Server-preview/releases/download/v2.1.2087/Suwayomi-Server-v2.1.2087.jar"
 )
+noextract=("Suwayomi-Server-v2.1.2087.jar")
 sha256sums=(
-    '4e7e48ea3332f66c840f2b633c7b3f49b535b144f1b6cfc8d63ead24fcab3684'
+    'fc1c8268b812e70e56460c8930ca8ae83bcd30eea5903ddfef4e30a3a9a5c1cc'
     'f589a422674252394c13b289a9c8be691905bf583efb7f4d5f1501ae5e91e6b3'
+)
+b2sums=(
+    'SKIP'
+    'SKIP'
 )
 
 prepare() {
     cd "Moku-$pkgver"
     pnpm install --frozen-lockfile
+    sed -i 's/^lto\s*=\s*true/lto = "thin"/' src-tauri/Cargo.toml
+    mkdir -p src-tauri/.cargo
+    cat > src-tauri/.cargo/config.toml << 'EOF'
+[target.x86_64-unknown-linux-gnu]
+linker = "x86_64-linux-gnu-gcc"
+EOF
 }
 
 build() {
     cd "Moku-$pkgver"
     pnpm build
+    local fixed_cflags="${CFLAGS/-march=native/-march=x86-64}"
+    fixed_cflags="${fixed_cflags/-flto=auto/}"
+    local fixed_cxxflags="${CXXFLAGS/-march=native/-march=x86-64}"
+    fixed_cxxflags="${fixed_cxxflags/-flto=auto/}"
+    CFLAGS="$fixed_cflags" \
+    CXXFLAGS="$fixed_cxxflags" \
     TAURI_SKIP_DEVSERVER_CHECK=true cargo build \
         --release \
         --manifest-path src-tauri/Cargo.toml
@@ -52,7 +71,7 @@ package() {
     cat > "$pkgdir/usr/lib/moku/tachidesk/default-conf/server.conf" << 'CONF'
 server.ip = "127.0.0.1"
 server.port = 4567
-server.webUIEnabled = true
+server.webUIEnabled = false
 server.initialOpenInBrowserEnabled = false
 server.systemTrayEnabled = false
 server.downloadAsCbz = true
@@ -68,14 +87,14 @@ DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/Tachidesk"
 mkdir -p "$DATA_DIR"
 
 if [ ! -f "$DATA_DIR/server.conf" ]; then
-  cp /usr/lib/moku/tachidesk/default-conf/server.conf "$DATA_DIR/server.conf"
+    cp /usr/lib/moku/tachidesk/default-conf/server.conf "$DATA_DIR/server.conf"
 fi
 
 sed -i \
-  -e 's|server\.webUIEnabled.*|server.webUIEnabled = false|' \
-  -e 's|server\.initialOpenInBrowserEnabled.*|server.initialOpenInBrowserEnabled = false|' \
-  -e 's|server\.systemTrayEnabled.*|server.systemTrayEnabled = false|' \
-  "$DATA_DIR/server.conf"
+    -e 's|server\.webUIEnabled.*|server.webUIEnabled = false|' \
+    -e 's|server\.initialOpenInBrowserEnabled.*|server.initialOpenInBrowserEnabled = false|' \
+    -e 's|server\.systemTrayEnabled.*|server.systemTrayEnabled = false|' \
+    "$DATA_DIR/server.conf"
 
 grep -q 'server\.webUIEnabled'                "$DATA_DIR/server.conf" || echo 'server.webUIEnabled = false'                >> "$DATA_DIR/server.conf"
 grep -q 'server\.initialOpenInBrowserEnabled' "$DATA_DIR/server.conf" || echo 'server.initialOpenInBrowserEnabled = false' >> "$DATA_DIR/server.conf"
@@ -87,12 +106,12 @@ export _JAVA_OPTIONS="-Djava.awt.headless=true"
 export JAVA_TOOL_OPTIONS="-Djava.awt.headless=true"
 
 exec java \
-  -Djava.awt.headless=true \
-  -Dapple.awt.UIElement=true \
-  -Dsun.java2d.noddraw=true \
-  -Dsun.awt.disablegui=true \
-  -Dsuwayomi.tachidesk.config.server.rootDir="$DATA_DIR" \
-  -jar /usr/lib/moku/tachidesk/Suwayomi-Server.jar
+    -Djava.awt.headless=true \
+    -Dapple.awt.UIElement=true \
+    -Dsun.java2d.noddraw=true \
+    -Dsun.awt.disablegui=true \
+    -Dsuwayomi.tachidesk.config.server.rootDir="$DATA_DIR" \
+    -jar /usr/lib/moku/tachidesk/Suwayomi-Server.jar
 LAUNCHER
 
     install -Dm644 packaging/io.github.moku_project.Moku.desktop \
@@ -105,6 +124,6 @@ LAUNCHER
         "$pkgdir/usr/share/icons/hicolor/256x256/apps/io.github.moku_project.Moku.png"
     install -Dm644 packaging/io.github.moku_project.Moku.metainfo.xml \
         "$pkgdir/usr/share/metainfo/io.github.moku_project.Moku.metainfo.xml"
-
-    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+    install -Dm644 LICENSE \
+        "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }

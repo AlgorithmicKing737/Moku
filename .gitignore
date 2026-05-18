@@ -1,10 +1,14 @@
 # --- Build Artifacts ---
 node_modules/
+suwayomi-raw/
+suwayomi-windows.zip
+suwayomi.zip
 dist/
 dist-tauri/
 target/
 bin/
 out/
+
 
 # --- Nix ---
 .direnv/
@@ -32,6 +36,7 @@ yarn-error.log*
 
 # --- Tauri specific ---
 src-tauri/target/
+src-tauri/binaries/
 src-tauri/gen/
 
 # --- Flatpak build artifacts ---
