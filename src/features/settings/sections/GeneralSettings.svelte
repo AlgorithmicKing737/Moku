@@ -51,6 +51,10 @@
         <div class="s-row-info"><span class="s-label">Auto-start server</span><span class="s-desc">Launch tachidesk-server when Moku opens</span></div>
         <button role="switch" aria-checked={store.settings.autoStartServer} aria-label="Auto-start server" class="s-toggle" class:on={store.settings.autoStartServer} onclick={() => updateSettings({ autoStartServer: !store.settings.autoStartServer })}><span class="s-toggle-thumb"></span></button>
       </label>
+      <label class="s-row">
+        <div class="s-row-info"><span class="s-label">Suwayomi Web UI</span><span class="s-desc">Enable the built-in Suwayomi web interface alongside Moku</span></div>
+        <button role="switch" aria-checked={store.settings.suwayomiWebUI ?? false} aria-label="Suwayomi Web UI" class="s-toggle" class:on={store.settings.suwayomiWebUI ?? false} onclick={() => updateSettings({ suwayomiWebUI: !(store.settings.suwayomiWebUI ?? false) })}><span class="s-toggle-thumb"></span></button>
+      </label>
     </div>
   </div>
 

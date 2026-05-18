@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 const DEFAULT_SERVER_CONF: &str = r#"server.ip = "127.0.0.1"
 server.port = 4567
-server.webUIEnabled = true
+server.webUIEnabled = false
 server.initialOpenInBrowserEnabled = false
 server.systemTrayEnabled = false
 server.webUIInterface = "browser"
@@ -17,7 +17,7 @@ server.maxSourcesInParallel = 6
 server.extensionRepos = []
 "#;
 
-pub fn seed_server_conf(data_dir: &PathBuf) {
+pub fn seed_server_conf(data_dir: &PathBuf, web_ui_enabled: bool) {
     let conf_path = data_dir.join("server.conf");
 
     if !conf_path.exists() {
@@ -25,7 +25,12 @@ pub fn seed_server_conf(data_dir: &PathBuf) {
             eprintln!("Could not create Suwayomi data dir: {e}");
             return;
         }
-        if let Err(e) = std::fs::write(&conf_path, DEFAULT_SERVER_CONF) {
+        let initial = patch_conf_key(
+            DEFAULT_SERVER_CONF.to_string(),
+            "server.webUIEnabled",
+            if web_ui_enabled { "true" } else { "false" },
+        );
+        if let Err(e) = std::fs::write(&conf_path, initial) {
             eprintln!("Could not write server.conf: {e}");
         }
         return;
@@ -37,7 +42,11 @@ pub fn seed_server_conf(data_dir: &PathBuf) {
 
     let patched = patch_conf_key(
         patch_conf_key(
-            patch_conf_key(contents, "server.webUIEnabled", "true"),
+            patch_conf_key(
+                contents,
+                "server.webUIEnabled",
+                if web_ui_enabled { "true" } else { "false" },
+            ),
             "server.initialOpenInBrowserEnabled",
             "false",
         ),

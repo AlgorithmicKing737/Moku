@@ -138,7 +138,10 @@
     startProbe();
 
     if (store.settings.autoStartServer) {
-      invoke<void>("spawn_server", { binary: store.settings.serverBinary }).catch((err: any) => {
+      invoke<void>("spawn_server", {
+        binary: store.settings.serverBinary,
+        webUiEnabled: store.settings.suwayomiWebUI ?? false,
+      }).catch((err: any) => {
         if (err?.kind === "NotConfigured") boot.notConfigured = true;
         else console.warn("Could not start server:", err);
       });

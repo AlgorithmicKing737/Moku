@@ -3,7 +3,7 @@ use crate::ServerState;
 use tauri::Manager;
 
 #[tauri::command]
-pub fn spawn_server(binary: String, app: tauri::AppHandle) -> Result<(), SpawnError> {
+pub fn spawn_server(binary: String, web_ui_enabled: bool, app: tauri::AppHandle) -> Result<(), SpawnError> {
     {
         let state = app.state::<ServerState>();
         if state.0.lock().unwrap().is_some() {
@@ -22,10 +22,10 @@ pub fn spawn_server(binary: String, app: tauri::AppHandle) -> Result<(), SpawnEr
 
     server::do_log(
         &mut log,
-        &format!("[spawn_server] binary={:?} data_dir={:?}", binary, data_dir),
+        &format!("[spawn_server] binary={:?} web_ui_enabled={} data_dir={:?}", binary, web_ui_enabled, data_dir),
     );
 
-    server::conf::seed_server_conf(&data_dir);
+    server::conf::seed_server_conf(&data_dir, web_ui_enabled);
 
     let mut invocation =
         server::resolve::resolve_server_binary(&binary, &app, &mut log).map_err(|e| {
