@@ -108,15 +108,20 @@ export const PUSH_KOSYNC_PROGRESS = `
 `;
 
 export const LOGIN_USER = `
-  mutation Login($username: String!, $password: String!) {
-    login(input: { username: $username, password: $password }) {
+  mutation Login($username: String!, $password: String!, $clientMutationId: String) {
+    login(input: { username: $username, password: $password, clientMutationId: $clientMutationId }) {
       accessToken
+      refreshToken
+      clientMutationId
     }
   }
 `;
 
 export const REFRESH_TOKEN = `
-  mutation RefreshToken {
-    refreshToken(input: {}) { accessToken }
+  mutation RefreshToken($refreshToken: String!, $clientMutationId: String) {
+    refreshToken(input: { refreshToken: $refreshToken, clientMutationId: $clientMutationId }) {
+      accessToken
+      clientMutationId
+    }
   }
 `;
