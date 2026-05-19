@@ -79,23 +79,22 @@
   }
 
   async function saveAuth() {
-    if ((authMode === "BASIC_AUTH" || authMode === "UI_LOGIN") && (!authUsername.trim() || !authPassword.trim())) {
+    if (authMode === "NONE") { await clearAuth(); return; }
+    if (!authUsername.trim() || !authPassword.trim()) {
       secError = "Username and password are required"; return;
     }
     secLoading = true; secError = null;
     const prev = { mode: store.settings.serverAuthMode, user: store.settings.serverAuthUser, pass: store.settings.serverAuthPass };
 
     try {
-      const newUser = authMode !== "NONE" ? authUsername.trim() : "";
-      const newPass = authMode !== "NONE" ? authPassword.trim() : "";
-      authSession.clearTokens();
+      const newUser = authUsername.trim();
+      const newPass = authPassword.trim();
       if (authMode === "UI_LOGIN") {
         await loginUI(newUser, newPass);
         updateSettings({ serverAuthMode: "UI_LOGIN", serverAuthUser: newUser, serverAuthPass: "" });
-      } else if (authMode === "BASIC_AUTH") {
-        updateSettings({ serverAuthMode: "BASIC_AUTH", serverAuthUser: newUser, serverAuthPass: newPass });
       } else {
-        updateSettings({ serverAuthMode: "NONE", serverAuthUser: "", serverAuthPass: "" });
+        authSession.clearTokens();
+        updateSettings({ serverAuthMode: "BASIC_AUTH", serverAuthUser: newUser, serverAuthPass: newPass });
       }
 
       await gql(SET_SERVER_AUTH, { authMode, authUsername: newUser, authPassword: newPass });
