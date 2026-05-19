@@ -1,5 +1,5 @@
 import { store } from "@store/state.svelte";
-import { fetchAuthenticated, AuthRequiredError, uiAuth } from "../core/auth";
+import { fetchAuthenticated, AuthRequiredError, refreshUiAccessToken } from "../core/auth";
 import { boot } from "@store/boot.svelte";
 import { getBlobUrl } from "@core/cache/imageCache";
 
@@ -104,6 +104,15 @@ export async function gql<T>(
   variables?: Record<string, unknown>,
   signal?: AbortSignal,
 ): Promise<T> {
+  const tryRefreshAndRetry = async (): Promise<T | null> => {
+    const mode = store.settings.serverAuthMode ?? "NONE";
+    if (mode !== "UI_LOGIN" || boot.skipped) return null;
+    const refreshed = await refreshUiAccessToken(true);
+    if (!refreshed) return null;
+    if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+    return attempt();
+  };
+
   const attempt = async (): Promise<T> => {
     const res = await fetchWithRetry(
       `${getServerUrl()}/api/graphql`,
@@ -111,12 +120,21 @@ export async function gql<T>(
       signal,
     );
     if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
-    if (!res.ok) throw new Error(`Suwayomi HTTP ${res.status}`);
+    if (!res.ok) {
+      if (res.status === 401 || res.status === 403) {
+        const retried = await tryRefreshAndRetry();
+        if (retried) return retried;
+      }
+      throw new Error(`Suwayomi HTTP ${res.status}`);
+    }
     const json: GQLResponse<T> = await res.json();
     if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
     if (json.errors?.length) {
       const isAuthError = json.errors.some(e => /unauthorized|unauthenticated/i.test(e.message));
       if (isAuthError && !boot.skipped) {
+        const retried = await tryRefreshAndRetry();
+        if (retried) return retried;
+
         boot.sessionExpired = true;
         boot.loginRequired  = true;
         boot.loginUser      = store.settings.serverAuthUser ?? "";
