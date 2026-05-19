@@ -114,7 +114,6 @@ function withExpiryFromSettings(
     ?? (typeof jwt?.jwtTokenExpiry === "string" ? now + (parseIsoDuration(jwt.jwtTokenExpiry) ?? 0) : null);
   const refreshExpiresAt =
     typeof jwt?.jwtRefreshExpiry === "string" ? now + (parseIsoDuration(jwt.jwtRefreshExpiry) ?? 0) : null;
-  console.log("Calculated token expiry", { accessExpiresAt, refreshExpiresAt }, jwt);
   return { accessExpiresAt, refreshExpiresAt };
 }
 
@@ -173,7 +172,6 @@ async function getJwtSettings(force = false): Promise<JwtSettings | null> {
   if (!force && _jwtSettingsBase === base && _jwtSettings && freshEnough) return _jwtSettings;
 
   const jwt = await fetchJwtSettings(base);
-  console.log(jwt);
   _jwtSettingsBase = base;
   _jwtSettings = jwt;
   _jwtSettingsFetchedAt = Date.now();
@@ -522,12 +520,6 @@ export function getUiAuthDebugStatus(now = Date.now()): UiAuthDebugStatus {
   const session = uiAuth.getSession();
   const accessExpiresAt = session?.accessExpiresAt ?? null;
   const refreshExpiresAt = session?.refreshExpiresAt ?? null;
-
-  console.log("Calculating debug status", {
-    session,
-    accessExpiresAt,
-    refreshExpiresAt,
-  });
 
   return {
     mode: (store.settings.serverAuthMode ?? "NONE") as AuthMode,
