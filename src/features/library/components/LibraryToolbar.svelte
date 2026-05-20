@@ -24,8 +24,8 @@
     search:           string;
     activeDragKind:   "tab" | null;
     dragInsertIdx:    number;
-    dragTabId:        number | null;
-    dragOverTabId:    number | null;
+    dragTabId:        string | null;
+    dragOverTabId:    string | null;
     sortPanelOpen:    boolean;
     filterPanelOpen:  boolean;
     tabsEl:           HTMLDivElement;
@@ -39,10 +39,10 @@
     onSortPanelToggle:   () => void;
     onFilterPanelToggle: () => void;
     onOpenDownloadsFolder: () => void;
-    onTabDragStart:      (e: DragEvent, cat: Category) => void;
-    onTabDragOver:       (e: DragEvent, cat: Category, idx: number) => void;
+    onTabDragStart:      (e: DragEvent, id: string) => void;
+    onTabDragOver:       (e: DragEvent, id: string, idx: number) => void;
     onTabDragLeave:      () => void;
-    onTabDrop:           (e: DragEvent, cat: Category) => void;
+    onTabDrop:           (e: DragEvent, id: string) => void;
     onTabDragEnd:        () => void;
   }
 
@@ -100,20 +100,23 @@
     {#each visibleTabIds as id, idx}
       {@const cat = visibleCategories.find(c => String(c.id) === id)}
       {#if id === "library" || id === "downloaded" || cat}
+        {@const isBuiltin   = id === "library" || id === "downloaded"}
+        {@const isCompleted = cat && id === String(completedCatId)}
+        {@const isDraggable = true}
         {#if activeDragKind === "tab" && dragInsertIdx === idx}
           <div class="tab-insert-bar" aria-hidden="true"></div>
         {/if}
         <button
           class="tab"
           class:active={tab === id}
-          class:tab-dragging={cat && dragTabId === cat.id}
-          draggable={!!cat && id !== String(completedCatId)}
+          class:tab-dragging={isDraggable && dragTabId === id}
+          draggable={isDraggable}
           onclick={() => onTabChange(id)}
-          ondragstart={cat && id !== String(completedCatId) ? (e) => onTabDragStart(e, cat) : undefined}
-          ondragover={cat && id !== String(completedCatId) ? (e) => onTabDragOver(e, cat, idx) : undefined}
-          ondragleave={cat && id !== String(completedCatId) ? onTabDragLeave : undefined}
-          ondrop={cat && id !== String(completedCatId) ? (e) => onTabDrop(e, cat) : undefined}
-          ondragend={cat && id !== String(completedCatId) ? onTabDragEnd : undefined}
+          ondragstart={isDraggable ? (e) => onTabDragStart(e, id) : undefined}
+          ondragover={isDraggable ? (e) => onTabDragOver(e, id, idx) : undefined}
+          ondragleave={isDraggable ? onTabDragLeave : undefined}
+          ondrop={isDraggable ? (e) => onTabDrop(e, id) : undefined}
+          ondragend={isDraggable ? onTabDragEnd : undefined}
         >
           {#if id === "library"}<Books size={11} weight="bold" />
           {:else if id === "downloaded"}<DownloadSimple size={11} weight="bold" />

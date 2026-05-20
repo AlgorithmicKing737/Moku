@@ -71,8 +71,8 @@
 
   let activeDragKind:   "tab" | null = $state(null);
   let dragInsertIdx:    number       = $state(-1);
-  let dragTabId:        number | null = $state(null);
-  let dragOverTabId:    number | null = $state(null);
+  let dragTabId:        string | null = $state(null);
+  let dragOverTabId:    string | null = $state(null);
 
   const DT_TAB = "application/x-moku-tab";
   const anims  = $derived(store.settings.qolAnimations ?? true);
@@ -95,7 +95,8 @@
     const catIds  = store.categories.filter(c => c.id !== 0).map(c => String(c.id));
     const pinned  = store.settings.libraryPinnedTabOrder ?? [];
     const known   = new Set([...BUILTIN_TABS, ...catIds]);
-    const ordered = [...pinned.filter(id => known.has(id))];
+    const eligible = pinned.filter(id => known.has(id));
+    const ordered = [...eligible];
     const inOrder = new Set(ordered);
     for (const id of [...BUILTIN_TABS, ...catIds]) {
       if (!inOrder.has(id)) ordered.push(id);
@@ -517,45 +518,54 @@
     });
   }
 
-  function onTabDragStart(e: DragEvent, cat: Category) {
-    activeDragKind = "tab"; dragTabId = cat.id;
+  function onTabDragStart(e: DragEvent, id: string) {
+    activeDragKind = "tab"; dragTabId = id;
     e.dataTransfer!.effectAllowed = "move";
-    e.dataTransfer!.setData(DT_TAB, String(cat.id));
-    e.dataTransfer!.setData("text/plain", `tab:${cat.id}`);
+    e.dataTransfer!.setData(DT_TAB, id);
+    e.dataTransfer!.setData("text/plain", `tab:${id}`);
   }
 
-  function onTabDragOver(e: DragEvent, cat: Category, idx: number) {
-    if (activeDragKind !== "tab" || dragTabId === null || dragTabId === cat.id) return;
+  function onTabDragOver(e: DragEvent, id: string, idx: number) {
+    if (activeDragKind !== "tab" || dragTabId === null || dragTabId === id) return;
     e.preventDefault(); e.dataTransfer!.dropEffect = "move";
-    dragOverTabId = cat.id;
+    dragOverTabId = id;
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     dragInsertIdx = e.clientX < rect.left + rect.width / 2 ? idx : idx + 1;
   }
 
   function onTabDragLeave() { dragOverTabId = null; }
 
-  async function onTabDrop(e: DragEvent, dropCat: Category) {
+  async function onTabDrop(e: DragEvent, dropId: string) {
     e.preventDefault(); dragOverTabId = null;
     const insertAt = dragInsertIdx;
     dragInsertIdx = -1;
-    if (activeDragKind !== "tab" || dragTabId === null || dragTabId === dropCat.id) { dragTabId = null; return; }
-    const dragId = dragTabId; dragTabId = null; activeDragKind = null;
-    const dragStrId = String(dragId);
-    const tabs    = [...visibleTabIds];
+    if (activeDragKind !== "tab" || dragTabId === null || dragTabId === dropId) { dragTabId = null; return; }
+    const dragStrId = dragTabId; dragTabId = null; activeDragKind = null;
+
+    const tabs    = [...allTabIds];
     const fromIdx = tabs.indexOf(dragStrId);
-    if (fromIdx < 0) return;
+    const dropIdx = tabs.indexOf(dropId);
+    if (fromIdx < 0 || dropIdx < 0) return;
+
+    const visibleDrop = visibleTabIds[insertAt] ?? null;
+    const destIdx = visibleDrop ? tabs.indexOf(visibleDrop) : tabs.length;
+
     tabs.splice(fromIdx, 1);
-    const dest = Math.max(0, Math.min(insertAt > fromIdx ? insertAt - 1 : insertAt, tabs.length));
-    tabs.splice(dest, 0, dragStrId);
+    const adjustedDest = Math.max(0, Math.min(destIdx > fromIdx ? destIdx - 1 : destIdx, tabs.length));
+    tabs.splice(adjustedDest, 0, dragStrId);
+
     updateSettings({ libraryPinnedTabOrder: tabs });
     const catIds    = tabs.filter(id => id !== "library" && id !== "downloaded");
     const zeroCat   = store.categories.filter(c => c.id === 0);
     const reordered = catIds.map((id, i) => { const c = store.categories.find(x => String(x.id) === id)!; return { ...c, order: i + 1 }; });
     setCategories([...zeroCat, ...reordered]);
-    const serverPos = catIds.indexOf(dragStrId) + 1;
-    try {
-      await gql<{ updateCategoryOrder: { categories: Category[] } }>(UPDATE_CATEGORY_ORDER, { id: dragId, position: serverPos });
-    } catch (err) { console.error("Tab reorder failed:", err); await reloadCategories(); }
+    const dragIsBuiltin = dragStrId === "library" || dragStrId === "downloaded";
+    if (!dragIsBuiltin) {
+      const serverPos = catIds.indexOf(dragStrId) + 1;
+      try {
+        await gql<{ updateCategoryOrder: { categories: Category[] } }>(UPDATE_CATEGORY_ORDER, { id: Number(dragStrId), position: serverPos });
+      } catch (err) { console.error("Tab reorder failed:", err); await reloadCategories(); }
+    }
   }
 
   function onTabDragEnd() { activeDragKind = null; dragTabId = null; dragOverTabId = null; dragInsertIdx = -1; }
