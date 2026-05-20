@@ -10,10 +10,11 @@ import { boot } from "@store/boot.svelte";
 import type { DownloadStatus, DownloadQueueItem } from "@types/index";
 import {
   toActiveDownloads, optimisticRemove, optimisticRemoveMany,
-  isRunning, getErrored, calcSpeed, estimateEta,
+  isRunning, getErrored, calcSpeed, estimateEta, estimateQueueBytes,
   type SpeedSample,
 } from "../lib/downloadQueue";
 import { startAutoRetry, type AutoRetryHandle } from "../lib/autoRetry";
+import { invoke } from "@tauri-apps/api/core";
 
 class DownloadStore {
   status:       DownloadStatus | null = $state(null);
@@ -23,8 +24,11 @@ class DownloadStore {
   dequeueing                          = $state(new Set<number>());
   selected                            = $state(new Set<number>());
   batchWorking                        = $state(false);
-  pagesPerSec:  number | null         = $state(null);
-  eta:          number | null         = $state(null);
+  pagesPerSec:    number | null = $state(null);
+  eta:            number | null = $state(null);
+  storageWarning:       boolean = $state(false);
+
+  private freeBytes: number | null = null;
 
   get toastsEnabled()    { return store.settings.downloadToastsEnabled ?? true; }
   get autoRetryEnabled() { return store.settings.downloadAutoRetry ?? false; }
@@ -82,6 +86,52 @@ class DownloadStore {
     this.status = ds;
     setActiveDownloads(toActiveDownloads(ds.queue));
     this.updateSpeed(ds);
+    this.fetchFreeBytes(ds);
+  }
+
+  private async fetchFreeBytes(ds: DownloadStatus) {
+    const path = store.settings.serverDownloadsPath ?? "";
+    if (!path) return;
+    try {
+      const info = await invoke<{ free_bytes: number }>("get_storage_info", { downloadsPath: path });
+      this.freeBytes = info.free_bytes;
+      this.storageWarning = estimateQueueBytes(ds.queue) > info.free_bytes * 0.95;
+    } catch { }
+  }
+
+  private confirmStorageOverrun(): Promise<boolean> {
+    return new Promise(resolve => {
+      const backdrop = document.createElement("div");
+      backdrop.style.cssText = "position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;animation:s-fade-in 0.15s ease both";
+      const panel = document.createElement("div");
+      panel.style.cssText = "background:var(--bg-surface);border:1px solid var(--border-base);border-radius:var(--radius-2xl);box-shadow:0 24px 80px rgba(0,0,0,0.7),0 0 0 1px rgba(255,255,255,0.04) inset;width:min(380px,calc(100vw - 40px));overflow:hidden;animation:s-scale-in 0.2s cubic-bezier(0.16,1,0.3,1) both";
+      panel.innerHTML = `
+        <div style="padding:var(--sp-4) var(--sp-5) var(--sp-3);border-bottom:1px solid var(--border-dim)">
+          <p style="margin:0;font-size:var(--text-sm);font-weight:var(--weight-medium);color:var(--text-primary);letter-spacing:0.01em">Low disk space</p>
+        </div>
+        <div style="padding:var(--sp-4) var(--sp-5);display:flex;flex-direction:column;gap:var(--sp-2)">
+          <p style="margin:0;font-family:var(--font-ui);font-size:var(--text-xs);color:var(--text-muted);letter-spacing:var(--tracking-wide);line-height:var(--leading-snug)">
+            The download queue is estimated to exceed 95% of your available storage. Download anyway?
+          </p>
+        </div>
+        <div style="padding:var(--sp-3) var(--sp-5);border-top:1px solid var(--border-dim);display:flex;justify-content:flex-end;gap:var(--sp-2)">
+          <button id="_moku-storage-cancel" style="font-family:var(--font-ui);font-size:var(--text-xs);letter-spacing:var(--tracking-wide);padding:5px var(--sp-3);border-radius:var(--radius-sm);border:1px solid var(--border-dim);background:none;color:var(--text-muted);cursor:pointer">Cancel</button>
+          <button id="_moku-storage-confirm" style="font-family:var(--font-ui);font-size:var(--text-xs);letter-spacing:var(--tracking-wide);padding:5px var(--sp-3);border-radius:var(--radius-sm);border:1px solid color-mix(in srgb,var(--color-error) 40%,transparent);background:color-mix(in srgb,var(--color-error) 10%,transparent);color:var(--color-error);cursor:pointer">Download anyway</button>
+        </div>
+      `;
+      backdrop.appendChild(panel);
+      document.body.appendChild(backdrop);
+      function finish(result: boolean) { backdrop.remove(); resolve(result); }
+      panel.querySelector("#_moku-storage-cancel")!.addEventListener("click",  () => finish(false));
+      panel.querySelector("#_moku-storage-confirm")!.addEventListener("click", () => finish(true));
+      backdrop.addEventListener("click", (e) => { if (e.target === backdrop) finish(false); });
+    });
+  }
+
+  private async guardStorage(queueAfter: DownloadQueueItem[]): Promise<boolean> {
+    if (this.freeBytes === null) return true;
+    if (estimateQueueBytes(queueAfter) <= this.freeBytes * 0.95) return true;
+    return this.confirmStorageOverrun();
   }
 
   private updateSpeed(ds: DownloadStatus) {
@@ -172,11 +222,21 @@ class DownloadStore {
     finally { this.batchWorking = false; }
   }
 
+  async enqueue(chapterId: number): Promise<boolean> {
+    const projected = [...this.queue, { chapter: { id: chapterId, pageCount: 0 }, progress: 0, state: "QUEUED" } as any];
+    if (!(await this.guardStorage(projected))) return false;
+    try { await gql(ENQUEUE_DOWNLOAD, { chapterId }); this.poll(); }
+    catch (e) { console.error(e); }
+    return true;
+  }
+
   async retryOne(chapterId: number) {
     if (this.dequeueing.has(chapterId)) return;
     this.dequeueing = new Set(this.dequeueing).add(chapterId);
     try {
       await gql(DEQUEUE_DOWNLOAD, { chapterId });
+      const projected = this.queue.filter(i => i.chapter.id !== chapterId);
+      if (!(await this.guardStorage(projected))) { this.poll(); return; }
       await gql(ENQUEUE_DOWNLOAD, { chapterId });
       this.poll();
     } catch (e) { console.error(e); this.poll(); }
@@ -189,6 +249,8 @@ class DownloadStore {
     const ids = [...this.erroredIds];
     try {
       await gql(DEQUEUE_CHAPTERS_DOWNLOAD, { chapterIds: ids });
+      const projected = this.queue.filter(i => !this.erroredIds.has(i.chapter.id));
+      if (!(await this.guardStorage(projected))) { this.poll(); return; }
       for (const id of ids) await gql(ENQUEUE_DOWNLOAD, { chapterId: id });
       this.poll();
       addToast({ kind: "info", title: `Retrying ${ids.length} failed download${ids.length !== 1 ? "s" : ""}`, duration: 3000 });
@@ -204,6 +266,8 @@ class DownloadStore {
     try {
       if (ids.length > 0) {
         await gql(DEQUEUE_CHAPTERS_DOWNLOAD, { chapterIds: ids });
+        const projected = this.queue.filter(i => !new Set(ids).has(i.chapter.id));
+        if (!(await this.guardStorage(projected))) { this.poll(); return; }
         for (const id of ids) await gql(ENQUEUE_DOWNLOAD, { chapterId: id });
         addToast({ kind: "info", title: `Retrying ${ids.length} failed download${ids.length !== 1 ? "s" : ""}`, duration: 3000 });
       }

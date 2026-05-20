@@ -10,7 +10,7 @@
   import { GET_CHAPTERS } from "@api/queries/chapters";
   import { UPDATE_MANGA, CREATE_CATEGORY, UPDATE_MANGA_CATEGORIES } from "@api/mutations/manga";
   import { FETCH_CHAPTERS, MARK_CHAPTER_READ, MARK_CHAPTERS_READ, DELETE_DOWNLOADED_CHAPTERS } from "@api/mutations/chapters";
-  import { ENQUEUE_DOWNLOAD, ENQUEUE_CHAPTERS_DOWNLOAD } from "@api/mutations/downloads";
+  import { downloadStore } from "@features/downloads/store/downloadState.svelte";
   import { cache, CACHE_KEYS, recordSourceAccess } from "@core/cache";
   import {
     store, addToast, openReader, setActiveManga,
@@ -321,7 +321,7 @@
   async function enqueue(ch: Chapter, e: MouseEvent) {
     e.stopPropagation();
     enqueueing = new Set(enqueueing).add(ch.id);
-    await gql(ENQUEUE_DOWNLOAD, { chapterId: ch.id }).catch(console.error);
+    await downloadStore.enqueue(ch.id);
     addToast({ kind: "download", title: "Download queued", body: ch.name });
     enqueueing.delete(ch.id); enqueueing = new Set(enqueueing);
     if (store.activeManga) reloadChapters(store.activeManga.id);
@@ -329,7 +329,10 @@
 
   async function enqueueMultiple(chapterIds: number[]) {
     if (!chapterIds.length) return;
-    await gql(ENQUEUE_CHAPTERS_DOWNLOAD, { chapterIds }).catch(console.error);
+    for (const id of chapterIds) {
+      const allowed = await downloadStore.enqueue(id);
+      if (!allowed) return;
+    }
     addToast({ kind: "download", title: "Download queued", body: `${chapterIds.length} chapter${chapterIds.length !== 1 ? "s" : ""} added` });
     if (store.activeManga) reloadChapters(store.activeManga.id);
   }
@@ -461,7 +464,7 @@
       { label: "Mark below as read",   icon: ArrowFatLinesDown, onClick: () => markBelowRead(idx),   disabled: idx === last || below.filter(c => !c.isRead).length === 0 },
       { label: "Mark below as unread", icon: ArrowFatLineDown,  onClick: () => markBelowUnread(idx), disabled: idx === last || below.filter(c => c.isRead).length === 0 },
       { separator: true },
-      { label: ch.isDownloaded ? "Delete download" : "Download", icon: ch.isDownloaded ? Trash : Download, danger: ch.isDownloaded, onClick: () => ch.isDownloaded ? deleteDownloaded(ch.id) : gql(ENQUEUE_DOWNLOAD, { chapterId: ch.id }).catch(console.error) },
+      { label: ch.isDownloaded ? "Delete download" : "Download", icon: ch.isDownloaded ? Trash : Download, danger: ch.isDownloaded, onClick: () => ch.isDownloaded ? deleteDownloaded(ch.id) : downloadStore.enqueue(ch.id) },
       { separator: true },
       { label: "Download next 5 from here", icon: DownloadSimple, onClick: () => enqueueMultiple(sortedChapters.slice(idx, idx + 5).filter(c => !c.isDownloaded).map(c => c.id)) },
       { label: "Download all from here",    icon: DownloadSimple, onClick: () => enqueueMultiple(sortedChapters.slice(idx).filter(c => !c.isDownloaded).map(c => c.id)) },

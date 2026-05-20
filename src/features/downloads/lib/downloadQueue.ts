@@ -65,6 +65,18 @@ export function reorderSelectedToEdge(
   return edge === "top" ? [...pinned, ...rest] : [...rest, ...pinned];
 }
 
+const AVG_BYTES_PER_PAGE = 1_500_000;
+
+export function estimateQueueBytes(queue: DownloadQueueItem[]): number {
+  let total = 0;
+  for (const item of queue) {
+    const pages     = item.chapter.pageCount ?? 0;
+    const remaining = pages - Math.round(item.progress * pages);
+    total += remaining * AVG_BYTES_PER_PAGE;
+  }
+  return total;
+}
+
 export function formatEta(seconds: number): string {
   if (seconds < 60)  return `~${Math.ceil(seconds)}s`;
   if (seconds < 3600) return `~${Math.ceil(seconds / 60)}m`;
