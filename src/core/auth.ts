@@ -207,7 +207,7 @@ export const uiAuth = {
     sessionStorage.setItem(UI_SESSION_KEY, JSON.stringify(_uiSession));
     sessionStorage.removeItem(TOKEN_KEY);
   },
-  getToken:   () => {
+  getToken: () => {
     const session = uiAuth.getSession();
     if (!session) return null;
 
@@ -229,7 +229,7 @@ export const uiAuth = {
     _accessTokenBase = stored.base;
     return _accessToken;
   },
-  setToken:   (t: string) => {
+  setToken: (t: string) => {
     const existing = uiAuth.getSession();
     if (existing?.refreshToken) {
       uiAuth.setSession({
@@ -276,7 +276,13 @@ export const uiAuth = {
 };
 
 export const authSession = {
-  clearTokens() { uiAuth.clearToken(); },
+  clearTokens() {
+    _refreshPromise = null;
+    _jwtSettings = null;
+    _jwtSettingsBase = null;
+    _jwtSettingsFetchedAt = 0;
+    uiAuth.clearToken();
+  },
   hasSession(): boolean {
     const mode = store.settings.serverAuthMode ?? "NONE";
     if (mode === "UI_LOGIN") return uiAuth.getSession() !== null;

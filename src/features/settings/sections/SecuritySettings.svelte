@@ -1,7 +1,7 @@
 <script lang="ts">
   import { store, updateSettings } from "@store/state.svelte";
   import { gql } from "@api/client";
-  import { authSession, loginUI } from "@core/auth";
+  import { authSession, loginUI, logout } from "@core/auth";
   import { GET_SERVER_SECURITY } from "@api/queries/extensions";
   import { SET_SERVER_AUTH, SET_SOCKS_PROXY, SET_FLARESOLVERR } from "@api/mutations/extensions";
 
@@ -44,39 +44,40 @@
   }
 
   $effect(() => {
-    if (!secLoaded) { secLoaded = true; loadServerSecurity(); }
+    if (!secLoaded) { secLoaded = true; authSession.clearTokens(); loadServerSecurity(); }
   });
 
   async function loadServerSecurity() {
-    try {
-      const res = await gql<{ settings: {
-        authMode: string; authUsername: string;
-        socksProxyEnabled: boolean; socksProxyHost: string; socksProxyPort: string;
-        socksProxyVersion: number; socksProxyUsername: string;
-        flareSolverrEnabled: boolean; flareSolverrUrl: string; flareSolverrTimeout: number;
-        flareSolverrSessionName: string; flareSolverrSessionTtl: number;
-        flareSolverrAsResponseFallback: boolean;
-      }}>(GET_SERVER_SECURITY);
-      const s = res.settings;
-      const serverMode = normalizeAuthMode(s.authMode);
-      authMode = serverMode;
-      authUsername = s.authUsername || "";
-      updateSettings({ serverAuthMode: serverMode, serverAuthUser: authUsername });
-      socksEnabled = s.socksProxyEnabled; socksHost = s.socksProxyHost;
-      socksPort = s.socksProxyPort; socksVersion = s.socksProxyVersion;
-      socksUsername = s.socksProxyUsername;
-      flareEnabled = s.flareSolverrEnabled; flareUrl = s.flareSolverrUrl;
-      flareTimeout = s.flareSolverrTimeout; flareSession = s.flareSolverrSessionName;
-      flareTtl = s.flareSolverrSessionTtl; flareFallback = s.flareSolverrAsResponseFallback;
-      updateSettings({
-        socksProxyEnabled: socksEnabled, socksProxyHost: socksHost, socksProxyPort: socksPort,
-        socksProxyVersion: socksVersion, socksProxyUsername: socksUsername,
-        flareSolverrEnabled: flareEnabled, flareSolverrUrl: flareUrl,
-        flareSolverrTimeout: flareTimeout, flareSolverrSessionName: flareSession,
-        flareSolverrSessionTtl: flareTtl, flareSolverrAsResponseFallback: flareFallback,
-      });
-    } catch {}
-  }
+      try {
+        const res = await gql<{ settings: {
+          authMode: string; authUsername: string;
+          socksProxyEnabled: boolean; socksProxyHost: string; socksProxyPort: string;
+          socksProxyVersion: number; socksProxyUsername: string;
+          flareSolverrEnabled: boolean; flareSolverrUrl: string; flareSolverrTimeout: number;
+          flareSolverrSessionName: string; flareSolverrSessionTtl: number;
+          flareSolverrAsResponseFallback: boolean;
+        }}>(GET_SERVER_SECURITY);
+        const s = res.settings;
+        const serverMode = normalizeAuthMode(s.authMode);
+        if (serverMode !== "UI_LOGIN") authSession.clearTokens();
+        authMode = serverMode;
+        authUsername = s.authUsername || "";
+        updateSettings({ serverAuthMode: serverMode, serverAuthUser: authUsername });
+        socksEnabled = s.socksProxyEnabled; socksHost = s.socksProxyHost;
+        socksPort = s.socksProxyPort; socksVersion = s.socksProxyVersion;
+        socksUsername = s.socksProxyUsername;
+        flareEnabled = s.flareSolverrEnabled; flareUrl = s.flareSolverrUrl;
+        flareTimeout = s.flareSolverrTimeout; flareSession = s.flareSolverrSessionName;
+        flareTtl = s.flareSolverrSessionTtl; flareFallback = s.flareSolverrAsResponseFallback;
+        updateSettings({
+          socksProxyEnabled: socksEnabled, socksProxyHost: socksHost, socksProxyPort: socksPort,
+          socksProxyVersion: socksVersion, socksProxyUsername: socksUsername,
+          flareSolverrEnabled: flareEnabled, flareSolverrUrl: flareUrl,
+          flareSolverrTimeout: flareTimeout, flareSolverrSessionName: flareSession,
+          flareSolverrSessionTtl: flareTtl, flareSolverrAsResponseFallback: flareFallback,
+        });
+      } catch {}
+    }
 
   async function saveAuth() {
     if (authMode === "NONE") { await clearAuth(); return; }
@@ -89,11 +90,11 @@
     try {
       const newUser = authUsername.trim();
       const newPass = authPassword.trim();
+      authSession.clearTokens();
       if (authMode === "UI_LOGIN") {
         await loginUI(newUser, newPass);
         updateSettings({ serverAuthMode: "UI_LOGIN", serverAuthUser: newUser, serverAuthPass: "" });
       } else {
-        authSession.clearTokens();
         updateSettings({ serverAuthMode: "BASIC_AUTH", serverAuthUser: newUser, serverAuthPass: newPass });
       }
 
