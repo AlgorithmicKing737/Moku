@@ -3,6 +3,7 @@
   import { BookOpen, CircleNotch } from "phosphor-svelte";
   import { gql } from "@api/client";
   import { GET_RECENTLY_UPDATED, GET_CHAPTERS } from "@api/queries";
+  import { cache, CACHE_GROUPS, CACHE_KEYS } from "@core/cache";
   import { store, openReader, setActiveManga, addToast } from "@store/state.svelte";
   import { dayLabel } from "@core/util";
   import { buildReaderChapterList } from "@features/series/lib/chapterList";
@@ -30,9 +31,10 @@
   let openingId = $state<number | null>(null);
 
   let ctrl: AbortController | null = null;
+  const RECENT_UPDATES_TTL_MS = 60 * 1_000;
 
   onMount(() => {
-    onRegisterRefresh?.(loadUpdates);
+    onRegisterRefresh?.(() => loadUpdates(true));
     void loadUpdates();
   });
 
@@ -46,13 +48,13 @@
   }
 
   const groups = $derived.by(() => {
-    const map = new Map<string, RecentUpdate[]>();
+    const grouped: Record<string, RecentUpdate[]> = {};
     for (const item of updates) {
       const label = dayLabel(fetchedAtMs(item));
-      if (!map.has(label)) map.set(label, []);
-      map.get(label)!.push(item);
+      if (!grouped[label]) grouped[label] = [];
+      grouped[label].push(item);
     }
-    return Array.from(map.entries()).map(([label, items]) => ({ label, items })) as UpdateGroup[];
+    return Object.entries(grouped).map(([label, items]) => ({ label, items })) as UpdateGroup[];
   });
 
   const lastCheckedTs = $derived(
@@ -86,7 +88,7 @@
     return "Chapter";
   }
 
-  async function loadUpdates() {
+  async function loadUpdates(force = false) {
     ctrl?.abort();
     const nextCtrl = new AbortController();
     ctrl = nextCtrl;
@@ -94,7 +96,15 @@
     error = null;
 
     try {
-      const res = await gql<{ chapters: { nodes: RecentUpdate[] } }>(GET_RECENTLY_UPDATED, {}, nextCtrl.signal);
+      const key = CACHE_KEYS.RECENT_UPDATES;
+      if (force) cache.clear(key);
+
+      const res = await cache.get<{ chapters: { nodes: RecentUpdate[] } }>(
+        key,
+        () => gql<{ chapters: { nodes: RecentUpdate[] } }>(GET_RECENTLY_UPDATED, {}, nextCtrl.signal),
+        RECENT_UPDATES_TTL_MS,
+        CACHE_GROUPS.LIBRARY,
+      );
       if (nextCtrl.signal.aborted) return;
 
       updates = res.chapters.nodes
