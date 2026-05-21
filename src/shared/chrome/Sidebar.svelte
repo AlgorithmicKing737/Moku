@@ -1,11 +1,12 @@
 <script lang="ts">
-  import { House, Books, MagnifyingGlass, ClockCounterClockwise, DownloadSimple, PuzzlePiece, GearSix, ChartLineUp } from "phosphor-svelte";
+  import { House, Books, MagnifyingGlass, ArrowsClockwise, ClockCounterClockwise, DownloadSimple, PuzzlePiece, GearSix, ChartLineUp } from "phosphor-svelte";
   import { store } from "@store/state.svelte";
   import type { NavPage } from "@store/state.svelte";
 
   const TABS: { id: NavPage; label: string; icon: any }[] = [
     { id: "home",       label: "Home",       icon: House },
     { id: "library",    label: "Library",    icon: Books },
+    { id: "updates",    label: "Updates",    icon: ArrowsClockwise },
     { id: "search",     label: "Search",     icon: MagnifyingGlass },
     { id: "history",    label: "History",    icon: ClockCounterClockwise },
     { id: "downloads",  label: "Downloads",  icon: DownloadSimple },

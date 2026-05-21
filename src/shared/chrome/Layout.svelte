@@ -10,6 +10,7 @@
   import Downloads      from "@features/downloads/components/Downloads.svelte";
   import Extensions     from "@features/extensions/components/Extensions.svelte";
   import Tracking       from "@features/tracking/components/Tracking.svelte";
+  import Updates        from "@features/updates/components/Updates.svelte";
 </script>
 
 <div class="frame">
@@ -24,6 +25,8 @@
         <Home />
       {:else if store.navPage === "library"}
         <Library />
+      {:else if store.navPage === "updates"}
+        <Updates />
       {:else if store.navPage === "search"}
         <Search />
       {:else if store.navPage === "history"}
