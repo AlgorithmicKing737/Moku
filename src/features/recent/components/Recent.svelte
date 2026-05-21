@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ArrowsClockwise, CircleNotch, MagnifyingGlass, Trash } from "phosphor-svelte";
+  import { ArrowCircleUp, ArrowsClockwise, BookOpen, CircleNotch, MagnifyingGlass, NewspaperClipping, Trash } from "phosphor-svelte";
   import { store, clearHistory } from "@store/state.svelte";
   import HistoryPanel from "./HistoryPanel.svelte";
   import UpdatesPanel from "./UpdatesPanel.svelte";
@@ -32,9 +32,11 @@
 
     <div class="tabs">
       <button class="tab" class:active={tab === "updates"} onclick={() => tab = "updates"}>
+        <NewspaperClipping size={11} weight="bold" />
         Updates
       </button>
       <button class="tab" class:active={tab === "history"} onclick={() => tab = "history"}>
+        <BookOpen size={11} weight="bold" />
         Reading history
       </button>
     </div>
@@ -97,21 +99,25 @@
   }
 
   .header {
+    position: relative;
+    z-index: 100;
     display: flex;
     align-items: center;
     gap: var(--sp-4);
     padding: var(--sp-4) var(--sp-6);
     border-bottom: 1px solid var(--border-dim);
     flex-shrink: 0;
+    min-width: 0;
   }
 
   .heading {
     font-family: var(--font-ui);
     font-size: var(--text-xs);
     font-weight: var(--weight-medium);
-    color: var(--text-muted);
+    color: var(--text-faint);
     letter-spacing: var(--tracking-wider);
     text-transform: uppercase;
+    flex-shrink: 0;
   }
 
   .tabs {
@@ -147,6 +153,7 @@
     align-items: center;
     gap: var(--sp-2);
     margin-left: auto;
+    flex-shrink: 0;
   }
 
   .icon-btn {
