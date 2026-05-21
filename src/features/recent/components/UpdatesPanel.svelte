@@ -155,11 +155,29 @@
   </div>
 
   {#if loading && updates.length === 0}
-    <div class="empty">
-      <div class="empty-icon-wrap">
-        <CircleNotch size={22} weight="light" class="anim-spin" />
-      </div>
-      <p class="empty-text">Loading updates…</p>
+    <div class="timeline" aria-hidden="true">
+      <section class="day-group">
+        <div class="day-header">
+          <span class="day-label skeleton sk-day-label"></span>
+          <div class="day-rule skeleton sk-day-rule"></div>
+        </div>
+
+        <div class="updates-list">
+          {#each Array(8) as _, i (i)}
+            <div class="update-row skeleton-row">
+              <div class="thumb-skeleton skeleton"></div>
+
+              <div class="info-skeleton">
+                <div class="skeleton sk-title"></div>
+                <div class="skeleton sk-chapter"></div>
+                <div class="skeleton sk-meta"></div>
+              </div>
+
+              <div class="end-skeleton skeleton"></div>
+            </div>
+          {/each}
+        </div>
+      </section>
     </div>
   {:else if error}
     <div class="empty">
@@ -179,7 +197,7 @@
     </div>
   {:else}
     <div class="timeline">
-      {#each groups as { label, items }}
+      {#each groups as { label, items } (label)}
         <section class="day-group">
           <div class="day-header">
             <span class="day-label">{label}</span>
@@ -289,20 +307,82 @@
     gap: var(--sp-2);
   }
 
+  @keyframes shimmer { from { background-position: -200% 0 } to { background-position: 200% 0 } }
+  .skeleton {
+    border-radius: var(--radius-sm);
+    background: linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--bg-overlay, var(--bg-elevated)) 90%, var(--text-primary) 6%) 20%,
+      color-mix(in srgb, var(--bg-elevated, var(--bg-overlay)) 76%, var(--text-primary) 16%) 50%,
+      color-mix(in srgb, var(--bg-overlay, var(--bg-elevated)) 90%, var(--text-primary) 6%) 80%
+    );
+    background-size: 220% 100%;
+    animation: shimmer 1.45s ease-in-out infinite;
+  }
+
   .update-row {
     display: flex;
     align-items: stretch;
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius-md);
     border: 1px solid var(--border-dim);
-    background: var(--bg-base);
+    background: var(--bg-raised);
     overflow: hidden;
-    transition: border-color var(--t-base), transform var(--t-base);
+    transition: border-color var(--t-fast), opacity var(--t-base), background var(--t-fast);
   }
-  .update-row:has(.info-btn:hover:not(:disabled)) {
+  .update-row:has(.info-btn:hover:not(:disabled)),
+  .update-row:has(.thumb-btn:hover) {
     border-color: var(--border-strong);
-    transform: translateY(-1px);
+    background: var(--bg-elevated);
   }
   .update-row.read { opacity: 0.5; }
+
+  .skeleton-row {
+    min-height: 74px;
+    pointer-events: none;
+  }
+
+  .thumb-skeleton {
+    width: 34px;
+    aspect-ratio: 2 / 3;
+    margin: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-3);
+    border-radius: var(--radius-sm);
+    flex-shrink: 0;
+    align-self: center;
+  }
+
+  .info-skeleton {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: var(--sp-2);
+    padding: var(--sp-2) var(--sp-3) var(--sp-2) 0;
+  }
+
+  .sk-title { height: 12px; width: clamp(140px, 42%, 340px); }
+  .sk-chapter { height: 10px; width: clamp(100px, 30%, 260px); }
+  .sk-meta { height: 8px; width: clamp(70px, 18%, 180px); }
+
+  .end-skeleton {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    margin: auto var(--sp-4) auto 0;
+    opacity: 0.85;
+    flex-shrink: 0;
+  }
+
+  .sk-day-label {
+    display: block;
+    width: 74px;
+    height: 10px;
+    border-radius: var(--radius-sm);
+  }
+
+  .sk-day-rule {
+    opacity: 0.7;
+  }
 
   .thumb-btn {
     width: 52px;
@@ -316,7 +396,7 @@
     align-items: center;
     transition: background var(--t-base);
   }
-  .thumb-btn:hover { background: var(--bg-raised); }
+  .thumb-btn:hover { background: none; }
 
   :global(.thumb) {
     width: 100%;
@@ -339,7 +419,7 @@
     text-align: left;
     transition: background var(--t-base);
   }
-  .info-btn:hover:not(:disabled) { background: var(--bg-raised); }
+  .info-btn:hover:not(:disabled) { background: none; }
   .info-btn:disabled { cursor: default; opacity: 0.8; }
 
   .update-info {
