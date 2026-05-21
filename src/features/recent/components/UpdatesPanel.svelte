@@ -4,7 +4,7 @@
   import { gql } from "@api/client";
   import { GET_RECENTLY_UPDATED, GET_CHAPTERS } from "@api/queries";
   import { store, openReader, setActiveManga, addToast } from "@store/state.svelte";
-  import { dayLabel, timeAgo } from "@core/util";
+  import { dayLabel } from "@core/util";
   import { buildReaderChapterList } from "@features/series/lib/chapterList";
   import Thumbnail from "@shared/manga/Thumbnail.svelte";
   import type { Chapter, Manga } from "@types";
@@ -47,6 +47,24 @@
     }
     return Array.from(map.entries()).map(([label, items]) => ({ label, items })) as UpdateGroup[];
   });
+
+  const lastUpdatedTs = $derived(
+    store.lastLibraryRefresh > 0
+      ? store.lastLibraryRefresh
+      : (updates.length > 0 ? fetchedAtMs(updates[0]) : null)
+  );
+
+  const lastUpdatedLabel = $derived(
+    lastUpdatedTs
+      ? new Date(lastUpdatedTs).toLocaleString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+        })
+      : "Never"
+  );
 
   function mangaStub(item: RecentUpdate): Manga {
     return {
@@ -116,7 +134,8 @@
   <div class="header">
     <div class="heading-group">
       <ArrowsClockwise size={13} weight="light" class="heading-icon" />
-      <span class="heading">Updates</span>
+      <span class="heading">Library updates</span>
+      <span class="last-updated">Last updated: {lastUpdatedLabel}</span>
     </div>
     <button class="icon-btn" onclick={loadUpdates} disabled={loading} title="Refresh updates">
       {#if loading}<CircleNotch size={14} weight="light" class="anim-spin" />
@@ -173,12 +192,11 @@
 
                   <span class="chapter-title">{chapterLabel(item)}</span>
 
-                  <div class="meta-row">
-                    <span>{timeAgo(fetchedAtMs(item))}</span>
-                    {#if (item.lastPageRead ?? 0) > 0 && !item.isRead}
-                      <span>· Resume p.{item.lastPageRead}</span>
-                    {/if}
-                  </div>
+                  {#if (item.lastPageRead ?? 0) > 0 && !item.isRead}
+                    <div class="meta-row">
+                      <span>Resume p.{item.lastPageRead}</span>
+                    </div>
+                  {/if}
                 </div>
 
                 <div class="row-end">
@@ -229,6 +247,14 @@
     color: var(--text-muted);
     letter-spacing: var(--tracking-wider);
     text-transform: uppercase;
+  }
+
+  .last-updated {
+    font-family: var(--font-ui);
+    font-size: var(--text-2xs);
+    color: var(--text-faint);
+    letter-spacing: var(--tracking-wide);
+    text-transform: none;
   }
 
   .icon-btn {

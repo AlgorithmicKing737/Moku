@@ -1,5 +1,5 @@
 export type NavPage =
-  | "home" | "library" | "updates" | "sources" | "explore"
+  | "home" | "library" | "sources" | "explore"
   | "downloads" | "extensions" | "history" | "search" | "tracking";
 
 class AppStore {

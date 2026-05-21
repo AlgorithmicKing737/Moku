@@ -1,7 +1,6 @@
 <script lang="ts">
   import { store } from "@store/state.svelte";
   import Sidebar        from "@shared/chrome/Sidebar.svelte";
-  import RecentActivity from "@shared/chrome/RecentActivity.svelte";
   import Library        from "@features/library/components/Library.svelte";
   import SeriesDetail   from "@features/series/components/SeriesDetail.svelte";
   import Home           from "@features/home/components/Home.svelte";
@@ -10,7 +9,7 @@
   import Downloads      from "@features/downloads/components/Downloads.svelte";
   import Extensions     from "@features/extensions/components/Extensions.svelte";
   import Tracking       from "@features/tracking/components/Tracking.svelte";
-  import Updates        from "@features/updates/components/Updates.svelte";
+  import Recent         from "@features/recent/components/Recent.svelte";
 </script>
 
 <div class="frame">
@@ -25,12 +24,10 @@
         <Home />
       {:else if store.navPage === "library"}
         <Library />
-      {:else if store.navPage === "updates"}
-        <Updates />
       {:else if store.navPage === "search"}
         <Search />
       {:else if store.navPage === "history"}
-        <RecentActivity />
+        <Recent />
       {:else if store.navPage === "downloads"}
         <Downloads />
       {:else if store.navPage === "extensions"}
