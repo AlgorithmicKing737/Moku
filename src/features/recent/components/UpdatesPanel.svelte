@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
-  import { ArrowsClockwise, BookOpen, CircleNotch } from "phosphor-svelte";
+  import { BookOpen, CircleNotch } from "phosphor-svelte";
   import { gql } from "@api/client";
   import { GET_RECENTLY_UPDATED, GET_CHAPTERS } from "@api/queries";
   import { store, openReader, setActiveManga, addToast } from "@store/state.svelte";
@@ -8,6 +8,13 @@
   import { buildReaderChapterList } from "@features/series/lib/chapterList";
   import Thumbnail from "@shared/manga/Thumbnail.svelte";
   import type { Chapter, Manga } from "@types";
+
+  interface Props {
+    loading?: boolean;
+    onRegisterRefresh?: (fn: () => Promise<void>) => void;
+  }
+
+  let { loading = $bindable(true), onRegisterRefresh }: Props = $props();
 
   interface RecentUpdate extends Pick<Chapter, "id" | "name" | "chapterNumber" | "sourceOrder" | "isRead" | "lastPageRead" | "mangaId" | "fetchedAt"> {
     manga: { id: number; title: string; thumbnailUrl: string; inLibrary: boolean } | null;
@@ -19,13 +26,13 @@
   }
 
   let updates   = $state<RecentUpdate[]>([]);
-  let loading   = $state(true);
   let error     = $state<string | null>(null);
   let openingId = $state<number | null>(null);
 
   let ctrl: AbortController | null = null;
 
   onMount(() => {
+    onRegisterRefresh?.(loadUpdates);
     void loadUpdates();
   });
 
@@ -48,22 +55,20 @@
     return Array.from(map.entries()).map(([label, items]) => ({ label, items })) as UpdateGroup[];
   });
 
-  const lastUpdatedTs = $derived(
-    store.lastLibraryRefresh > 0
-      ? store.lastLibraryRefresh
-      : (updates.length > 0 ? fetchedAtMs(updates[0]) : null)
+  const lastCheckedTs = $derived(
+    updates.length > 0 ? fetchedAtMs(updates[0]) : null
   );
 
-  const lastUpdatedLabel = $derived(
-    lastUpdatedTs
-      ? new Date(lastUpdatedTs).toLocaleString("en-US", {
+  const lastCheckedLabel = $derived(
+    lastCheckedTs
+      ? new Date(lastCheckedTs).toLocaleString("en-US", {
           month: "short",
           day: "numeric",
           year: "numeric",
           hour: "numeric",
           minute: "2-digit",
         })
-      : "Never"
+      : null
   );
 
   function mangaStub(item: RecentUpdate): Manga {
@@ -131,16 +136,22 @@
 </script>
 
 <div class="root anim-fade-in">
-  <div class="header">
-    <div class="heading-group">
-      <ArrowsClockwise size={13} weight="light" class="heading-icon" />
-      <span class="heading">Library updates</span>
-      <span class="last-updated">Last updated: {lastUpdatedLabel}</span>
+  <div class="bar-wrap">
+    <div class="status-bar">
+      <div class="status-dot" class:active={loading}></div>
+      <span class="status-text">
+        {#if loading}Checking for updates…{:else if error}Update check failed{:else}Up to date{/if}
+      </span>
+      <div class="status-right">
+        {#if !loading && lastCheckedLabel}
+          <span class="status-detail">Last checked: {lastCheckedLabel}</span>
+          <div class="bar-sep"></div>
+        {/if}
+        {#if !loading && updates.length > 0}
+          <span class="status-count">{updates.length} chapter{updates.length === 1 ? "" : "s"}</span>
+        {/if}
+      </div>
     </div>
-    <button class="icon-btn" onclick={loadUpdates} disabled={loading} title="Refresh updates">
-      {#if loading}<CircleNotch size={14} weight="light" class="anim-spin" />
-      {:else}<ArrowsClockwise size={14} weight="bold" />{/if}
-    </button>
   </div>
 
   {#if loading && updates.length === 0}
@@ -177,36 +188,38 @@
 
           <div class="updates-list">
             {#each items as item (item.id)}
-              <button class="update-row" onclick={() => openUpdate(item)} disabled={openingId === item.id}>
-                <div class="thumb-wrap">
+              <div class="update-row" class:read={item.isRead}>
+                <button class="thumb-btn" onclick={() => setActiveManga(mangaStub(item))} title="View series">
                   <Thumbnail src={item.manga?.thumbnailUrl ?? ""} alt={item.manga?.title ?? "Series cover"} class="thumb" />
-                </div>
+                </button>
 
-                <div class="update-info">
-                  <div class="title-row">
-                    <span class="series-title">{item.manga?.title ?? "Unknown series"}</span>
-                    {#if !item.isRead}
-                      <span class="pill">Unread</span>
+                <button class="info-btn" onclick={() => openUpdate(item)} disabled={openingId === item.id}>
+                  <div class="update-info">
+                    <div class="title-row">
+                      <span class="series-title">{item.manga?.title ?? "Unknown series"}</span>
+                      {#if !item.isRead}
+                        <span class="pill">Unread</span>
+                      {/if}
+                    </div>
+
+                    <span class="chapter-title">{chapterLabel(item)}</span>
+
+                    {#if (item.lastPageRead ?? 0) > 0 && !item.isRead}
+                      <div class="meta-row">
+                        <span>Resume p.{item.lastPageRead}</span>
+                      </div>
                     {/if}
                   </div>
 
-                  <span class="chapter-title">{chapterLabel(item)}</span>
-
-                  {#if (item.lastPageRead ?? 0) > 0 && !item.isRead}
-                    <div class="meta-row">
-                      <span>Resume p.{item.lastPageRead}</span>
-                    </div>
-                  {/if}
-                </div>
-
-                <div class="row-end">
-                  {#if openingId === item.id}
-                    <CircleNotch size={14} weight="light" class="anim-spin" />
-                  {:else}
-                    <BookOpen size={14} weight="light" />
-                  {/if}
-                </div>
-              </button>
+                  <div class="row-end">
+                    {#if openingId === item.id}
+                      <CircleNotch size={14} weight="light" class="anim-spin" />
+                    {:else}
+                      <BookOpen size={14} weight="light" />
+                    {/if}
+                  </div>
+                </button>
+              </div>
             {/each}
           </div>
         </section>
@@ -223,60 +236,21 @@
     overflow: hidden;
   }
 
-  .header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: var(--sp-4) var(--sp-6);
-    border-bottom: 1px solid var(--border-dim);
-    flex-shrink: 0;
-  }
+  .bar-wrap { padding: var(--sp-3) var(--sp-6); flex-shrink: 0; }
 
-  .heading-group {
-    display: flex;
-    align-items: center;
-    gap: var(--sp-2);
-  }
-
-  :global(.heading-icon) { color: var(--text-faint); }
-
-  .heading {
-    font-family: var(--font-ui);
-    font-size: var(--text-xs);
-    font-weight: var(--weight-medium);
-    color: var(--text-muted);
-    letter-spacing: var(--tracking-wider);
-    text-transform: uppercase;
-  }
-
-  .last-updated {
-    font-family: var(--font-ui);
-    font-size: var(--text-2xs);
-    color: var(--text-faint);
-    letter-spacing: var(--tracking-wide);
-    text-transform: none;
-  }
-
-  .icon-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 30px;
-    height: 30px;
-    border-radius: var(--radius-md);
-    border: 1px solid var(--border-dim);
-    background: var(--bg-raised);
-    color: var(--text-faint);
-    cursor: pointer;
-    transition: color var(--t-base), border-color var(--t-base), background var(--t-base);
-  }
-  .icon-btn:hover:not(:disabled) { color: var(--text-primary); border-color: var(--border-strong); }
-  .icon-btn:disabled { opacity: 0.45; cursor: default; }
+  .status-bar { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); background: var(--bg-surface, var(--bg-raised)); border: 1px solid var(--border-strong, var(--border-dim)); border-radius: var(--radius-md); box-shadow: 0 1px 4px rgba(0,0,0,0.25); }
+  .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-faint); flex-shrink: 0; transition: background var(--t-base); }
+  .status-dot.active { background: var(--accent); animation: pulse 1.6s ease infinite; }
+  .status-text { font-family: var(--font-ui); font-size: var(--text-xs); color: var(--text-muted); flex: 1; letter-spacing: var(--tracking-wide); }
+  .status-right { display: flex; align-items: center; gap: var(--sp-2); margin-left: auto; }
+  .status-detail { font-family: var(--font-ui); font-size: var(--text-xs); color: var(--text-faint); letter-spacing: var(--tracking-wide); }
+  .status-count { font-family: var(--font-ui); font-size: var(--text-xs); color: var(--text-faint); letter-spacing: var(--tracking-wide); }
+  .bar-sep { width: 1px; height: 12px; background: var(--border-dim); flex-shrink: 0; }
 
   .timeline {
     flex: 1;
     overflow-y: auto;
-    padding: var(--sp-5) var(--sp-6) var(--sp-6);
+    padding: var(--sp-4) var(--sp-6) var(--sp-6);
     display: flex;
     flex-direction: column;
     gap: var(--sp-5);
@@ -316,42 +290,60 @@
   }
 
   .update-row {
-    display: grid;
-    grid-template-columns: 52px minmax(0, 1fr) auto;
-    align-items: center;
-    gap: var(--sp-3);
-    width: 100%;
-    padding: var(--sp-2);
+    display: flex;
+    align-items: stretch;
     border-radius: var(--radius-lg);
     border: 1px solid var(--border-dim);
     background: var(--bg-base);
-    cursor: pointer;
-    text-align: left;
-    transition: background var(--t-base), border-color var(--t-base), transform var(--t-base);
+    overflow: hidden;
+    transition: border-color var(--t-base), transform var(--t-base);
   }
-  .update-row:hover:not(:disabled) {
-    background: var(--bg-raised);
+  .update-row:has(.info-btn:hover:not(:disabled)) {
     border-color: var(--border-strong);
     transform: translateY(-1px);
   }
-  .update-row:disabled { cursor: default; opacity: 0.8; }
+  .update-row.read { opacity: 0.5; }
 
-  .thumb-wrap {
+  .thumb-btn {
     width: 52px;
-    aspect-ratio: 2 / 3;
-    border-radius: var(--radius-md);
-    overflow: hidden;
-    background: var(--bg-overlay);
-    border: 1px solid var(--border-dim);
+    flex-shrink: 0;
+    padding: var(--sp-2);
+    background: none;
+    border: none;
+    border-right: 1px solid var(--border-dim);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    transition: background var(--t-base);
   }
+  .thumb-btn:hover { background: var(--bg-raised); }
+
   :global(.thumb) {
     width: 100%;
-    height: 100%;
+    aspect-ratio: 2 / 3;
     display: block;
     object-fit: cover;
+    border-radius: var(--radius-sm);
   }
 
+  .info-btn {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    padding: var(--sp-2) var(--sp-3);
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    transition: background var(--t-base);
+  }
+  .info-btn:hover:not(:disabled) { background: var(--bg-raised); }
+  .info-btn:disabled { cursor: default; opacity: 0.8; }
+
   .update-info {
+    flex: 1;
     min-width: 0;
     display: flex;
     flex-direction: column;
@@ -409,6 +401,7 @@
     align-items: center;
     justify-content: center;
     width: 24px;
+    flex-shrink: 0;
   }
 
   .empty {
@@ -447,4 +440,6 @@
     font-size: var(--text-xs);
     color: var(--text-faint);
   }
+
+  @keyframes pulse { 0%, 100% { opacity: 1 } 50% { opacity: 0.4 } }
 </style>

@@ -1,14 +1,21 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { ClockCounterClockwise, Trash, MagnifyingGlass, Books, Fire, BookOpen, Clock, TrendUp } from "phosphor-svelte";
+  import { ClockCounterClockwise, Books, Fire, BookOpen, Clock, TrendUp } from "phosphor-svelte";
   import Thumbnail from "@shared/manga/Thumbnail.svelte";
-  import { store, clearHistory, setPreviewManga } from "@store/state.svelte";
+  import { store, setPreviewManga } from "@store/state.svelte";
   import { gql } from "@api/client";
   import { GET_LIBRARY } from "@api/queries/manga";
   import { cache, CACHE_KEYS } from "@core/cache";
   import type { HistoryEntry } from "@store/state.svelte";
   import type { Manga } from "@types";
   import { timeAgo, dayLabel, formatReadTime } from "@core/util";
+
+  interface Props {
+    search: string;
+    confirmClear: boolean;
+  }
+
+  let { search, confirmClear }: Props = $props();
 
   let libraryManga = $state<Manga[]>([]);
 
@@ -23,9 +30,6 @@
   function thumbFor(mangaId: number, fallback: string): string {
     return libraryManga.find(m => m.id === mangaId)?.thumbnailUrl ?? fallback ?? "";
   }
-
-  let search       = $state("");
-  let confirmClear = $state(false);
 
   const SESSION_GAP_MS = 30 * 60 * 1000;
 
@@ -90,42 +94,9 @@
     }
     return Array.from(map.entries()).map(([label, items]) => ({ label, items }));
   });
-
-  function handleClear() {
-    if (!confirmClear) { confirmClear = true; setTimeout(() => confirmClear = false, 3000); return; }
-    clearHistory(); confirmClear = false;
-  }
 </script>
 
 <div class="root anim-fade-in">
-
-  <div class="header">
-    <div class="heading-group">
-      <ClockCounterClockwise size={13} weight="light" class="heading-icon" />
-      <span class="heading">History</span>
-    </div>
-    <div class="header-right">
-      <div class="search-wrap">
-        <MagnifyingGlass size={11} class="search-icon" weight="light" />
-        <input class="search" placeholder="Search…" bind:value={search} />
-        {#if search}
-          <button class="search-clear" onclick={() => search = ""}>×</button>
-        {/if}
-      </div>
-      {#if store.history.length > 0}
-        <button
-          class="clear-btn"
-          class:confirm={confirmClear}
-          onclick={handleClear}
-          title={confirmClear ? "Click again to confirm" : "Clear history"}
-        >
-          <Trash size={12} weight="light" />
-          {#if confirmClear}<span class="clear-label">Confirm?</span>{/if}
-        </button>
-      {/if}
-    </div>
-  </div>
-
   {#if store.readingStats.totalChaptersRead > 0}
     <div class="stats-grid">
       <div class="stat-card streak">
@@ -229,100 +200,6 @@
     height: 100%;
     overflow: hidden;
   }
-
-  .header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: var(--sp-4) var(--sp-6);
-    border-bottom: 1px solid var(--border-dim);
-    flex-shrink: 0;
-  }
-
-  .heading-group {
-    display: flex;
-    align-items: center;
-    gap: var(--sp-2);
-  }
-
-  :global(.heading-icon) { color: var(--text-faint); }
-
-  .heading {
-    font-family: var(--font-ui);
-    font-size: var(--text-xs);
-    font-weight: var(--weight-medium);
-    color: var(--text-muted);
-    letter-spacing: var(--tracking-wider);
-    text-transform: uppercase;
-  }
-
-  .header-right {
-    display: flex;
-    align-items: center;
-    gap: var(--sp-2);
-  }
-
-  .search-wrap {
-    position: relative;
-    display: flex;
-    align-items: center;
-  }
-
-  .search-wrap :global(.search-icon) {
-    position: absolute;
-    left: 8px;
-    color: var(--text-faint);
-    pointer-events: none;
-  }
-
-  .search {
-    background: var(--bg-raised);
-    border: 1px solid var(--border-dim);
-    border-radius: var(--radius-md);
-    padding: 4px 26px;
-    color: var(--text-primary);
-    font-size: var(--text-xs);
-    width: 148px;
-    outline: none;
-    transition: border-color var(--t-base), width var(--t-base), background var(--t-base);
-  }
-
-  .search::placeholder { color: var(--text-faint); }
-
-  .search:focus {
-    border-color: var(--border-strong);
-    background: var(--bg-elevated);
-    width: 200px;
-  }
-
-  .search-clear {
-    position: absolute;
-    right: 8px;
-    color: var(--text-faint);
-    font-size: 13px;
-    line-height: 1;
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 2px;
-    transition: color var(--t-base);
-  }
-
-  .search-clear:hover { color: var(--text-muted); }
-
-  .clear-btn {
-    display: flex; align-items: center; gap: 4px;
-    height: 30px; padding: 0 var(--sp-2);
-    border-radius: var(--radius-md); border: 1px solid var(--border-dim);
-    background: var(--bg-raised); color: var(--text-faint);
-    cursor: pointer; font-family: var(--font-ui); font-size: var(--text-2xs);
-    letter-spacing: var(--tracking-wide); flex-shrink: 0;
-    transition: color var(--t-base), background var(--t-base), border-color var(--t-base);
-  }
-  .clear-btn:hover { color: var(--color-error); background: var(--color-error-bg); border-color: color-mix(in srgb, var(--color-error) 30%, transparent); }
-  .clear-btn.confirm { color: var(--color-error); background: var(--color-error-bg); border-color: var(--color-error); }
-
-  .clear-label { font-size: var(--text-2xs); }
 
   .stats-grid {
     display: grid;
