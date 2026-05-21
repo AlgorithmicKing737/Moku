@@ -198,8 +198,6 @@
     overflow: hidden;
   }
 
-  .stats-section { margin-bottom: var(--sp-5); }
-
   .stats-header {
     display: flex;
     align-items: center;
@@ -219,7 +217,7 @@
 
   .stats-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
     gap: var(--sp-2);
   }
 
@@ -276,23 +274,29 @@
   .timeline {
     flex: 1;
     overflow-y: auto;
-    padding: var(--sp-4) var(--sp-5) var(--sp-6);
+    padding: var(--sp-4) var(--sp-6) var(--sp-6);
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-5);
     scrollbar-width: thin;
     scrollbar-color: var(--border-dim) transparent;
   }
 
-  .day-group { margin-bottom: var(--sp-5); }
+  .day-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+  }
 
   .day-header {
     display: flex;
     align-items: center;
     gap: var(--sp-3);
-    padding-bottom: var(--sp-2);
   }
 
   .day-label {
     font-family: var(--font-ui);
-    font-size: 9px;
+    font-size: var(--text-2xs);
     color: var(--text-faint);
     letter-spacing: var(--tracking-wider);
     text-transform: uppercase;
@@ -303,7 +307,6 @@
     flex: 1;
     height: 1px;
     background: var(--border-dim);
-    opacity: 0.5;
   }
 
   .session-list {
