@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from "svelte";
   import { BookOpen, CircleNotch } from "phosphor-svelte";
   import { gql } from "@api/client";
-  import { GET_RECENTLY_UPDATED, GET_CHAPTERS, GET_LIBRARY_UPDATE_PANEL_STATUS } from "@api/queries";
+  import { GET_RECENTLY_UPDATED, GET_CHAPTERS, LIBRARY_UPDATE_STATUS } from "@api/queries";
   import { cache, CACHE_GROUPS, CACHE_KEYS } from "@core/cache";
   import { store, openReader, setActiveManga, addToast } from "@store/state.svelte";
   import { dayLabel } from "@core/util";
@@ -31,9 +31,13 @@
   let openingId = $state<number | null>(null);
   let updaterRunning = $state(false);
   let lastUpdatedTs = $state<number | null>(null);
+  let updaterFinishedJobs = $state<number | null>(null);
+  let updaterTotalJobs = $state<number | null>(null);
 
   let ctrl: AbortController | null = null;
+  let statusPollTimer: ReturnType<typeof setTimeout> | null = null;
   const RECENT_UPDATES_TTL_MS = 60 * 1_000;
+  const UPDATE_STATUS_POLL_MS = 2_000;
 
   onMount(() => {
     onRegisterRefresh?.(() => loadUpdates(true));
@@ -42,6 +46,7 @@
 
   onDestroy(() => {
     ctrl?.abort();
+    stopStatusPolling();
   });
 
   function fetchedAtMs(item: Pick<RecentUpdate, "fetchedAt">): number {
@@ -71,6 +76,12 @@
       : null
   );
 
+  const updaterProgressLabel = $derived(
+    typeof updaterFinishedJobs === "number" && typeof updaterTotalJobs === "number" && updaterTotalJobs > 0
+      ? `${updaterFinishedJobs}/${updaterTotalJobs}`
+      : null
+  );
+
   function parseServerTimestamp(value: unknown): number | null {
     if (typeof value === "number") return Number.isFinite(value) ? value : null;
     if (typeof value === "string") {
@@ -80,6 +91,64 @@
       return Number.isFinite(parsed) ? parsed : null;
     }
     return null;
+  }
+
+  function applyUpdateStatus(statusRes: {
+    libraryUpdateStatus: {
+      jobsInfo: {
+        isRunning: boolean;
+        finishedJobs?: number;
+        totalJobs?: number;
+      };
+    };
+    lastUpdateTimestamp: { timestamp: string | number | null } | null;
+  } | null) {
+    const jobsInfo = statusRes?.libraryUpdateStatus.jobsInfo;
+    updaterRunning = jobsInfo?.isRunning ?? false;
+    updaterFinishedJobs = typeof jobsInfo?.finishedJobs === "number" ? jobsInfo.finishedJobs : null;
+    updaterTotalJobs = typeof jobsInfo?.totalJobs === "number" ? jobsInfo.totalJobs : null;
+    lastUpdatedTs = parseServerTimestamp(statusRes?.lastUpdateTimestamp?.timestamp ?? null);
+  }
+
+  function stopStatusPolling() {
+    if (!statusPollTimer) return;
+    clearTimeout(statusPollTimer);
+    statusPollTimer = null;
+  }
+
+  function scheduleStatusPoll() {
+    if (statusPollTimer) return;
+
+    const tick = async () => {
+      statusPollTimer = null;
+      try {
+        const statusRes = await gql<{
+          libraryUpdateStatus: {
+            jobsInfo: {
+              isRunning: boolean;
+              finishedJobs: number;
+              totalJobs: number;
+            };
+          };
+          lastUpdateTimestamp: { timestamp: string | number | null } | null;
+        }>(LIBRARY_UPDATE_STATUS, {});
+
+        const wasRunning = updaterRunning;
+        applyUpdateStatus(statusRes);
+
+        if (updaterRunning) {
+          statusPollTimer = setTimeout(tick, UPDATE_STATUS_POLL_MS);
+        } else if (wasRunning) {
+          void loadUpdates(true);
+        }
+      } catch {
+        if (updaterRunning) {
+          statusPollTimer = setTimeout(tick, UPDATE_STATUS_POLL_MS);
+        }
+      }
+    };
+
+    statusPollTimer = setTimeout(tick, UPDATE_STATUS_POLL_MS);
   }
 
   function mangaStub(item: RecentUpdate): Manga {
@@ -120,11 +189,12 @@
             jobsInfo: { isRunning: boolean };
           };
           lastUpdateTimestamp: { timestamp: string | number | null } | null;
-        }>(GET_LIBRARY_UPDATE_PANEL_STATUS, {}, nextCtrl.signal).catch(() => null),
+        }>(LIBRARY_UPDATE_STATUS, {}, nextCtrl.signal).catch(() => null),
       ]);
 
-      updaterRunning = statusRes?.libraryUpdateStatus.jobsInfo.isRunning ?? false;
-      lastUpdatedTs = parseServerTimestamp(statusRes?.lastUpdateTimestamp?.timestamp ?? null);
+      applyUpdateStatus(statusRes);
+      if (updaterRunning) scheduleStatusPoll();
+      else stopStatusPolling();
 
       if (nextCtrl.signal.aborted) return;
 
@@ -137,6 +207,9 @@
       updates = [];
       updaterRunning = false;
       lastUpdatedTs = null;
+      updaterFinishedJobs = null;
+      updaterTotalJobs = null;
+      stopStatusPolling();
     } finally {
       if (!nextCtrl.signal.aborted) loading = false;
     }
@@ -171,9 +244,9 @@
 <div class="root anim-fade-in">
   <div class="bar-wrap">
     <div class="status-bar">
-      <div class="status-dot" class:active={loading}></div>
+      <div class="status-dot" class:active={loading || updaterRunning}></div>
       <span class="status-text">
-        {#if loading}Checking for updates…{:else if error}Update check failed{:else if updaterRunning}Library update in progress{:else}Up to date{/if}
+        {#if loading}Checking for updates…{:else if error}Update check failed{:else if updaterRunning}Library update in progress...{#if updaterProgressLabel} ({updaterProgressLabel}){/if}{:else}Up to date{/if}
       </span>
       <div class="status-right">
         {#if !loading && lastUpdatedLabel}

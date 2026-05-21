@@ -75,20 +75,6 @@ export const LIBRARY_UPDATE_STATUS = `
         manga { id title thumbnailUrl unreadCount }
       }
     }
-  }
-`;
-
-export const GET_LIBRARY_UPDATE_PANEL_STATUS = `
-  query GetLibraryUpdatePanelStatus {
-    libraryUpdateStatus {
-      jobsInfo {
-        isRunning
-        finishedJobs
-        totalJobs
-        skippedMangasCount
-        skippedCategoriesCount
-      }
-    }
     lastUpdateTimestamp {
       timestamp
     }
