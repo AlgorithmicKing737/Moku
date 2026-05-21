@@ -97,47 +97,6 @@
 </script>
 
 <div class="root anim-fade-in">
-  {#if store.readingStats.totalChaptersRead > 0}
-    <div class="stats-grid">
-      <div class="stat-card streak">
-        <div class="stat-icon-wrap fire">
-          <Fire size={12} weight="fill" />
-        </div>
-        <div class="stat-body">
-          <span class="stat-val">{store.readingStats.currentStreakDays}</span>
-          <span class="stat-unit">day streak</span>
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon-wrap">
-          <BookOpen size={12} weight="light" />
-        </div>
-        <div class="stat-body">
-          <span class="stat-val">{store.readingStats.totalChaptersRead}</span>
-          <span class="stat-unit">chapters</span>
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon-wrap">
-          <Clock size={12} weight="light" />
-        </div>
-        <div class="stat-body">
-          <span class="stat-val">{formatReadTime(store.readingStats.totalMinutesRead)}</span>
-          <span class="stat-unit">read time</span>
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon-wrap">
-          <TrendUp size={12} weight="light" />
-        </div>
-        <div class="stat-body">
-          <span class="stat-val">{store.readingStats.totalMangaRead}</span>
-          <span class="stat-unit">series</span>
-        </div>
-      </div>
-    </div>
-  {/if}
-
   {#if store.history.length === 0}
     <div class="empty">
       <div class="empty-icon-wrap">
@@ -155,6 +114,44 @@
     </div>
   {:else}
     <div class="timeline">
+      {#if store.readingStats.totalChaptersRead > 0}
+        <div class="stats-section">
+          <div class="stats-header">
+            <span class="stats-title"><TrendUp size={10} weight="bold" /> Reading Stats</span>
+          </div>
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-icon-wrap fire"><Fire size={14} weight="fill" /></div>
+              <div class="stat-body">
+                <span class="stat-val">{store.readingStats.currentStreakDays}</span>
+                <span class="stat-label">Day streak</span>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon-wrap accent"><BookOpen size={14} weight="light" /></div>
+              <div class="stat-body">
+                <span class="stat-val">{store.readingStats.totalChaptersRead}</span>
+                <span class="stat-label">Chapters read</span>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon-wrap neutral"><Clock size={14} weight="light" /></div>
+              <div class="stat-body">
+                <span class="stat-val">{formatReadTime(store.readingStats.totalMinutesRead)}</span>
+                <span class="stat-label">Read time</span>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon-wrap neutral"><TrendUp size={14} weight="light" /></div>
+              <div class="stat-body">
+                <span class="stat-val">{store.readingStats.totalMangaRead}</span>
+                <span class="stat-label">Series read</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      {/if}
+
       {#each groups as { label, items }}
         <div class="day-group">
           <div class="day-header">
@@ -201,63 +198,78 @@
     overflow: hidden;
   }
 
+  .stats-section { margin-bottom: var(--sp-5); }
+
+  .stats-header {
+    display: flex;
+    align-items: center;
+    padding-bottom: var(--sp-2);
+  }
+
+  .stats-title {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sp-2);
+    font-family: var(--font-ui);
+    font-size: var(--text-2xs);
+    color: var(--text-faint);
+    letter-spacing: var(--tracking-wider);
+    text-transform: uppercase;
+  }
+
   .stats-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 1px;
-    background: var(--border-dim);
-    border-bottom: 1px solid var(--border-dim);
-    flex-shrink: 0;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--sp-2);
   }
 
   .stat-card {
     display: flex;
     align-items: center;
-    gap: var(--sp-2);
-    padding: var(--sp-3) var(--sp-4);
-    background: var(--bg-base);
-    transition: background var(--t-base);
+    gap: var(--sp-3);
+    background: var(--bg-raised);
+    border: 1px solid var(--border-dim);
+    border-radius: var(--radius-md);
+    padding: var(--sp-3);
+    transition: border-color var(--t-fast);
   }
 
-  .stat-card.streak .stat-icon-wrap { background: color-mix(in srgb, #f97316 12%, transparent); }
-  .stat-card.streak .stat-val { color: #f97316; }
+  .stat-card:hover { border-color: var(--border-base); }
 
   .stat-icon-wrap {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 24px;
-    height: 24px;
+    width: 32px;
+    height: 32px;
     border-radius: var(--radius-sm);
-    background: var(--bg-raised);
-    color: var(--text-faint);
     flex-shrink: 0;
   }
 
-  .stat-icon-wrap.fire { color: #f97316; }
+  .fire    { background: rgba(251, 146, 60, 0.15); color: #fb923c; }
+  .accent  { background: var(--accent-muted); color: var(--accent-fg); }
+  .neutral { background: var(--bg-overlay); color: var(--text-faint); }
 
   .stat-body {
     display: flex;
     flex-direction: column;
-    gap: 1px;
+    gap: 2px;
     min-width: 0;
   }
 
   .stat-val {
     font-family: var(--font-ui);
-    font-size: var(--text-sm);
-    font-weight: var(--weight-semibold);
+    font-size: var(--text-lg, 1.05rem);
+    font-weight: var(--weight-medium);
     color: var(--text-secondary);
     line-height: 1;
-    letter-spacing: -0.01em;
   }
 
-  .stat-unit {
+  .stat-label {
     font-family: var(--font-ui);
-    font-size: 9px;
+    font-size: var(--text-2xs);
     color: var(--text-faint);
     letter-spacing: var(--tracking-wide);
-    text-transform: uppercase;
     white-space: nowrap;
   }
 
