@@ -1,9 +1,7 @@
 #[cfg(target_os = "windows")]
 use crate::server::resolve::strip_unc;
-#[cfg(target_os = "windows")]
 use std::path::PathBuf;
 use tauri::Manager;
-use std::path::PathBuf;
 
 #[tauri::command]
 pub fn get_platform_ui_scale(window: tauri::Window) -> f64 {
@@ -55,6 +53,34 @@ pub async fn pick_downloads_folder(app: tauri::AppHandle) -> Option<String> {
 }
 
 #[tauri::command]
+pub async fn pick_server_binary(app: tauri::AppHandle) -> Option<String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    #[cfg(target_os = "windows")]
+    let dialog = app
+        .dialog()
+        .file()
+        .set_title("Choose Server Binary")
+        .add_filter("Executable", &["exe", "jar", "bat", "cmd"]);
+
+    #[cfg(target_os = "macos")]
+    let dialog = app
+        .dialog()
+        .file()
+        .set_title("Choose Server Binary")
+        .add_filter("Executable or JAR", &["jar", "command", "sh", "app"]);
+
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    let dialog = app
+        .dialog()
+        .file()
+        .set_title("Choose Server Binary")
+        .add_filter("Executable or JAR", &["jar", "sh"]);
+
+    dialog.blocking_pick_file().map(|p| p.to_string())
+}
+
+#[tauri::command]
 pub fn exit_app(app: tauri::AppHandle) {
     app.exit(0);
 }
@@ -100,11 +126,6 @@ pub async fn clear_moku_cache(app: tauri::AppHandle) -> Result<(), String> {
 
     let (tx, rx) = tokio::sync::oneshot::channel::<Result<(), String>>();
 
-    // Note: We intentionally skip the WebView2 COM-level ClearBrowsingDataAll call here.
-    // The webview2_com crate pulls in a different version of windows_core than Tauri's
-    // own windows dependency, causing irreconcilable trait-impl conflicts at compile time.
-    // The filesystem cache removal below (app_cache_dir) is sufficient for our purposes;
-    // WebView2 will rebuild its cache on next launch from a clean directory.
     window
         .with_webview(move |_wv| {
             let _ = tx.send(Ok(()));

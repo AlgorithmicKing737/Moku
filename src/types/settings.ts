@@ -92,7 +92,7 @@ export interface Settings {
   discordRpc: boolean;
   chapterSortDir: ChapterSortDir; chapterSortMode: ChapterSortMode; chapterPageSize: number;
   uiZoom: number; compactSidebar: boolean; gpuAcceleration: boolean;
-  serverUrl: string; serverBinary: string; autoStartServer: boolean; suwayomiWebUI: boolean;
+  serverUrl: string; serverBinary: string; serverBinaryArgs: string; autoStartServer: boolean; suwayomiWebUI: boolean;
   preferredExtensionLang: string; keybinds: Keybinds;
   idleTimeoutMin?: number; splashCards?: boolean;
   storageLimitGb: number | null; markReadOnNext: boolean; readerDebounceMs: number;
@@ -143,7 +143,7 @@ export const DEFAULT_SETTINGS: Settings = {
   discordRpc: false,
   chapterSortDir: "desc", chapterSortMode: "source", chapterPageSize: 25,
   uiZoom: 1.0, compactSidebar: false, gpuAcceleration: true,
-  serverUrl: "http://localhost:4567", serverBinary: "", autoStartServer: true, suwayomiWebUI: false,
+  serverUrl: "http://localhost:4567", serverBinary: "", serverBinaryArgs: "", autoStartServer: true, suwayomiWebUI: false,
   preferredExtensionLang: "en", keybinds: DEFAULT_KEYBINDS,
   idleTimeoutMin: 5, splashCards: true, storageLimitGb: null,
   markReadOnNext: true, readerDebounceMs: 120, autoBookmark: true,

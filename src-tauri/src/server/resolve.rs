@@ -1,7 +1,6 @@
 use crate::server::do_log;
 use serde::Serialize;
 use std::path::PathBuf;
-use walkdir::WalkDir;
 use tauri::Manager;
 
 #[derive(Serialize, Debug)]
@@ -48,22 +47,14 @@ pub fn strip_unc(path: PathBuf) -> PathBuf {
     }
 }
 
-#[cfg(not(target_os = "macos"))]
-fn find_java_in_bundle(bundle_dir: &PathBuf, log: &mut Option<std::fs::File>) -> Option<PathBuf> {
-    #[cfg(target_os = "windows")]
-    let java = strip_unc(bundle_dir.join("jre").join("bin").join("java.exe"));
-    #[cfg(not(target_os = "windows"))]
-    let java = bundle_dir.join("jre").join("bin").join("java");
+fn java_bin_name() -> &'static str {
+    if cfg!(target_os = "windows") { "java.exe" } else { "java" }
+}
 
-    do_log(
-        log,
-        &format!("[find_java] path: {:?} exists: {}", java, java.exists()),
-    );
-    if java.exists() {
-        Some(java)
-    } else {
-        None
-    }
+fn find_java_in_bundle(bundle_dir: &PathBuf, log: &mut Option<std::fs::File>) -> Option<PathBuf> {
+    let java = bundle_dir.join("jre").join("bin").join(java_bin_name());
+    do_log(log, &format!("[find_java] {:?} exists={}", java, java.exists()));
+    if java.exists() { Some(java) } else { None }
 }
 
 fn data_root_args() -> Vec<String> {
@@ -74,24 +65,34 @@ fn jar_data_root_flag() -> String {
     format!("-Dsuwayomi.server.rootDir={}", suwayomi_data_dir().to_string_lossy())
 }
 
+fn jar_invocation(java: PathBuf, jar: PathBuf, working_dir: PathBuf) -> ServerInvocation {
+    ServerInvocation {
+        bin: java.to_string_lossy().into_owned(),
+        args: vec![
+            jar_data_root_flag(),
+            "-jar".to_string(),
+            jar.to_string_lossy().into_owned(),
+        ],
+        working_dir: Some(working_dir),
+    }
+}
+
 pub fn resolve_server_binary(
     binary: &str,
     app: &tauri::AppHandle,
     log: &mut Option<std::fs::File>,
 ) -> Result<ServerInvocation, SpawnError> {
-    do_log(log, &format!("[resolve] binary = {:?}", binary));
+    do_log(log, &format!("[resolve] binary={:?}", binary));
 
     if !binary.trim().is_empty() {
         let path = strip_unc(PathBuf::from(binary.trim()));
-        do_log(
-            log,
-            &format!("[resolve] user path: {:?} exists={}", path, path.exists()),
-        );
+        do_log(log, &format!("[resolve] user path={:?} exists={}", path, path.exists()));
         if path.exists() {
+            let working_dir = path.parent().map(|p| p.to_path_buf());
             return Ok(ServerInvocation {
                 bin: path.to_string_lossy().into_owned(),
                 args: data_root_args(),
-                working_dir: path.parent().map(|p| p.to_path_buf()),
+                working_dir,
             });
         }
         do_log(log, "[resolve] user path not found, falling through");
@@ -101,10 +102,7 @@ pub fn resolve_server_binary(
         if let Some(bin_dir) = exe.parent() {
             for name in &["tachidesk-server", "suwayomi-launcher"] {
                 let p = bin_dir.join(name);
-                do_log(
-                    log,
-                    &format!("[resolve] sibling: {:?} exists={}", p, p.exists()),
-                );
+                do_log(log, &format!("[resolve] sibling={:?} exists={}", p, p.exists()));
                 if p.exists() {
                     return Ok(ServerInvocation {
                         bin: p.to_string_lossy().into_owned(),
@@ -117,53 +115,30 @@ pub fn resolve_server_binary(
     }
 
     #[cfg(not(target_os = "macos"))]
-    let resource_dir = {
-        let raw = app.path().resource_dir().unwrap_or_default();
-        let stripped = strip_unc(raw);
-        do_log(log, &format!("[resolve] resource_dir = {:?}", stripped));
-        stripped
-    };
-
-    #[cfg(not(target_os = "macos"))]
     {
+        let resource_dir = {
+            let raw = app.path().resource_dir().unwrap_or_default();
+            let stripped = strip_unc(raw);
+            do_log(log, &format!("[resolve] resource_dir={:?}", stripped));
+            stripped
+        };
+
         let bundle_dir = resource_dir.join("binaries").join("suwayomi-bundle");
         let jar = bundle_dir.join("bin").join("Suwayomi-Server.jar");
 
-        do_log(
-            log,
-            &format!(
-                "[resolve] bundle_dir={:?} exists={}",
-                bundle_dir,
-                bundle_dir.exists()
-            ),
-        );
-        do_log(
-            log,
-            &format!("[resolve] jar={:?} exists={}", jar, jar.exists()),
-        );
+        do_log(log, &format!("[resolve] bundle_dir={:?} exists={}", bundle_dir, bundle_dir.exists()));
+        do_log(log, &format!("[resolve] jar={:?} exists={}", jar, jar.exists()));
 
-        match find_java_in_bundle(&bundle_dir, log) {
-            Some(java) if jar.exists() => {
-                do_log(log, "[resolve] using bundled JRE");
-                return Ok(ServerInvocation {
-                    bin: java.to_string_lossy().into_owned(),
-                    args: vec![jar_data_root_flag(), "-jar".to_string(), jar.to_string_lossy().into_owned()],
-                    working_dir: Some(bundle_dir),
-                });
+        if let Some(java) = find_java_in_bundle(&bundle_dir, log) {
+            if jar.exists() {
+                do_log(log, "[resolve] using bundled JRE + jar");
+                return Ok(jar_invocation(java, jar, bundle_dir));
             }
-            _ => do_log(log, "[resolve] bundled JRE/jar not found, falling through"),
         }
 
-        for name in &[
-            "suwayomi-launcher",
-            "suwayomi-launcher.sh",
-            "tachidesk-server",
-        ] {
+        for name in &["suwayomi-launcher", "suwayomi-launcher.sh", "tachidesk-server"] {
             let p = resource_dir.join(name);
-            do_log(
-                log,
-                &format!("[resolve] sidecar: {:?} exists={}", p, p.exists()),
-            );
+            do_log(log, &format!("[resolve] sidecar={:?} exists={}", p, p.exists()));
             if p.exists() {
                 return Ok(ServerInvocation {
                     bin: p.to_string_lossy().into_owned(),
@@ -174,26 +149,16 @@ pub fn resolve_server_binary(
         }
 
         if let Some(java) = find_java_in_bundle(&resource_dir, log) {
-            let jar = std::fs::read_dir(&resource_dir).ok().and_then(|mut rd| {
-                rd.find(|e| {
-                    e.as_ref()
-                        .map(|e| e.file_name().to_string_lossy().ends_with(".jar"))
-                        .unwrap_or(false)
-                })
-                .and_then(|e| e.ok())
-                .map(|e| e.path())
-            });
-
-            if let Some(jar_path) = jar {
-                do_log(
-                    log,
-                    &format!("[resolve] generic JRE java={:?} jar={:?}", java, jar_path),
-                );
-                return Ok(ServerInvocation {
-                    bin: java.to_string_lossy().into_owned(),
-                    args: vec![jar_data_root_flag(), "-jar".to_string(), jar_path.to_string_lossy().into_owned()],
-                    working_dir: Some(resource_dir),
+            let jar = std::fs::read_dir(&resource_dir)
+                .ok()
+                .and_then(|mut rd| {
+                    rd.find(|e| e.as_ref().map(|e| e.file_name().to_string_lossy().ends_with(".jar")).unwrap_or(false))
+                        .and_then(|e| e.ok())
+                        .map(|e| e.path())
                 });
+            if let Some(jar_path) = jar {
+                do_log(log, &format!("[resolve] generic JRE java={:?} jar={:?}", java, jar_path));
+                return Ok(jar_invocation(java, jar_path, resource_dir));
             }
         }
     }
@@ -201,108 +166,43 @@ pub fn resolve_server_binary(
     #[cfg(target_os = "macos")]
     {
         let resource_dir = app.path().resource_dir().unwrap_or_default();
-        let contents_dir = resource_dir.parent().unwrap_or(&resource_dir).to_path_buf();
+        let bundle_dir = resource_dir.join("suwayomi-bundle");
 
-        do_log(
-            log,
-            &format!("[resolve] macOS contents_dir = {:?}", contents_dir),
-        );
+        do_log(log, &format!("[resolve] macOS resource_dir={:?}", resource_dir));
+        do_log(log, &format!("[resolve] macOS bundle_dir={:?} exists={}", bundle_dir, bundle_dir.exists()));
 
-        const NATIVE_NAMES: &[&str] = &[
-            "suwayomi-server-aarch64-apple-darwin",
-            "suwayomi-server-x86_64-apple-darwin",
-            "suwayomi-server",
-            "suwayomi-launcher",
-            "suwayomi-launcher.sh",
-            "tachidesk-server",
-        ];
+        let java        = bundle_dir.join("jre").join("bin").join("java");
+        let jar         = bundle_dir.join("bin").join("Suwayomi-Server.jar");
+        let launcher_sh = bundle_dir.join("Suwayomi Launcher.command");
+        let launcher_jar = bundle_dir.join("Suwayomi-Launcher.jar");
 
-        let mut found_binary: Option<ServerInvocation> = None;
-        let mut found_java: Option<(PathBuf, PathBuf)> = None;
+        do_log(log, &format!("[resolve] java={:?} exists={}", java, java.exists()));
+        do_log(log, &format!("[resolve] jar={:?} exists={}", jar, jar.exists()));
+        do_log(log, &format!("[resolve] launcher.command={:?} exists={}", launcher_sh, launcher_sh.exists()));
+        do_log(log, &format!("[resolve] launcher.jar={:?} exists={}", launcher_jar, launcher_jar.exists()));
 
-        'outer: for depth in 0u8..=8 {
-            let entries: Vec<PathBuf> = WalkDir::new(&contents_dir)
-                .min_depth(depth as usize)
-                .max_depth(depth as usize)
-                .into_iter()
-                .filter_map(|e| e.ok())
-                .filter(|e| e.file_type().is_dir())
-                .map(|e| e.into_path())
-                .collect();
-
-            for dir in &entries {
-                do_log(
-                    log,
-                    &format!("[resolve] scanning depth={} dir={:?}", depth, dir),
-                );
-
-                for name in NATIVE_NAMES {
-                    let p = dir.join(name);
-                    if p.exists() {
-                        do_log(log, &format!("[resolve] found native binary: {:?}", p));
-                        found_binary = Some(ServerInvocation {
-                            bin: p.to_string_lossy().into_owned(),
-                            args: data_root_args(),
-                            working_dir: Some(dir.clone()),
-                        });
-                        break 'outer;
-                    }
-                }
-
-                if found_java.is_none() {
-                    let java_exe = dir.join("bin").join("java");
-                    if java_exe.exists() {
-                        do_log(log, &format!("[resolve] found java: {:?}", java_exe));
-                        let mut search = dir.as_path();
-                        'jar: for _ in 0..5 {
-                            if let Ok(rd) = std::fs::read_dir(search) {
-                                for entry in rd.filter_map(|e| e.ok()) {
-                                    if entry.file_name().to_string_lossy().ends_with(".jar") {
-                                        let jar = entry.path();
-                                        do_log(log, &format!("[resolve] found jar: {:?}", jar));
-                                        found_java = Some((java_exe.clone(), jar));
-                                        break 'jar;
-                                    }
-                                }
-                            }
-                            let bin_sibling = search.join("bin");
-                            if let Ok(rd) = std::fs::read_dir(&bin_sibling) {
-                                for entry in rd.filter_map(|e| e.ok()) {
-                                    if entry.file_name().to_string_lossy().ends_with(".jar") {
-                                        let jar = entry.path();
-                                        do_log(
-                                            log,
-                                            &format!("[resolve] found jar in bin/: {:?}", jar),
-                                        );
-                                        found_java = Some((java_exe.clone(), jar));
-                                        break 'jar;
-                                    }
-                                }
-                            }
-                            match search.parent() {
-                                Some(p) => search = p,
-                                None => break,
-                            }
-                        }
-                    }
-                }
-            }
+        if java.exists() && jar.exists() {
+            do_log(log, "[resolve] macOS using bundled JRE + Suwayomi-Server.jar");
+            return Ok(jar_invocation(java, jar, bundle_dir));
         }
 
-        if let Some(inv) = found_binary {
-            return Ok(inv);
-        }
-
-        if let Some((java, jar)) = found_java {
-            let working_dir = jar.parent().map(|p| p.to_path_buf());
+        if launcher_sh.exists() {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(&launcher_sh, std::fs::Permissions::from_mode(0o755));
+            do_log(log, "[resolve] macOS using Suwayomi Launcher.command");
             return Ok(ServerInvocation {
-                bin: java.to_string_lossy().into_owned(),
-                args: vec![jar_data_root_flag(), "-jar".to_string(), jar.to_string_lossy().into_owned()],
-                working_dir,
+                bin: launcher_sh.to_string_lossy().into_owned(),
+                args: vec![],
+                working_dir: Some(bundle_dir),
             });
         }
 
-        do_log(log, "[resolve] macOS scan found nothing in bundle");
+        if java.exists() && launcher_jar.exists() {
+            do_log(log, "[resolve] macOS using bundled JRE + Suwayomi-Launcher.jar");
+            return Ok(jar_invocation(java, launcher_jar, bundle_dir));
+        }
+
+        do_log(log, "[resolve] macOS bundle not found, falling through to PATH");
     }
 
     for name in &["suwayomi-server", "tachidesk-server"] {
@@ -314,6 +214,7 @@ pub fn resolve_server_binary(
             .filter(|o| o.status.success())
             .and_then(|o| String::from_utf8(o.stdout).ok())
             .and_then(|s| s.lines().next().map(|l| l.trim().to_string()));
+
         #[cfg(not(target_os = "windows"))]
         let resolved = std::process::Command::new("which")
             .arg(name)

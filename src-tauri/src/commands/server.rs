@@ -3,7 +3,12 @@ use crate::ServerState;
 use tauri::Manager;
 
 #[tauri::command]
-pub fn spawn_server(binary: String, web_ui_enabled: bool, app: tauri::AppHandle) -> Result<(), SpawnError> {
+pub fn spawn_server(
+    binary: String,
+    binary_args: Option<String>,
+    web_ui_enabled: bool,
+    app: tauri::AppHandle,
+) -> Result<(), SpawnError> {
     {
         let state = app.state::<ServerState>();
         if state.0.lock().unwrap().is_some() {
@@ -20,9 +25,14 @@ pub fn spawn_server(binary: String, web_ui_enabled: bool, app: tauri::AppHandle)
         .open(&log_path)
         .ok();
 
+    let binary_args = binary_args.unwrap_or_default();
+
     server::do_log(
         &mut log,
-        &format!("[spawn_server] binary={:?} web_ui_enabled={} data_dir={:?}", binary, web_ui_enabled, data_dir),
+        &format!(
+            "[spawn_server] binary={:?} binary_args={:?} web_ui_enabled={} data_dir={:?}",
+            binary, binary_args, web_ui_enabled, data_dir
+        ),
     );
 
     server::conf::seed_server_conf(&data_dir, web_ui_enabled);
@@ -32,6 +42,13 @@ pub fn spawn_server(binary: String, web_ui_enabled: bool, app: tauri::AppHandle)
             server::do_log(&mut log, &format!("[spawn_server] resolve failed: {:?}", e));
             e
         })?;
+
+    if !binary_args.trim().is_empty() {
+        let extra: Vec<String> = binary_args.split_whitespace().map(|s| s.to_string()).collect();
+        let mut merged = extra;
+        merged.extend(invocation.args);
+        invocation.args = merged;
+    }
 
     if invocation.bin.ends_with("java") || invocation.bin.ends_with("java.exe") {
         let rootdir_flag = format!(

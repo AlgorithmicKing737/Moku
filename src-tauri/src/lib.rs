@@ -102,6 +102,7 @@ pub fn run() {
             commands::system::reset_suwayomi_data,
             commands::system::open_path,
             commands::system::pick_downloads_folder,
+            commands::system::pick_server_binary,
             commands::backup::export_app_data,
             commands::backup::import_app_data,
             commands::backup::auto_backup_app_data,
@@ -159,5 +160,5 @@ pub fn run() {
             }
         })
         .run(tauri::generate_context!())
-        .expect("error while running moku");
+        .expect("error while running moku")
 }
