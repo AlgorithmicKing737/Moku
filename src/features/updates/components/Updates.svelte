@@ -33,11 +33,15 @@
     ctrl?.abort();
   });
 
+  function fetchedAtMs(item: Pick<RecentUpdate, "fetchedAt">): number {
+    const ts = item.fetchedAt ? new Date(item.fetchedAt).getTime() : Date.now();
+    return Number.isFinite(ts) ? ts : Date.now();
+  }
+
   const groups = $derived.by(() => {
     const map = new Map<string, RecentUpdate[]>();
     for (const item of updates) {
-      const ts = item.fetchedAt ? new Date(item.fetchedAt).getTime() : 0;
-      const label = dayLabel(Number.isFinite(ts) ? ts : 0);
+      const label = dayLabel(fetchedAtMs(item));
       if (!map.has(label)) map.set(label, []);
       map.get(label)!.push(item);
     }
@@ -61,23 +65,24 @@
 
   async function loadUpdates() {
     ctrl?.abort();
-    ctrl = new AbortController();
+    const nextCtrl = new AbortController();
+    ctrl = nextCtrl;
     loading = true;
     error = null;
 
     try {
-      const res = await gql<{ chapters: { nodes: RecentUpdate[] } }>(GET_RECENTLY_UPDATED, {}, ctrl.signal);
-      if (ctrl.signal.aborted) return;
+      const res = await gql<{ chapters: { nodes: RecentUpdate[] } }>(GET_RECENTLY_UPDATED, {}, nextCtrl.signal);
+      if (nextCtrl.signal.aborted) return;
 
       updates = res.chapters.nodes
         .filter(item => item.manga?.inLibrary)
-        .sort((a, b) => new Date(b.fetchedAt ?? 0).getTime() - new Date(a.fetchedAt ?? 0).getTime());
+        .sort((a, b) => fetchedAtMs(b) - fetchedAtMs(a));
     } catch (e: any) {
-      if (ctrl.signal.aborted) return;
+      if (nextCtrl.signal.aborted) return;
       error = e?.message ?? "Failed to load updates";
       updates = [];
     } finally {
-      if (!ctrl.signal.aborted) loading = false;
+      if (!nextCtrl.signal.aborted) loading = false;
     }
   }
 
@@ -169,7 +174,7 @@
                   <span class="chapter-title">{chapterLabel(item)}</span>
 
                   <div class="meta-row">
-                    <span>{timeAgo(new Date(item.fetchedAt ?? 0).getTime())}</span>
+                    <span>{timeAgo(fetchedAtMs(item))}</span>
                     {#if (item.lastPageRead ?? 0) > 0 && !item.isRead}
                       <span>· Resume p.{item.lastPageRead}</span>
                     {/if}
