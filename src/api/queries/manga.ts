@@ -78,6 +78,23 @@ export const LIBRARY_UPDATE_STATUS = `
   }
 `;
 
+export const GET_LIBRARY_UPDATE_PANEL_STATUS = `
+  query GetLibraryUpdatePanelStatus {
+    libraryUpdateStatus {
+      jobsInfo {
+        isRunning
+        finishedJobs
+        totalJobs
+        skippedMangasCount
+        skippedCategoriesCount
+      }
+    }
+    lastUpdateTimestamp {
+      timestamp
+    }
+  }
+`;
+
 export const GET_RESTORE_STATUS = `
   query GetRestoreStatus($id: String!) {
     restoreStatus(id: $id) { mangaProgress state totalManga }

@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from "svelte";
   import { BookOpen, CircleNotch } from "phosphor-svelte";
   import { gql } from "@api/client";
-  import { GET_RECENTLY_UPDATED, GET_CHAPTERS } from "@api/queries";
+  import { GET_RECENTLY_UPDATED, GET_CHAPTERS, GET_LIBRARY_UPDATE_PANEL_STATUS } from "@api/queries";
   import { cache, CACHE_GROUPS, CACHE_KEYS } from "@core/cache";
   import { store, openReader, setActiveManga, addToast } from "@store/state.svelte";
   import { dayLabel } from "@core/util";
@@ -29,6 +29,8 @@
   let updates   = $state<RecentUpdate[]>([]);
   let error     = $state<string | null>(null);
   let openingId = $state<number | null>(null);
+  let updaterRunning = $state(false);
+  let lastUpdatedTs = $state<number | null>(null);
 
   let ctrl: AbortController | null = null;
   const RECENT_UPDATES_TTL_MS = 60 * 1_000;
@@ -57,13 +59,9 @@
     return Object.entries(grouped).map(([label, items]) => ({ label, items })) as UpdateGroup[];
   });
 
-  const lastCheckedTs = $derived(
-    updates.length > 0 ? fetchedAtMs(updates[0]) : null
-  );
-
-  const lastCheckedLabel = $derived(
-    lastCheckedTs
-      ? new Date(lastCheckedTs).toLocaleString("en-US", {
+  const lastUpdatedLabel = $derived(
+    lastUpdatedTs
+      ? new Date(lastUpdatedTs).toLocaleString("en-US", {
           month: "short",
           day: "numeric",
           year: "numeric",
@@ -72,6 +70,17 @@
         })
       : null
   );
+
+  function parseServerTimestamp(value: unknown): number | null {
+    if (typeof value === "number") return Number.isFinite(value) ? value : null;
+    if (typeof value === "string") {
+      const numeric = Number(value);
+      if (Number.isFinite(numeric)) return numeric;
+      const parsed = new Date(value).getTime();
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+    return null;
+  }
 
   function mangaStub(item: RecentUpdate): Manga {
     return {
@@ -99,21 +108,35 @@
       const key = CACHE_KEYS.RECENT_UPDATES;
       if (force) cache.clear(key);
 
-      const res = await cache.get<{ chapters: { nodes: RecentUpdate[] } }>(
-        key,
-        () => gql<{ chapters: { nodes: RecentUpdate[] } }>(GET_RECENTLY_UPDATED, {}, nextCtrl.signal),
-        RECENT_UPDATES_TTL_MS,
-        CACHE_GROUPS.LIBRARY,
-      );
+      const [updatesRes, statusRes] = await Promise.all([
+        cache.get<{ chapters: { nodes: RecentUpdate[] } }>(
+          key,
+          () => gql<{ chapters: { nodes: RecentUpdate[] } }>(GET_RECENTLY_UPDATED, {}, nextCtrl.signal),
+          RECENT_UPDATES_TTL_MS,
+          CACHE_GROUPS.LIBRARY,
+        ),
+        gql<{
+          libraryUpdateStatus: {
+            jobsInfo: { isRunning: boolean };
+          };
+          lastUpdateTimestamp: { timestamp: string | number | null } | null;
+        }>(GET_LIBRARY_UPDATE_PANEL_STATUS, {}, nextCtrl.signal).catch(() => null),
+      ]);
+
+      updaterRunning = statusRes?.libraryUpdateStatus.jobsInfo.isRunning ?? false;
+      lastUpdatedTs = parseServerTimestamp(statusRes?.lastUpdateTimestamp?.timestamp ?? null);
+
       if (nextCtrl.signal.aborted) return;
 
-      updates = res.chapters.nodes
+      updates = updatesRes.chapters.nodes
         .filter(item => item.manga?.inLibrary)
         .sort((a, b) => fetchedAtMs(b) - fetchedAtMs(a));
     } catch (e: any) {
       if (nextCtrl.signal.aborted) return;
       error = e?.message ?? "Failed to load updates";
       updates = [];
+      updaterRunning = false;
+      lastUpdatedTs = null;
     } finally {
       if (!nextCtrl.signal.aborted) loading = false;
     }
@@ -150,11 +173,11 @@
     <div class="status-bar">
       <div class="status-dot" class:active={loading}></div>
       <span class="status-text">
-        {#if loading}Checking for updates…{:else if error}Update check failed{:else}Up to date{/if}
+        {#if loading}Checking for updates…{:else if error}Update check failed{:else if updaterRunning}Library update in progress{:else}Up to date{/if}
       </span>
       <div class="status-right">
-        {#if !loading && lastCheckedLabel}
-          <span class="status-detail">Last checked: {lastCheckedLabel}</span>
+        {#if !loading && lastUpdatedLabel}
+          <span class="status-detail">Last updated: {lastUpdatedLabel}</span>
           <div class="bar-sep"></div>
         {/if}
         {#if !loading && updates.length > 0}
