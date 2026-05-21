@@ -390,7 +390,7 @@
     padding: var(--sp-2);
     background: none;
     border: none;
-    border-right: 1px solid var(--border-dim);
+    /* border-right: 1px solid var(--border-dim); */
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -453,7 +453,7 @@
   .chapter-title {
     font-family: var(--font-ui);
     font-size: var(--text-xs);
-    color: var(--text-secondary);
+    color: var(--text-muted);
   }
 
   .meta-row {

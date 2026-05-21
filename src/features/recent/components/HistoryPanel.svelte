@@ -297,6 +297,7 @@
   .session-list {
     display: flex;
     flex-direction: column;
+    gap: var(--sp-2);
   }
 
   .session-row {
@@ -304,17 +305,16 @@
     align-items: center;
     gap: var(--sp-3);
     width: 100%;
-    padding: var(--sp-2) var(--sp-2);
+    padding: var(--sp-3);
     border-radius: var(--radius-md);
-    border: none;
-    background: none;
+    border: 1px solid var(--border-dim);
+    background: var(--bg-raised);
     text-align: left;
     cursor: pointer;
-    transition: background var(--t-fast);
+    transition: border-color var(--t-fast), background var(--t-fast);
   }
 
-  .session-row:hover { background: var(--bg-raised); }
-  .session-row:active { background: var(--bg-elevated); }
+  .session-row:hover { border-color: var(--border-strong); background: var(--bg-elevated); }
 
   .thumb-wrap {
     position: relative;
@@ -371,8 +371,8 @@
     align-items: center;
     gap: 4px;
     font-family: var(--font-ui);
-    font-size: var(--text-2xs);
-    color: var(--text-faint);
+    font-size: var(--text-xs);
+    color: var(--text-muted);
     letter-spacing: var(--tracking-wide);
     white-space: nowrap;
     overflow: hidden;
