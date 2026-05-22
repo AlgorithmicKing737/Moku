@@ -1,30 +1,33 @@
-# --- Build Artifacts ---
 node_modules/
 suwayomi-raw/
 suwayomi-windows.zip
-suwayomi.zip
 dist/
 dist-tauri/
 target/
 bin/
 out/
 
-
-# --- Nix ---
 .direnv/
 result
 result-*
 
-# --- Logs ---
 *.log
 npm-debug.log*
 yarn-debug.log*
-yarn-error.log*
 .env
+.env.*
+!.env.example
+!.env.test
 .env.local
 .env.*.local
 
-# --- IDEs & OS ---
+.output
+.vercel
+.netlify
+.wrangler
+/.svelte-kit
+/build
+
 .vscode/
 .idea/
 .DS_Store
@@ -34,15 +37,19 @@ yarn-error.log*
 *.sln
 *.swp
 
-# --- Tauri specific ---
 src-tauri/target/
 src-tauri/binaries/
 src-tauri/gen/
 
-# --- Flatpak build artifacts ---
+.DS_Store
+Thumbs.db
+
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
 build-dir/
 repo/
 dist/
 packaging/frontend-dist.tar.gz
 *.flatpak
-.flatpak-builder/\n# --- Staged sidecar binaries (platform-specific, never commit) ---\nsrc-tauri/binaries/
+./flatpak-builder
