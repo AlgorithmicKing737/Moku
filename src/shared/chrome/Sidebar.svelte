@@ -7,7 +7,7 @@
     { id: "home",       label: "Home",       icon: House },
     { id: "library",    label: "Library",    icon: Books },
     { id: "search",     label: "Search",     icon: MagnifyingGlass },
-    { id: "history",    label: "History",    icon: ClockCounterClockwise },
+    { id: "history",    label: "Recent",     icon: ClockCounterClockwise },
     { id: "downloads",  label: "Downloads",  icon: DownloadSimple },
     { id: "extensions", label: "Extensions", icon: PuzzlePiece },
     { id: "tracking",   label: "Tracking",   icon: ChartLineUp },

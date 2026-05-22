@@ -147,6 +147,7 @@ export const CACHE_GROUPS = {
 
 export const CACHE_KEYS = {
   LIBRARY:    "library",
+  RECENT_UPDATES: "recent_updates",
   ALL_MANGA:  "all_manga_unfiltered",
   CATEGORIES: "categories",
   SEARCH:     "search_all_manga",

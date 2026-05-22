@@ -10,7 +10,7 @@
 | `GET_CATEGORIES` | — | All categories with order/settings and their assigned manga (minimal fields) |
 | `GET_DOWNLOADED_CHAPTERS_PAGES` | — | Page counts for all downloaded chapters — used for storage stats |
 | `GET_DOWNLOADS_PATH` | — | `downloadsPath` and `localSourcePath` from settings |
-| `LIBRARY_UPDATE_STATUS` | — | Current library update job — `jobsInfo` progress and `mangaUpdates` list with new chapters |
+| `LIBRARY_UPDATE_STATUS` | — | Current library update job (`jobsInfo`, `mangaUpdates`) plus `lastUpdateTimestamp` for server-side update timing |
 | `GET_RESTORE_STATUS` | `id: String!` | Backup restore job status by job ID — `mangaProgress`, `state`, `totalManga` |
 | `VALIDATE_BACKUP` | `backup: Upload!` | Validate a backup file before restore — returns missing sources and trackers |
 | `MANGAS_BY_GENRE` | `filter: MangaFilterInput`, `first: Int`, `offset: Int` | Paginated manga filtered by genre, ordered by `IN_LIBRARY_AT DESC` |

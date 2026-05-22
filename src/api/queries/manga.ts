@@ -75,6 +75,9 @@ export const LIBRARY_UPDATE_STATUS = `
         manga { id title thumbnailUrl unreadCount }
       }
     }
+    lastUpdateTimestamp {
+      timestamp
+    }
   }
 `;
 

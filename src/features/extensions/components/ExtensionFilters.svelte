@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { MagnifyingGlass, ArrowsClockwise, Plus, GitBranch, ArrowCircleUp } from "phosphor-svelte";
+  import { MagnifyingGlass, ArrowsClockwise, Plus, GitBranch, ArrowCircleUp, CheckCircle, Rows, Globe } from "phosphor-svelte";
   import { FILTERS, type Filter, type Panel } from "../lib/extensionHelpers";
 
   interface Props {
@@ -40,6 +40,15 @@
     {/if}
     {#each FILTERS as f}
       <button class="tab" class:active={filter === f.id} onclick={() => onFilter(f.id)}>
+        {#if f.id === "installed"}
+          <CheckCircle size={11} weight="bold" />
+        {:else if f.id === "available"}
+          <Globe size={11} weight="bold" />
+        {:else if f.id === "updates"}
+          <ArrowCircleUp size={11} weight="bold" />
+        {:else if f.id === "all"}
+          <Rows size={11} weight="bold" />
+        {/if}
         {f.id === "updates" && updateCount > 0 ? `Updates (${updateCount})` : f.label}
       </button>
     {/each}
