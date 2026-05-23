@@ -6,6 +6,7 @@ dist-tauri/
 target/
 bin/
 out/
+notes/
 
 .direnv/
 result

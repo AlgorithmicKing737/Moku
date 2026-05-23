@@ -1,0 +1,29 @@
+[data-theme='light-contrast'] {
+  --bg-void: #f3efe7;
+  --bg-base: #fbf7f1;
+  --bg-surface: #ffffff;
+  --bg-raised: #fffdfa;
+  --bg-overlay: #ffffff;
+  --bg-subtle: #efe8dc;
+
+  --border-dim: #c0b8ab;
+  --border-base: #8f8677;
+  --border-strong: #60594f;
+  --border-focus: #234c23;
+
+  --text-primary: #050402;
+  --text-secondary: #14110b;
+  --text-muted: #3e3529;
+  --text-faint: #655c50;
+  --text-disabled: #a39b8f;
+
+  --accent: #244f24;
+  --accent-dim: #b7d2b7;
+  --accent-muted: #d5e6d5;
+  --accent-fg: #173717;
+  --accent-bright: #173f17;
+
+  --color-error: #7f1010;
+  --color-error-bg: #fdeaea;
+  --color-read: #ece5da;
+}
