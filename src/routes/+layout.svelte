@@ -10,25 +10,35 @@
 
   let { children } = $props()
 
-  const isTauri    = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
-  const ringFull   = $derived(appState.status !== 'booting')
-  const splashDone = $derived(
+  const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
+  const ringFull = $derived(appState.status !== 'booting')
+
+  let splashVisible = $state(true)
+  let bypassed      = $state(false)
+
+  const showApp = $derived(
     appState.status === 'ready' ||
     appState.status === 'auth'  ||
-    appState.status === 'error'
+    bypassed
   )
 
-  let bypassed = $state(false)
-  const showApp = $derived(splashDone && (appState.status === 'ready' || appState.status === 'auth' || bypassed))
+  function onSplashReady() {
+    splashVisible = false
+  }
+
+  function onSplashBypass() {
+    bypassed      = true
+    splashVisible = false
+  }
 </script>
 
-{#if !showApp}
+{#if splashVisible}
   <SplashScreen
     mode="loading"
     {ringFull}
     failed={appState.status === 'error'}
-    onReady={() => {}}
-    onBypass={() => (bypassed = true)}
+    onReady={onSplashReady}
+    onBypass={onSplashBypass}
     onRetry={() => window.location.reload()}
   />
 {/if}

@@ -27,8 +27,8 @@
     onDismiss,
   }: Props = $props()
 
-  const EXIT_MS = 320
-  const RING_R  = 70
+  const EXIT_MS  = 320
+  const RING_R   = 70
   const RING_PAD = 12
   const { size: ringSize, c: ringC, circ: ringCirc } = ringGeometry(RING_R, RING_PAD)
 
@@ -80,6 +80,7 @@
       exiting  = false
       return
     }
+    if (failed || notConfigured) return
     triggerExit(onReady)
   })
 
@@ -204,7 +205,7 @@
   .ring      { transition:opacity 0.5s ease; }
   .ring-hide { opacity:0; }
 
-  .bottom-area    { display:flex; align-items:center; justify-content:center; min-height:48px; position:relative; }
+  .bottom-area      { display:flex; align-items:center; justify-content:center; min-height:48px; position:relative; }
   .status-slot      { display:flex; align-items:center; justify-content:center; transition:opacity 0.35s ease; position:absolute; }
   .status-slot-hide { opacity:0; pointer-events:none; }
   .status-text      { font-family:var(--font-ui); font-size:10px; color:var(--text-faint); letter-spacing:0.12em; margin:0; min-width:160px; text-align:center; }
