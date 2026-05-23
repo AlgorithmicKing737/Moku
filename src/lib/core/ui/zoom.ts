@@ -16,9 +16,9 @@ export function applyZoom(uiZoom: number) {
 
 export function zoomDelta(e: KeyboardEvent, current: number): number | null {
   if (!e.ctrlKey) return null;
-  if (e.key === "=" || e.key === "+") { e.preventDefault(); return Math.min(2.0, Math.round((current + 0.1) * 10) / 10); }
-  if (e.key === "-")                  { e.preventDefault(); return Math.max(0.5, Math.round((current - 0.1) * 10) / 10); }
-  if (e.key === "0")                  { e.preventDefault(); return 1.0; }
+  if (e.key === "=" || e.key === "+") {e.preventDefault(); return Math.min(2.0, Math.round((current + 0.1) * 10) / 10);}
+  if (e.key === "-") {e.preventDefault(); return Math.max(0.5, Math.round((current - 0.1) * 10) / 10);}
+  if (e.key === "0") {e.preventDefault(); return 1.0;}
   return null;
 }
 
@@ -43,19 +43,19 @@ export function clampZoom(z: number, min: number, max: number): number {
 export function captureZoomAnchor(
   containerEl: HTMLElement | null,
   style: string,
-  out: { el: HTMLElement | null; offset: number },
+  out: {el: HTMLElement | null; offset: number;},
 ) {
   if (!containerEl || style !== "longstrip") return;
   const containerTop = containerEl.getBoundingClientRect().top;
   for (const img of containerEl.querySelectorAll<HTMLElement>("img[data-local-page]")) {
     const rect = img.getBoundingClientRect();
-    if (rect.bottom > containerTop) { out.el = img; out.offset = rect.top - containerTop; return; }
+    if (rect.bottom > containerTop) {out.el = img; out.offset = rect.top - containerTop; return;}
   }
 }
 
 export function restoreZoomAnchor(
   containerEl: HTMLElement | null,
-  out: { el: HTMLElement | null; offset: number },
+  out: {el: HTMLElement | null; offset: number;},
 ) {
   if (!out.el || !containerEl) return;
   const el = out.el;
