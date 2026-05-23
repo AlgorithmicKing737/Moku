@@ -2,7 +2,7 @@
   import { page } from '$app/stores'
   import {
     House, Books, MagnifyingGlass,
-    DownloadSimple, PuzzlePiece, GearSix, ChartLineUp,
+    DownloadSimple, PuzzlePiece, GearSix, ChartLineUp, ClockCounterClockwise,
   } from 'phosphor-svelte'
   import logoUrl from '$lib/assets/moku-icon-wordmark.svg'
 
@@ -13,6 +13,7 @@
     { path: '/downloads',  label: 'Downloads',  icon: DownloadSimple },
     { path: '/extensions', label: 'Extensions', icon: PuzzlePiece },
     { path: '/tracking',   label: 'Tracking',   icon: ChartLineUp },
+    { path: '/history',    label: 'History',    icon: ClockCounterClockwise },
   ] as const
 
   const TAB_SIZE = 36
@@ -42,7 +43,7 @@
     {#if activeIndex >= 0}
       <div class="indicator" style="transform: translateX(-50%) translateY({indicatorY}px)"></div>
     {/if}
-    {#each TABS as tab}
+    {#each TABS as tab (tab.path)}
       <a
         class="tab"
         class:active={isActive(tab.path)}
