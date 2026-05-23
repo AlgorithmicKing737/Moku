@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { page } from '$app/stores'
-  import { applyTheme } from '$lib/core/theme'
+  import { applyTheme, mountSystemThemeSync, unmountSystemThemeSync } from '$lib/core/theme'
   import { mountIdleDetection } from '$lib/core/ui/idle'
   import { applyZoom, mountZoomKey } from '$lib/core/ui/zoom'
   import { appState } from '$lib/state/app.svelte'
@@ -40,6 +40,7 @@
   onMount(() => {
     applyTheme(settingsState.theme, settingsState.customThemes)
     applyZoom(settingsState.uiZoom)
+    mountSystemThemeSync()
 
     const stopZoomKey = mountZoomKey(
       () => settingsState.uiZoom,
@@ -77,6 +78,7 @@
       stopZoomKey()
       stopIdleDetection()
       window.removeEventListener('resize', handleResize)
+      unmountSystemThemeSync()
       stopTauriScale?.()
     }
   })

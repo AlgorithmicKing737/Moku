@@ -1,12 +1,13 @@
-import type { Keybinds } from "$lib/core/keybinds/defaultBinds";
+import type {Keybinds} from "$lib/core/keybinds/defaultBinds";
 
-export type PageStyle        = "single" | "double" | "longstrip";
-export type FitMode          = "width" | "height" | "screen" | "original";
-export type LibraryFilter    = "all" | "library" | "downloaded" | string;
+export type PageStyle = "single" | "double" | "longstrip";
+export type FitMode = "width" | "height" | "screen" | "original";
+export type LibraryFilter = "all" | "library" | "downloaded" | string;
 export type ReadingDirection = "ltr" | "rtl";
-export type ChapterSortDir   = "desc" | "asc";
-export type ChapterSortMode  = "source" | "chapterNumber" | "uploadDate";
-export type ContentLevel     = "strict" | "moderate" | "unrestricted";
+export type ChapterSortDir = "desc" | "asc";
+export type ChapterSortMode = "source" | "chapterNumber" | "uploadDate";
+export type ContentLevel = "strict" | "moderate" | "unrestricted";
+export type CloseAction = "ask" | "tray" | "quit";
 
 export type LibrarySortMode =
   | "az" | "unreadCount" | "totalChapters"
@@ -14,11 +15,11 @@ export type LibrarySortMode =
 
 export type LibrarySortDir = "asc" | "desc";
 
-export type LibraryStatusFilter  = "ALL" | "ONGOING" | "COMPLETED" | "CANCELLED" | "HIATUS" | "UNKNOWN";
+export type LibraryStatusFilter = "ALL" | "ONGOING" | "COMPLETED" | "CANCELLED" | "HIATUS" | "UNKNOWN";
 export type LibraryContentFilter = "unread" | "started" | "downloaded" | "bookmarked" | "marked";
 
 export type BuiltinTheme = "original" | "dark" | "light" | "light-contrast" | "midnight" | "warm";
-export type Theme        = BuiltinTheme | string;
+export type Theme = BuiltinTheme | string;
 
 export interface ThemeTokens {
   "bg-void": string;
@@ -98,6 +99,16 @@ export interface MangaPrefs {
   coverUrl?: string;
 }
 
+export interface AutomationDefaults {
+  autoDownload: boolean;
+  downloadAhead: number;
+  deleteOnRead: boolean;
+  deleteDelayHours: number;
+  maxKeepChapters: number;
+  pauseUpdates: boolean;
+  refreshInterval: "daily" | "weekly" | "manual";
+}
+
 export const DEFAULT_MANGA_PREFS: MangaPrefs = {
   autoDownload: false,
   downloadAhead: 0,
@@ -113,20 +124,30 @@ export const DEFAULT_MANGA_PREFS: MangaPrefs = {
   autoDownloadScanlators: [],
 };
 
+export const DEFAULT_AUTOMATION_DEFAULTS: AutomationDefaults = {
+  autoDownload: false,
+  downloadAhead: 0,
+  deleteOnRead: false,
+  deleteDelayHours: 0,
+  maxKeepChapters: 0,
+  pauseUpdates: false,
+  refreshInterval: "weekly",
+};
+
 export interface ReaderSettings {
-  pageStyle:           PageStyle;
-  fitMode:             FitMode;
-  readingDirection:    ReadingDirection;
-  readerZoom:          number;
-  pageGap:             boolean;
-  optimizeContrast:    boolean;
+  pageStyle: PageStyle;
+  fitMode: FitMode;
+  readingDirection: ReadingDirection;
+  readerZoom: number;
+  pageGap: boolean;
+  optimizeContrast: boolean;
   offsetDoubleSpreads: boolean;
-  barPosition?:        "top" | "left" | "right";
+  barPosition?: "top" | "left" | "right";
 }
 
 export interface ReaderPreset {
-  id:       string;
-  name:     string;
+  id: string;
+  name: string;
   settings: ReaderSettings;
 }
 
@@ -135,6 +156,8 @@ export interface Settings {
   readingDirection: ReadingDirection;
   fitMode: FitMode;
   readerZoom: number;
+  overlayBars: boolean;
+  tapToToggleBar: boolean;
   pageGap: boolean;
   optimizeContrast: boolean;
   offsetDoubleSpreads: boolean;
@@ -147,6 +170,8 @@ export interface Settings {
   sourceOverridesEnabled: boolean;
   nsfwAllowedSourceIds: string[];
   nsfwBlockedSourceIds: string[];
+  libraryShowAllInSaved: boolean;
+  libraryHideCompletedInSaved: boolean;
   discordRpc: boolean;
   chapterSortDir: ChapterSortDir;
   chapterSortMode: ChapterSortMode;
@@ -154,6 +179,7 @@ export interface Settings {
   uiZoom: number;
   compactSidebar: boolean;
   gpuAcceleration: boolean;
+  closeAction: CloseAction;
   serverUrl: string;
   serverBinary: string;
   serverBinaryArgs: string;
@@ -168,6 +194,9 @@ export interface Settings {
   readerDebounceMs: number;
   autoBookmark: boolean;
   theme: Theme;
+  systemThemeSync: boolean;
+  systemThemeDark: Theme;
+  systemThemeLight: Theme;
   libraryBranches: boolean;
   renderLimit: number;
   heroSlots: (number | null)[];
@@ -194,7 +223,7 @@ export interface Settings {
   hiddenCategoryIds: number[];
   defaultLibraryCategoryId: number | null;
   savedIsDefaultCategory: boolean;
-  libraryTabSort: Record<string, { mode: LibrarySortMode; dir: LibrarySortDir }>;
+  libraryTabSort: Record<string, {mode: LibrarySortMode; dir: LibrarySortDir;}>;
   libraryTabStatus: Record<string, LibraryStatusFilter>;
   libraryTabFilters: Record<string, Partial<Record<LibraryContentFilter, boolean>>>;
   maxPageWidth?: number;
@@ -220,6 +249,9 @@ export interface Settings {
   autoScroll?: boolean;
   autoScrollSpeed?: number;
   disableAutoComplete: boolean;
+  automationEnabled: boolean;
+  automationEnforceGlobal: boolean;
+  automationDefaults: AutomationDefaults;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -227,6 +259,8 @@ export const DEFAULT_SETTINGS: Settings = {
   readingDirection: "ltr",
   fitMode: "width",
   readerZoom: 1.0,
+  overlayBars: false,
+  tapToToggleBar: false,
   pageGap: true,
   optimizeContrast: false,
   offsetDoubleSpreads: false,
@@ -239,6 +273,8 @@ export const DEFAULT_SETTINGS: Settings = {
   sourceOverridesEnabled: false,
   nsfwAllowedSourceIds: [],
   nsfwBlockedSourceIds: [],
+  libraryShowAllInSaved: true,
+  libraryHideCompletedInSaved: false,
   discordRpc: false,
   chapterSortDir: "desc",
   chapterSortMode: "source",
@@ -246,6 +282,7 @@ export const DEFAULT_SETTINGS: Settings = {
   uiZoom: 1.0,
   compactSidebar: false,
   gpuAcceleration: true,
+  closeAction: "ask",
   serverUrl: "http://localhost:4567",
   serverBinary: "",
   serverBinaryArgs: "",
@@ -260,6 +297,9 @@ export const DEFAULT_SETTINGS: Settings = {
   readerDebounceMs: 120,
   autoBookmark: true,
   theme: "dark",
+  systemThemeSync: false,
+  systemThemeDark: "dark",
+  systemThemeLight: "light",
   libraryBranches: true,
   renderLimit: 48,
   heroSlots: [null, null, null, null],
@@ -309,4 +349,7 @@ export const DEFAULT_SETTINGS: Settings = {
   autoScroll: false,
   autoScrollSpeed: 5,
   disableAutoComplete: false,
+  automationEnabled: false,
+  automationEnforceGlobal: false,
+  automationDefaults: DEFAULT_AUTOMATION_DEFAULTS,
 };

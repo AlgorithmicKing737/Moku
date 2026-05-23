@@ -8,14 +8,15 @@ import type {
   Page,
   DownloadItem,
   UpdateResult,
-} from '$lib/server-adapters/types'
-import type { Manga, Chapter, Extension, Source, Tracker } from '$lib/types'
+} from '$lib/server-adapters/types';
+import type {Manga, Chapter, Extension, Source, Tracker} from '$lib/types';
+export type {Settings} from './settings';
 
 // ─── GQL client ────────────────────────────────────────────────────────────
 
 interface GQLResponse<T> {
-  data: T
-  errors?: { message: string }[]
+  data: T;
+  errors?: {message: string;}[];
 }
 
 // ─── Queries ────────────────────────────────────────────────────────────────
@@ -33,7 +34,7 @@ const GET_LIBRARY = `
       }
     }
   }
-`
+`;
 
 const GET_MANGA = `
   query GetManga($id: Int!) {
@@ -46,7 +47,7 @@ const GET_MANGA = `
       highestNumberedChapter { id chapterNumber }
     }
   }
-`
+`;
 
 const GET_CHAPTERS = `
   query GetChapters($mangaId: Int!) {
@@ -57,7 +58,7 @@ const GET_CHAPTERS = `
       }
     }
   }
-`
+`;
 
 const GET_DOWNLOAD_STATUS = `
   query GetDownloadStatus {
@@ -72,7 +73,7 @@ const GET_DOWNLOAD_STATUS = `
       }
     }
   }
-`
+`;
 
 const GET_EXTENSIONS = `
   query GetExtensions {
@@ -83,7 +84,7 @@ const GET_EXTENSIONS = `
       }
     }
   }
-`
+`;
 
 const GET_SOURCES = `
   query GetSources {
@@ -94,7 +95,7 @@ const GET_SOURCES = `
       }
     }
   }
-`
+`;
 
 const GET_TRACKERS = `
   query GetTrackers {
@@ -107,7 +108,7 @@ const GET_TRACKERS = `
       }
     }
   }
-`
+`;
 
 // ─── Mutations ──────────────────────────────────────────────────────────────
 
@@ -120,7 +121,7 @@ const FETCH_MANGA = `
       }
     }
   }
-`
+`;
 
 const FETCH_SOURCE_MANGA = `
   mutation FetchSourceManga($source: LongString!, $type: FetchSourceMangaType!, $page: Int!, $query: String) {
@@ -129,7 +130,7 @@ const FETCH_SOURCE_MANGA = `
       hasNextPage
     }
   }
-`
+`;
 
 const UPDATE_MANGA = `
   mutation UpdateManga($id: Int!, $inLibrary: Boolean) {
@@ -137,7 +138,7 @@ const UPDATE_MANGA = `
       manga { id inLibrary }
     }
   }
-`
+`;
 
 const SET_MANGA_META = `
   mutation SetMangaMeta($mangaId: Int!, $key: String!, $value: String!) {
@@ -145,7 +146,7 @@ const SET_MANGA_META = `
       meta { key value }
     }
   }
-`
+`;
 
 const FETCH_CHAPTERS = `
   mutation FetchChapters($mangaId: Int!) {
@@ -156,13 +157,13 @@ const FETCH_CHAPTERS = `
       }
     }
   }
-`
+`;
 
 const FETCH_CHAPTER_PAGES = `
   mutation FetchChapterPages($chapterId: Int!) {
     fetchChapterPages(input: { chapterId: $chapterId }) { pages }
   }
-`
+`;
 
 const MARK_CHAPTER_READ = `
   mutation MarkChapterRead($id: Int!, $isRead: Boolean!) {
@@ -170,7 +171,7 @@ const MARK_CHAPTER_READ = `
       chapter { id isRead }
     }
   }
-`
+`;
 
 const MARK_CHAPTERS_READ = `
   mutation MarkChaptersRead($ids: [Int!]!, $isRead: Boolean!) {
@@ -178,7 +179,7 @@ const MARK_CHAPTERS_READ = `
       chapters { id isRead }
     }
   }
-`
+`;
 
 const ENQUEUE_DOWNLOAD = `
   mutation EnqueueDownload($chapterId: Int!) {
@@ -186,7 +187,7 @@ const ENQUEUE_DOWNLOAD = `
       downloadStatus { state }
     }
   }
-`
+`;
 
 const DEQUEUE_DOWNLOAD = `
   mutation DequeueDownload($chapterId: Int!) {
@@ -194,7 +195,7 @@ const DEQUEUE_DOWNLOAD = `
       downloadStatus { state }
     }
   }
-`
+`;
 
 const CLEAR_DOWNLOADER = `
   mutation ClearDownloader {
@@ -202,7 +203,7 @@ const CLEAR_DOWNLOADER = `
       downloadStatus { state }
     }
   }
-`
+`;
 
 const FETCH_EXTENSIONS = `
   mutation FetchExtensions {
@@ -213,7 +214,7 @@ const FETCH_EXTENSIONS = `
       }
     }
   }
-`
+`;
 
 const UPDATE_EXTENSION = `
   mutation UpdateExtension($id: String!, $install: Boolean, $uninstall: Boolean, $update: Boolean) {
@@ -221,7 +222,7 @@ const UPDATE_EXTENSION = `
       extension { apkName pkgName name isInstalled hasUpdate }
     }
   }
-`
+`;
 
 const BIND_TRACK = `
   mutation BindTrack($mangaId: Int!, $trackerId: Int!, $remoteId: LongString!) {
@@ -229,7 +230,7 @@ const BIND_TRACK = `
       trackRecord { id trackerId remoteId }
     }
   }
-`
+`;
 
 const TRACK_PROGRESS = `
   mutation TrackProgress($mangaId: Int!) {
@@ -237,7 +238,7 @@ const TRACK_PROGRESS = `
       trackRecords { id trackerId lastChapterRead status }
     }
   }
-`
+`;
 
 const UPDATE_LIBRARY = `
   mutation UpdateLibrary {
@@ -245,7 +246,7 @@ const UPDATE_LIBRARY = `
       updateStatus { jobsInfo { isRunning finishedJobs totalJobs } }
     }
   }
-`
+`;
 
 // ─── Mappers ────────────────────────────────────────────────────────────────
 
@@ -267,11 +268,11 @@ function mapChapter(raw: Record<string, unknown>): Chapter {
     lastReadAt: raw.lastReadAt as string | undefined,
     scanlator: raw.scanlator as string | null | undefined,
     manga: raw.manga as Chapter['manga'],
-  }
+  };
 }
 
 function mapManga(raw: Record<string, unknown>): Manga {
-  const inLibraryAt = raw.inLibraryAt as string | null | undefined
+  const inLibraryAt = raw.inLibraryAt as string | null | undefined;
   return {
     ...(raw as unknown as Manga),
     tags: raw.genre as string[] | undefined,
@@ -279,19 +280,19 @@ function mapManga(raw: Record<string, unknown>): Manga {
     lastReadAt: raw.lastReadChapter
       ? Date.now()
       : undefined,
-  }
+  };
 }
 
 function mapExtension(raw: Record<string, unknown>): Extension {
   return {
     ...(raw as unknown as Extension),
     id: raw.pkgName as string,
-  }
+  };
 }
 
 function mapDownloadItem(raw: Record<string, unknown>): DownloadItem {
-  const chapter = raw.chapter as Record<string, unknown>
-  const manga = chapter?.manga as Record<string, unknown>
+  const chapter = raw.chapter as Record<string, unknown>;
+  const manga = chapter?.manga as Record<string, unknown>;
   return {
     chapterId: String(chapter?.id),
     mangaId: String(chapter?.mangaId ?? manga?.id),
@@ -299,29 +300,29 @@ function mapDownloadItem(raw: Record<string, unknown>): DownloadItem {
     mangaTitle: manga?.title as string,
     progress: (raw.progress as number) ?? 0,
     state: mapDownloadState(raw.state as string),
-  }
+  };
 }
 
 function mapDownloadState(state: string): DownloadItem['state'] {
   switch (state) {
-    case 'DOWNLOADING': return 'downloading'
-    case 'FINISHED':    return 'finished'
-    case 'ERROR':       return 'error'
-    default:            return 'queued'
+    case 'DOWNLOADING': return 'downloading';
+    case 'FINISHED': return 'finished';
+    case 'ERROR': return 'error';
+    default: return 'queued';
   }
 }
 
 // ─── Adapter ────────────────────────────────────────────────────────────────
 
 export class SuwayomiAdapter implements ServerAdapter {
-  private baseUrl = 'http://127.0.0.1:4567'
-  private authHeader: string | null = null
+  private baseUrl = 'http://127.0.0.1:4567';
+  private authHeader: string | null = null;
 
   async connect(config: ServerConfig) {
-    this.baseUrl = config.baseUrl.replace(/\/$/, '')
+    this.baseUrl = config.baseUrl.replace(/\/$/, '');
     if (config.credentials) {
-      const { username, password } = config.credentials
-      this.authHeader = 'Basic ' + btoa(`${username}:${password}`)
+      const {username, password} = config.credentials;
+      this.authHeader = 'Basic ' + btoa(`${username}:${password}`);
     }
   }
 
@@ -330,182 +331,182 @@ export class SuwayomiAdapter implements ServerAdapter {
       const res = await fetch(`${this.baseUrl}/api/graphql`, {
         method: 'POST',
         headers: this.headers(),
-        body: JSON.stringify({ query: '{ aboutServer { name } }' }),
-      })
-      return res.ok ? 'connected' : 'error'
+        body: JSON.stringify({query: '{ aboutServer { name } }'}),
+      });
+      return res.ok ? 'connected' : 'error';
     } catch {
-      return 'disconnected'
+      return 'disconnected';
     }
   }
 
   private headers(): Record<string, string> {
-    const h: Record<string, string> = { 'Content-Type': 'application/json' }
-    if (this.authHeader) h['Authorization'] = this.authHeader
-    return h
+    const h: Record<string, string> = {'Content-Type': 'application/json'};
+    if (this.authHeader) h['Authorization'] = this.authHeader;
+    return h;
   }
 
   private async gql<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
     const res = await fetch(`${this.baseUrl}/api/graphql`, {
       method: 'POST',
       headers: this.headers(),
-      body: JSON.stringify({ query, variables }),
-    })
-    if (!res.ok) throw new Error(`Suwayomi HTTP ${res.status}`)
-    const json: GQLResponse<T> = await res.json()
-    if (json.errors?.length) throw new Error(json.errors[0].message)
-    return json.data
+      body: JSON.stringify({query, variables}),
+    });
+    if (!res.ok) throw new Error(`Suwayomi HTTP ${res.status}`);
+    const json: GQLResponse<T> = await res.json();
+    if (json.errors?.length) throw new Error(json.errors[0].message);
+    return json.data;
   }
 
   // ── Manga ──────────────────────────────────────────────────────────────
 
   async getManga(id: string): Promise<Manga> {
-    const data = await this.gql<{ manga: Record<string, unknown> }>(
-      GET_MANGA, { id: Number(id) }
-    )
-    return mapManga(data.manga)
+    const data = await this.gql<{manga: Record<string, unknown>;}>(
+      GET_MANGA, {id: Number(id)}
+    );
+    return mapManga(data.manga);
   }
 
   async getMangaList(filters: MangaFilters): Promise<PaginatedResult<Manga>> {
     if (filters.inLibrary) {
-      const data = await this.gql<{ mangas: { nodes: Record<string, unknown>[] } }>(GET_LIBRARY)
-      return { items: data.mangas.nodes.map(mapManga), hasNextPage: false }
+      const data = await this.gql<{mangas: {nodes: Record<string, unknown>[];};}>(GET_LIBRARY);
+      return {items: data.mangas.nodes.map(mapManga), hasNextPage: false};
     }
-    const data = await this.gql<{ mangas: { nodes: Record<string, unknown>[] } }>(GET_LIBRARY)
-    return { items: data.mangas.nodes.map(mapManga), hasNextPage: false }
+    const data = await this.gql<{mangas: {nodes: Record<string, unknown>[];};}>(GET_LIBRARY);
+    return {items: data.mangas.nodes.map(mapManga), hasNextPage: false};
   }
 
   async searchManga(query: string, sourceId?: string): Promise<Manga[]> {
-    if (!sourceId) return []
+    if (!sourceId) return [];
     const data = await this.gql<{
-      fetchSourceManga: { mangas: Record<string, unknown>[] }
+      fetchSourceManga: {mangas: Record<string, unknown>[];};
     }>(FETCH_SOURCE_MANGA, {
       source: sourceId,
       type: 'SEARCH',
       page: 1,
       query,
-    })
-    return data.fetchSourceManga.mangas.map(mapManga)
+    });
+    return data.fetchSourceManga.mangas.map(mapManga);
   }
 
   async addToLibrary(mangaId: string) {
-    await this.gql(UPDATE_MANGA, { id: Number(mangaId), inLibrary: true })
+    await this.gql(UPDATE_MANGA, {id: Number(mangaId), inLibrary: true});
   }
 
   async removeFromLibrary(mangaId: string) {
-    await this.gql(UPDATE_MANGA, { id: Number(mangaId), inLibrary: false })
+    await this.gql(UPDATE_MANGA, {id: Number(mangaId), inLibrary: false});
   }
 
   async updateMangaMeta(id: string, meta: Partial<MangaMeta>) {
     for (const [key, value] of Object.entries(meta)) {
-      if (value === undefined) continue
+      if (value === undefined) continue;
       await this.gql(SET_MANGA_META, {
         mangaId: Number(id),
         key,
         value: String(value),
-      })
+      });
     }
   }
 
   // ── Chapters ───────────────────────────────────────────────────────────
 
   async getChapters(mangaId: string): Promise<Chapter[]> {
-    const data = await this.gql<{ chapters: { nodes: Record<string, unknown>[] } }>(
-      GET_CHAPTERS, { mangaId: Number(mangaId) }
-    )
-    return data.chapters.nodes.map(mapChapter)
+    const data = await this.gql<{chapters: {nodes: Record<string, unknown>[];};}>(
+      GET_CHAPTERS, {mangaId: Number(mangaId)}
+    );
+    return data.chapters.nodes.map(mapChapter);
   }
 
   async getChapter(id: string): Promise<Chapter> {
-    const chapters = await this.gql<{ chapters: { nodes: Record<string, unknown>[] } }>(
-      GET_CHAPTERS, { mangaId: 0 }
-    )
-    const found = chapters.chapters.nodes.find(c => String(c.id) === id)
-    if (!found) throw new Error(`Chapter ${id} not found`)
-    return mapChapter(found)
+    const chapters = await this.gql<{chapters: {nodes: Record<string, unknown>[];};}>(
+      GET_CHAPTERS, {mangaId: 0}
+    );
+    const found = chapters.chapters.nodes.find(c => String(c.id) === id);
+    if (!found) throw new Error(`Chapter ${id} not found`);
+    return mapChapter(found);
   }
 
   async getChapterPages(id: string): Promise<Page[]> {
-    const data = await this.gql<{ fetchChapterPages: { pages: string[] } }>(
-      FETCH_CHAPTER_PAGES, { chapterId: Number(id) }
-    )
-    return data.fetchChapterPages.pages.map((url, index) => ({ index, url }))
+    const data = await this.gql<{fetchChapterPages: {pages: string[];};}>(
+      FETCH_CHAPTER_PAGES, {chapterId: Number(id)}
+    );
+    return data.fetchChapterPages.pages.map((url, index) => ({index, url}));
   }
 
   async markChapterRead(id: string, read: boolean) {
-    await this.gql(MARK_CHAPTER_READ, { id: Number(id), isRead: read })
+    await this.gql(MARK_CHAPTER_READ, {id: Number(id), isRead: read});
   }
 
   async markChaptersRead(ids: string[], read: boolean) {
-    await this.gql(MARK_CHAPTERS_READ, { ids: ids.map(Number), isRead: read })
+    await this.gql(MARK_CHAPTERS_READ, {ids: ids.map(Number), isRead: read});
   }
 
   // ── Downloads ──────────────────────────────────────────────────────────
 
   async getDownloads(): Promise<DownloadItem[]> {
     const data = await this.gql<{
-      downloadStatus: { queue: Record<string, unknown>[] }
-    }>(GET_DOWNLOAD_STATUS)
-    return data.downloadStatus.queue.map(mapDownloadItem)
+      downloadStatus: {queue: Record<string, unknown>[];};
+    }>(GET_DOWNLOAD_STATUS);
+    return data.downloadStatus.queue.map(mapDownloadItem);
   }
 
   async enqueueDownload(chapterId: string) {
-    await this.gql(ENQUEUE_DOWNLOAD, { chapterId: Number(chapterId) })
+    await this.gql(ENQUEUE_DOWNLOAD, {chapterId: Number(chapterId)});
   }
 
   async dequeueDownload(chapterId: string) {
-    await this.gql(DEQUEUE_DOWNLOAD, { chapterId: Number(chapterId) })
+    await this.gql(DEQUEUE_DOWNLOAD, {chapterId: Number(chapterId)});
   }
 
   async clearDownloads() {
-    await this.gql(CLEAR_DOWNLOADER)
+    await this.gql(CLEAR_DOWNLOADER);
   }
 
   // ── Extensions ─────────────────────────────────────────────────────────
 
   async getExtensions(): Promise<Extension[]> {
-    await this.gql(FETCH_EXTENSIONS)
-    const data = await this.gql<{ extensions: { nodes: Record<string, unknown>[] } }>(
+    await this.gql(FETCH_EXTENSIONS);
+    const data = await this.gql<{extensions: {nodes: Record<string, unknown>[];};}>(
       GET_EXTENSIONS
-    )
-    return data.extensions.nodes.map(mapExtension)
+    );
+    return data.extensions.nodes.map(mapExtension);
   }
 
   async installExtension(id: string) {
-    await this.gql(UPDATE_EXTENSION, { id, install: true })
+    await this.gql(UPDATE_EXTENSION, {id, install: true});
   }
 
   async uninstallExtension(id: string) {
-    await this.gql(UPDATE_EXTENSION, { id, uninstall: true })
+    await this.gql(UPDATE_EXTENSION, {id, uninstall: true});
   }
 
   async updateExtension(id: string) {
-    await this.gql(UPDATE_EXTENSION, { id, update: true })
+    await this.gql(UPDATE_EXTENSION, {id, update: true});
   }
 
   async getSources(): Promise<Source[]> {
-    const data = await this.gql<{ sources: { nodes: Source[] } }>(GET_SOURCES)
-    return data.sources.nodes
+    const data = await this.gql<{sources: {nodes: Source[];};}>(GET_SOURCES);
+    return data.sources.nodes;
   }
 
   async browseSource(sourceId: string, page: number): Promise<PaginatedResult<Manga>> {
     const data = await this.gql<{
-      fetchSourceManga: { mangas: Record<string, unknown>[]; hasNextPage: boolean }
+      fetchSourceManga: {mangas: Record<string, unknown>[]; hasNextPage: boolean;};
     }>(FETCH_SOURCE_MANGA, {
       source: sourceId,
       type: 'LATEST',
       page,
-    })
+    });
     return {
       items: data.fetchSourceManga.mangas.map(mapManga),
       hasNextPage: data.fetchSourceManga.hasNextPage,
-    }
+    };
   }
 
   // ── Tracking ───────────────────────────────────────────────────────────
 
   async getTrackers(): Promise<Tracker[]> {
-    const data = await this.gql<{ trackers: { nodes: Tracker[] } }>(GET_TRACKERS)
-    return data.trackers.nodes
+    const data = await this.gql<{trackers: {nodes: Tracker[];};}>(GET_TRACKERS);
+    return data.trackers.nodes;
   }
 
   async linkTracker(mangaId: string, trackerId: string, remoteId: string) {
@@ -513,27 +514,27 @@ export class SuwayomiAdapter implements ServerAdapter {
       mangaId: Number(mangaId),
       trackerId: Number(trackerId),
       remoteId,
-    })
+    });
   }
 
   async syncTracking(mangaId: string) {
-    await this.gql(TRACK_PROGRESS, { mangaId: Number(mangaId) })
+    await this.gql(TRACK_PROGRESS, {mangaId: Number(mangaId)});
   }
 
   // ── Updates ────────────────────────────────────────────────────────────
 
   async checkForUpdates(mangaIds?: string[]): Promise<UpdateResult[]> {
     if (mangaIds?.length) {
-      const results: UpdateResult[] = []
+      const results: UpdateResult[] = [];
       for (const id of mangaIds) {
-        const before = await this.getChapters(id)
-        await this.gql(FETCH_CHAPTERS, { mangaId: Number(id) })
-        const after = await this.getChapters(id)
-        results.push({ mangaId: id, newChapters: after.length - before.length })
+        const before = await this.getChapters(id);
+        await this.gql(FETCH_CHAPTERS, {mangaId: Number(id)});
+        const after = await this.getChapters(id);
+        results.push({mangaId: id, newChapters: after.length - before.length});
       }
-      return results
+      return results;
     }
-    await this.gql(UPDATE_LIBRARY)
-    return []
+    await this.gql(UPDATE_LIBRARY);
+    return [];
   }
 }

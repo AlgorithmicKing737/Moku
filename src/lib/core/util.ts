@@ -1,17 +1,17 @@
-import type { Manga, Source } from "$lib/types";
-import type { Settings }      from "$lib/types";
+import type {Manga, Source} from "$lib/types";
+import type {Settings} from "$lib/types/settings";
 
-export { clsx as cn } from "clsx";
+export {clsx as cn} from "clsx";
 
 export function timeAgo(ts: number): string {
   const diff = Date.now() - ts, m = Math.floor(diff / 60000);
-  if (m < 1)  return "Just now";
+  if (m < 1) return "Just now";
   if (m < 60) return `${m}m ago`;
   const h = Math.floor(m / 60);
   if (h < 24) return `${h}h ago`;
   const d = Math.floor(h / 24);
-  if (d < 7)  return `${d}d ago`;
-  return new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  if (d < 7) return `${d}d ago`;
+  return new Date(ts).toLocaleDateString("en-US", {month: "short", day: "numeric"});
 }
 
 export function dayLabel(ts: number): string {
@@ -19,11 +19,11 @@ export function dayLabel(ts: number): string {
   if (d.toDateString() === now.toDateString()) return "Today";
   const yest = new Date(now); yest.setDate(now.getDate() - 1);
   if (d.toDateString() === yest.toDateString()) return "Yesterday";
-  return d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+  return d.toLocaleDateString("en-US", {weekday: "long", month: "long", day: "numeric"});
 }
 
 export function formatReadTime(m: number): string {
-  if (m < 1)  return "< 1 min";
+  if (m < 1) return "< 1 min";
   if (m < 60) return `${m} min`;
   const h = Math.floor(m / 60), r = m % 60;
   return r === 0 ? `${h}h` : `${h}h ${r}m`;
@@ -46,7 +46,7 @@ type ContentFilterSettings = Pick<
 >;
 
 function blockedTagsForSettings(settings: ContentFilterSettings): string[] {
-  if (settings.contentLevel === "strict")   return STRICT_TAGS;
+  if (settings.contentLevel === "strict") return STRICT_TAGS;
   if (settings.contentLevel === "moderate") return MODERATE_TAGS;
   return [];
 }
@@ -59,7 +59,7 @@ function genreMatchesBlocklist(genre: string[], blockedTags: string[]): boolean 
       const idx = norm.indexOf(tag);
       if (idx === -1) return false;
       const before = idx === 0 || /\W/.test(norm[idx - 1]);
-      const after  = idx + tag.length === norm.length || /\W/.test(norm[idx + tag.length]);
+      const after = idx + tag.length === norm.length || /\W/.test(norm[idx + tag.length]);
       return before && after;
     });
   });
@@ -71,7 +71,7 @@ export function shouldHideNsfw(
 ): boolean {
   if (settings.contentLevel === "unrestricted") return false;
 
-  const srcId   = manga.source?.id;
+  const srcId = manga.source?.id;
   const blocked = settings.sourceOverridesEnabled ? (settings.nsfwBlockedSourceIds ?? []) : [];
   const allowed = settings.sourceOverridesEnabled ? (settings.nsfwAllowedSourceIds ?? []) : [];
 
@@ -99,19 +99,19 @@ export function shouldHideSource(
 }
 
 export function dedupeSourcesByLang(
-  sources:       Source[],
+  sources: Source[],
   preferredLang: string,
-  settings:      ContentFilterSettings,
-  applyHide      = false,
+  settings: ContentFilterSettings,
+  applyHide = false,
 ): Source[] {
   const map = new Map<string, Source>();
   for (const s of sources) {
     if (s.id === "0") continue;
     if (applyHide && shouldHideSource(s, settings)) continue;
     const existing = map.get(s.name);
-    if (!existing) { map.set(s.name, s); continue; }
+    if (!existing) {map.set(s.name, s); continue;}
     const existingPref = existing.lang === preferredLang;
-    const newPref      = s.lang === preferredLang;
+    const newPref = s.lang === preferredLang;
     if (newPref && !existingPref) map.set(s.name, s);
     else if (!existingPref && !newPref && s.lang < existing.lang) map.set(s.name, s);
   }
@@ -159,36 +159,36 @@ function authorFingerprint(author?: string | null, artist?: string | null): stri
 }
 
 export function dedupeMangaByTitle<T extends {
-  id:             number;
-  title:          string;
-  description?:   string | null;
-  author?:        string | null;
-  artist?:        string | null;
-  inLibrary?:     boolean;
+  id: number;
+  title: string;
+  description?: string | null;
+  author?: string | null;
+  artist?: string | null;
+  inLibrary?: boolean;
   downloadCount?: number;
 }>(items: T[], links: Record<number, number[]> = {}): T[] {
-  const byTitle      = new Map<string, number>();
-  const byDesc       = new Map<string, number>();
+  const byTitle = new Map<string, number>();
+  const byDesc = new Map<string, number>();
   const byAuthorDesc = new Map<string, number>();
-  const byId         = new Map<number, number>();
-  const out: T[]     = [];
+  const byId = new Map<number, number>();
+  const out: T[] = [];
 
   for (const m of items) {
     const tk = normalizeTitle(m.title);
     const dk = descFingerprint(m.description);
     const ak = (dk && m.author) ? `${authorFingerprint(m.author, m.artist)}||${dk}` : null;
 
-    const linkedIds   = links[m.id] ?? [];
-    const linkedIdx   = linkedIds.map(lid => byId.get(lid)).find(i => i !== undefined);
+    const linkedIds = links[m.id] ?? [];
+    const linkedIdx = linkedIds.map(lid => byId.get(lid)).find(i => i !== undefined);
     const existingIdx =
       linkedIdx ??
       byTitle.get(tk) ??
-      (dk ? byDesc.get(dk)       : undefined) ??
+      (dk ? byDesc.get(dk) : undefined) ??
       (ak ? byAuthorDesc.get(ak) : undefined);
 
     if (existingIdx !== undefined) {
       const existing = out[existingIdx];
-      const mBetter  =
+      const mBetter =
         (m.inLibrary && !existing.inLibrary) ||
         (!existing.inLibrary && (m.downloadCount ?? 0) > (existing.downloadCount ?? 0));
 
@@ -213,11 +213,11 @@ export function dedupeMangaByTitle<T extends {
   return out;
 }
 
-export function dedupeMangaById<T extends { id: number }>(items: T[]): T[] {
+export function dedupeMangaById<T extends {id: number;}>(items: T[]): T[] {
   const seen = new Set<number>();
   const out: T[] = [];
   for (const m of items) {
-    if (!seen.has(m.id)) { seen.add(m.id); out.push(m); }
+    if (!seen.has(m.id)) {seen.add(m.id); out.push(m);}
   }
   return out;
 }

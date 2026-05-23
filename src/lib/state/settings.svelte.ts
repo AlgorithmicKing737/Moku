@@ -3,7 +3,7 @@ import {DEFAULT_KEYBINDS} from '$lib/core/keybinds/defaultBinds';
 import {savePersistentState, loadPersistentState} from '$lib/core/persistence/persist';
 import {applyTheme} from '$lib/core/theme';
 import {applyZoom} from '$lib/core/ui/zoom';
-import {DEFAULT_SETTINGS, DEFAULT_MANGA_PREFS, type MangaPrefs, type Settings} from '$lib/types/settings';
+import {DEFAULT_AUTOMATION_DEFAULTS, DEFAULT_SETTINGS, DEFAULT_MANGA_PREFS, type MangaPrefs, type Settings} from '$lib/types/settings';
 
 const SETTINGS_STORAGE_KEY = 'settings';
 const SETTINGS_STORE_VERSION = 1;
@@ -34,6 +34,7 @@ function mergeSettings(saved: Partial<Settings> | null | undefined): Settings {
         mangaReaderSettings: saved?.mangaReaderSettings ?? {},
         hiddenLibraryTabs: saved?.hiddenLibraryTabs ?? [],
         libraryPinnedTabOrder: saved?.libraryPinnedTabOrder ?? [],
+        automationDefaults: saved?.automationDefaults ?? DEFAULT_AUTOMATION_DEFAULTS,
     };
 }
 
