@@ -8,4 +8,5 @@ export const appState = $state({
   authMode:        'NONE' as 'NONE' | 'BASIC_AUTH' | 'UI_LOGIN',
   platform:        'web' as 'web' | 'tauri' | 'capacitor',
   version:         '',
+  idle:            false,
 })

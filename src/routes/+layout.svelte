@@ -1,5 +1,11 @@
 <script lang="ts">
+  import { onMount } from 'svelte'
+  import { page } from '$app/stores'
+  import { applyTheme } from '$lib/core/theme'
+  import { mountIdleDetection } from '$lib/core/ui/idle'
+  import { applyZoom, mountZoomKey } from '$lib/core/ui/zoom'
   import { appState } from '$lib/state/app.svelte'
+  import { settingsState, updateSettings } from '$lib/state/settings.svelte'
   import { notificationsState } from '$lib/state/notifications.svelte'
   import SplashScreen from '$lib/ui/chrome/SplashScreen.svelte'
   import AuthGate     from '$lib/ui/chrome/AuthGate.svelte'
@@ -10,17 +16,17 @@
 
   let { children } = $props()
 
-  const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
-  const ringFull = $derived(appState.status !== 'booting')
-
   let splashVisible = $state(true)
   let bypassed      = $state(false)
 
-  const showApp = $derived(
-    appState.status === 'ready' ||
-    appState.status === 'auth'  ||
-    bypassed
-  )
+  const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
+  const pathname = $derived($page.url.pathname as string)
+  const hideShellChrome = $derived(pathname === '/reader' || pathname.startsWith('/reader/'))
+  const ringFull = $derived(appState.status !== 'booting')
+  const showSplash = $derived((appState.status === 'booting' || appState.status === 'error') && !bypassed)
+  const showAuthGate = $derived(appState.status === 'auth')
+  const showShell = $derived(appState.status === 'ready' || bypassed)
+  const splashCards = $derived(settingsState.splashCards ?? true)
 
   function onSplashReady() {
     splashVisible = false
@@ -30,36 +36,89 @@
     bypassed      = true
     splashVisible = false
   }
+
+  onMount(() => {
+    applyTheme(settingsState.theme, settingsState.customThemes)
+    applyZoom(settingsState.uiZoom)
+
+    const stopZoomKey = mountZoomKey(
+      () => settingsState.uiZoom,
+      (nextZoom) => updateSettings({ uiZoom: nextZoom })
+    )
+
+    const stopIdleDetection = mountIdleDetection(
+      () => settingsState.idleTimeoutMin,
+      () => {
+        appState.idle = true
+      },
+      () => {
+        appState.idle = false
+      }
+    )
+
+    const handleResize = () => {
+      applyZoom(settingsState.uiZoom)
+    }
+
+    window.addEventListener('resize', handleResize, { passive: true })
+
+    let stopTauriScale: (() => void) | null = null
+
+    if (isTauri) {
+      void import('@tauri-apps/api/window').then(async ({ getCurrentWindow }) => {
+        stopTauriScale = await getCurrentWindow().onScaleChanged(() => {
+          applyZoom(settingsState.uiZoom)
+        })
+      })
+    }
+
+    return () => {
+      appState.idle = false
+      stopZoomKey()
+      stopIdleDetection()
+      window.removeEventListener('resize', handleResize)
+      stopTauriScale?.()
+    }
+  })
 </script>
 
-{#if splashVisible}
+{#if showSplash && splashVisible}
   <SplashScreen
     mode="loading"
     {ringFull}
     failed={appState.status === 'error'}
+    showCards={splashCards}
     onReady={onSplashReady}
     onBypass={onSplashBypass}
     onRetry={() => window.location.reload()}
   />
 {/if}
 
-{#if showApp}
-  <div class="frame">
-    <div class="shell">
-      {#if isTauri}
-        <TitleBar onClose={() => import('@tauri-apps/api/window').then(m => m.getCurrentWindow().close())} />
-      {/if}
-      <div class="body">
-        <Sidebar />
-        <main class="main">
-          {@render children()}
-        </main>
+{#if showShell}
+  {#if hideShellChrome}
+    <main class="reader-main">
+      {@render children()}
+    </main>
+  {:else}
+    <div class="frame">
+      <div class="shell">
+        {#if isTauri}
+          <TitleBar onClose={() => import('@tauri-apps/api/window').then(m => m.getCurrentWindow().close())} />
+        {/if}
+        <div class="body">
+          <Sidebar />
+          <main class="main">
+            {@render children()}
+          </main>
+        </div>
       </div>
     </div>
-  </div>
+  {/if}
 {/if}
 
-<AuthGate />
+{#if showAuthGate}
+  <AuthGate />
+{/if}
 <Toaster toasts={notificationsState.toasts} />
 
 <style>
@@ -98,5 +157,12 @@
     transform: translateZ(0);
     contain: layout style;
     min-width: 0;
+  }
+
+  .reader-main {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg-base);
   }
 </style>

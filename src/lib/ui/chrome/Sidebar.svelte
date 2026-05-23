@@ -1,8 +1,7 @@
 <script lang="ts">
   import { page } from '$app/stores'
-  import { goto } from '$app/navigation'
   import {
-    House, Books, MagnifyingGlass, ClockCounterClockwise,
+    House, Books, MagnifyingGlass,
     DownloadSimple, PuzzlePiece, GearSix, ChartLineUp,
   } from 'phosphor-svelte'
   import logoUrl from '$lib/assets/moku-icon-wordmark.svg'
@@ -27,33 +26,45 @@
   )
 
   const indicatorY = $derived(activeIndex * (TAB_SIZE + TAB_GAP))
+
+  function isActive(path: string) {
+    if (path === '/') return $page.url.pathname === '/'
+    return $page.url.pathname === path || $page.url.pathname.startsWith(`${path}/`)
+  }
 </script>
 
 <aside class="root">
-  <button class="logo" onclick={() => goto('/')} title="Home" aria-label="Go to Home">
+  <a class="logo" href="/" title="Home" aria-label="Go to Home">
     <div class="logo-icon" style="mask-image: url({logoUrl}); -webkit-mask-image: url({logoUrl})"></div>
-  </button>
+  </a>
 
   <nav class="nav">
     {#if activeIndex >= 0}
       <div class="indicator" style="transform: translateX(-50%) translateY({indicatorY}px)"></div>
     {/if}
     {#each TABS as tab}
-      <button
+      <a
         class="tab"
-        class:active={activeIndex === TABS.indexOf(tab)}
+        class:active={isActive(tab.path)}
         title={tab.label}
-        onclick={() => goto(tab.path)}
+        href={tab.path}
+        aria-current={isActive(tab.path) ? 'page' : undefined}
       >
         <tab.icon size={18} weight="light" />
-      </button>
+      </a>
     {/each}
   </nav>
 
   <div class="bottom">
-    <button class="settings-btn" onclick={() => goto('/settings')} title="Settings">
+    <a
+      class="settings-btn"
+      class:active={isActive('/settings')}
+      href="/settings"
+      title="Settings"
+      aria-current={isActive('/settings') ? 'page' : undefined}
+    >
       <GearSix size={18} weight="light" />
-    </button>
+    </a>
   </div>
 </aside>
 
@@ -80,6 +91,7 @@
     margin-bottom: var(--sp-4);
     border-radius: var(--radius-lg);
     transition: opacity var(--t-base), transform var(--t-base);
+    text-decoration: none;
   }
   .logo:hover            { opacity: 0.8; transform: scale(0.96); }
   .logo:active           { transform: scale(0.92); }
@@ -140,6 +152,7 @@
     border-radius: var(--radius-md);
     color: var(--text-faint);
     transition: color var(--t-base), background var(--t-base);
+    text-decoration: none;
   }
   .tab:hover          { color: var(--text-muted); background: var(--bg-raised); }
   .tab:active         { transform: scale(0.88); }
@@ -167,7 +180,9 @@
     border-radius: var(--radius-md);
     color: var(--text-faint);
     transition: color var(--t-base), background var(--t-base), transform var(--t-slow);
+    text-decoration: none;
   }
   .settings-btn:hover         { color: var(--text-muted); background: var(--bg-raised); transform: rotate(30deg); }
   .settings-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .settings-btn.active        { color: var(--accent-fg); background: var(--accent-muted); transform: none; }
 </style>

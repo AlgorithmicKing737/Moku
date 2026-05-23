@@ -22,6 +22,20 @@ export function zoomDelta(e: KeyboardEvent, current: number): number | null {
   return null;
 }
 
+export function mountZoomKey(getCurrent: () => number, onChange: (next: number) => void): () => void {
+  const handleKey = (event: KeyboardEvent) => {
+    const nextZoom = zoomDelta(event, getCurrent());
+    if (nextZoom === null) return;
+    onChange(nextZoom);
+  };
+
+  window.addEventListener('keydown', handleKey);
+
+  return () => {
+    window.removeEventListener('keydown', handleKey);
+  };
+}
+
 export function clampZoom(z: number, min: number, max: number): number {
   return Math.round(Math.min(max, Math.max(min, z)) * 1000) / 1000;
 }
