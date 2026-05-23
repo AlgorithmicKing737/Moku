@@ -47,12 +47,12 @@ export async function addToLibrary(mangaId: string) {
 
 export async function removeFromLibrary(mangaId: string) {
   await getAdapter().removeFromLibrary(mangaId)
-  libraryState.items = libraryState.items.filter(m => m.id !== mangaId)
+  libraryState.items = libraryState.items.filter(m => String(m.id) !== mangaId)
 }
 
 export async function updateMangaMeta(id: string, meta: Partial<MangaMeta>) {
   await getAdapter().updateMangaMeta(id, meta)
-  if (seriesState.current?.id === id) {
+  if (String(seriesState.current?.id) === id) {
     await loadManga(id)
   }
 }
