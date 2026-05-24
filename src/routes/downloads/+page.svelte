@@ -2,9 +2,18 @@
 	import { onMount } from 'svelte'
 	import { ArrowsClockwise, DownloadSimple, TrashSimple, XCircle } from 'phosphor-svelte'
 	import { clearDownloads, dequeueDownload, loadDownloads } from '$lib/request-manager/downloads'
-	import { activeDownloads, downloadCount, downloadsState, queuedDownloads } from '$lib/state/downloads.svelte'
+	import {
+		activeDownloads as getActiveDownloads,
+		downloadCount as getDownloadCount,
+		downloadsState,
+		queuedDownloads as getQueuedDownloads,
+	} from '$lib/state/downloads.svelte'
 
 	let busy = $state(false)
+
+	const activeDownloads = $derived(getActiveDownloads())
+	const queuedDownloads = $derived(getQueuedDownloads())
+	const downloadCount = $derived(getDownloadCount())
 
 	onMount(async () => {
 		await loadDownloads()

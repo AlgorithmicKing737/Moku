@@ -2,11 +2,12 @@
 	import { onMount } from 'svelte'
 	import { BookOpen, Books, ClockCounterClockwise, DownloadSimple } from 'phosphor-svelte'
 	import { loadLibrary } from '$lib/request-manager/manga'
-	import { downloadCount } from '$lib/state/downloads.svelte'
+	import { downloadCount as getDownloadCount } from '$lib/state/downloads.svelte'
 	import { historyState, initHistoryState } from '$lib/state/history.svelte'
 	import { libraryState } from '$lib/state/library.svelte'
 
 	const recentHistory = $derived(historyState.history.slice(0, 8))
+	const downloadCount = $derived(getDownloadCount())
 
 	const stats = $derived.by(() => [
 		{

@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte'
 	import { Funnel, ArrowsDownUp, SquaresFour, ListBullets, X } from 'phosphor-svelte'
 	import { loadLibrary } from '$lib/request-manager/manga'
-	import { libraryState, filteredItems } from '$lib/state/library.svelte'
+	import { libraryState, filteredItems as getFilteredItems } from '$lib/state/library.svelte'
 	import type { LibrarySortOption } from '$lib/state/library.svelte'
 	import type { MangaStatus } from '$lib/server-adapters/types'
 	import MangaCard from '$lib/ui/manga/MangaCard.svelte'
@@ -46,6 +46,7 @@
 		return count
 	})
 
+	const filteredItems = $derived(getFilteredItems())
 	const hasResults = $derived(filteredItems.length > 0)
 
 	onMount(async () => {

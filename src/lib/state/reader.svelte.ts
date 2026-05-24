@@ -34,17 +34,33 @@ export const readerState = $state({
   fullscreen: false,
 });
 
-export const currentPageData = $derived(
+const currentPageDataValue = $derived(
   readerState.pages[readerState.currentPage] ?? null
 );
 
-export const progress = $derived(
+const progressValue = $derived(
   readerState.pages.length > 0
     ? (readerState.currentPage + 1) / readerState.pages.length
     : 0
 );
 
-export const hasPrev = $derived(readerState.currentPage > 0);
-export const hasNext = $derived(
+const hasPrevValue = $derived(readerState.currentPage > 0);
+const hasNextValue = $derived(
   readerState.currentPage < readerState.pages.length - 1
 );
+
+export function currentPageData() {
+  return currentPageDataValue;
+}
+
+export function progress() {
+  return progressValue;
+}
+
+export function hasPrev() {
+  return hasPrevValue;
+}
+
+export function hasNext() {
+  return hasNextValue;
+}

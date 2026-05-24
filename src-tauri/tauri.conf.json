@@ -4,7 +4,7 @@
   "version": "0.9.4",
   "identifier": "io.github.MokuProject.Moku",
   "build": {
-    "frontendDist": "../dist",
+    "frontendDist": "../build",
     "beforeBuildCommand": "pnpm build"
   },
   "app": {

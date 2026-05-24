@@ -5,12 +5,24 @@ export const downloadsState = $state({
   error: null as string | null,
 })
 
-export const activeDownloads = $derived(
+const activeDownloadsValue = $derived(
   downloadsState.items.filter(d => d.state === 'downloading')
 )
 
-export const queuedDownloads = $derived(
+const queuedDownloadsValue = $derived(
   downloadsState.items.filter(d => d.state === 'queued')
 )
 
-export const downloadCount = $derived(downloadsState.items.length)
+const downloadCountValue = $derived(downloadsState.items.length)
+
+export function activeDownloads() {
+  return activeDownloadsValue
+}
+
+export function queuedDownloads() {
+  return queuedDownloadsValue
+}
+
+export function downloadCount() {
+  return downloadCountValue
+}

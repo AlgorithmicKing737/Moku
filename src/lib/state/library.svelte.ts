@@ -22,7 +22,7 @@ export const libraryState = $state({
   selected: new Set<string>(),
 });
 
-export const filteredItems = $derived.by(() => {
+const filteredItemsValue = $derived.by(() => {
   let result = libraryState.items;
 
   result = result.filter(m => !shouldHideNsfw(m, settingsState));
@@ -55,3 +55,7 @@ export const filteredItems = $derived.by(() => {
 
   return libraryState.sortDesc ? sorted.reverse() : sorted;
 });
+
+export function filteredItems() {
+  return filteredItemsValue;
+}

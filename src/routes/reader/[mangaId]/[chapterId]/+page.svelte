@@ -2,7 +2,7 @@
   import { goto } from '$app/navigation'
   import { page } from '$app/stores'
   import { ArrowArcLeft, CaretLeft, CaretRight, Columns, List, MagnifyingGlass, SpinnerGap, TextAlignRight } from 'phosphor-svelte'
-  import { currentPageData, progress, readerState } from '$lib/state/reader.svelte'
+  import { currentPageData as getCurrentPageData, progress as getProgress, readerState } from '$lib/state/reader.svelte'
   import { ensureReaderSession } from '$lib/core/reader/chapterLoader'
   import { getAdjacentChapters, goToNextReaderPage, goToPreviousReaderPage, setCurrentReaderPage } from '$lib/core/reader/navigation'
   import { createReaderKeyHandler } from '$lib/core/reader/readerKeybinds'
@@ -15,6 +15,9 @@
   let initializing = $state(true)
   let routeError = $state<string | null>(null)
   let requestVersion = 0
+
+  const currentPageData = $derived(getCurrentPageData())
+  const progress = $derived(getProgress())
 
   const mangaId = $derived($page.params.mangaId ?? '')
   const chapterId = $derived($page.params.chapterId ?? '')

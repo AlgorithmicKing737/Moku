@@ -43,10 +43,10 @@ async function resolvePlatformAdapter() {
     const {TauriAdapter} = await import('$lib/platform-adapters/tauri');
     return new TauriAdapter();
   }
-  if (isCapacitor()) {
-    const {CapacitorAdapter} = await import('$lib/platform-adapters/capacitor');
-    return new CapacitorAdapter();
-  }
+  // if (isCapacitor()) {
+  //   const {CapacitorAdapter} = await import('$lib/platform-adapters/capacitor');
+  //   return new CapacitorAdapter();
+  // }
   const {WebAdapter} = await import('$lib/platform-adapters/web');
   return new WebAdapter();
 }
@@ -73,7 +73,8 @@ async function boot() {
       initHistoryState(),
     ]);
 
-    appState.platform = isTauri() ? 'tauri' : isCapacitor() ? 'capacitor' : 'web';
+    // appState.platform = isTauri() ? 'tauri' : isCapacitor() ? 'capacitor' : 'web';
+    appState.platform = isTauri() ? 'tauri' : 'web';
     appState.version = await platformAdapter.getVersion();
 
     const legacyAuth = loadSavedAuth();

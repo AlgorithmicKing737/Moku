@@ -3,13 +3,14 @@
   import { BookOpen, DownloadSimple, Circle, CheckCircle } from 'phosphor-svelte'
   import type { Chapter } from '$lib/types/chapter'
   import { markRead } from '$lib/request-manager/chapters'
-  import { filteredChapters, seriesState } from '$lib/state/series.svelte'
+  import { filteredChapters as getFilteredChapters, seriesState } from '$lib/state/series.svelte'
   import { readerState } from '$lib/state/reader.svelte'
   import Thumbnail from '$lib/ui/manga/Thumbnail.svelte'
   import type { PageData } from './$types'
 
   let { data }: { data: PageData } = $props()
 
+  const filteredChapters = $derived(getFilteredChapters())
   const totalCount = $derived(seriesState.chapters.length)
   const readCount = $derived(seriesState.chapters.filter(ch => ch.read).length)
   const downloadedCount = $derived(seriesState.chapters.filter(ch => ch.downloaded).length)

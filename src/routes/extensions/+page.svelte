@@ -7,9 +7,11 @@
 		uninstallExtension,
 		updateExtension,
 	} from '$lib/request-manager/extensions'
-	import { extensionsState, filteredExtensions } from '$lib/state/extensions.svelte'
+	import { extensionsState, filteredExtensions as getFilteredExtensions } from '$lib/state/extensions.svelte'
 
 	let busyIds = $state<string[]>([])
+
+	const filteredExtensions = $derived(getFilteredExtensions())
 
 	const languageOptions = $derived.by(() => {
 		const values: string[] = []

@@ -17,7 +17,7 @@ export const seriesState = $state({
   chapterSortDesc: true,
 })
 
-export const filteredChapters = $derived.by(() => {
+const filteredChaptersValue = $derived.by(() => {
   let result = seriesState.chapters
 
   if (seriesState.chapterFilter.unread) {
@@ -34,3 +34,7 @@ export const filteredChapters = $derived.by(() => {
   const sorted = [...result].sort((a, b) => a.chapterNumber - b.chapterNumber)
   return seriesState.chapterSortDesc ? sorted.reverse() : sorted
 })
+
+export function filteredChapters() {
+  return filteredChaptersValue
+}
