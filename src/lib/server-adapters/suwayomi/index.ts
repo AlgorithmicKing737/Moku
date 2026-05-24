@@ -10,6 +10,7 @@ import type {
   UpdateResult,
 } from '$lib/server-adapters/types';
 import type {Manga, Chapter, Extension, Source, Tracker} from '$lib/types';
+import type {TrackRecord} from '$lib/types/tracking';
 import {
   GET_LIBRARY,
   GET_MANGA,
@@ -44,6 +45,9 @@ import {
   GET_TRACKERS,
   BIND_TRACK,
   TRACK_PROGRESS,
+  LOGIN_TRACKER_OAUTH,
+  LOGIN_TRACKER_CREDENTIALS,
+  LOGOUT_TRACKER,
 } from './tracking';
 import {
   GQLResponse,
@@ -235,6 +239,31 @@ export class SuwayomiAdapter implements ServerAdapter {
   async getTrackers(): Promise<Tracker[]> {
     const data = await this.gql<{trackers: {nodes: Tracker[];};}>(GET_TRACKERS);
     return data.trackers.nodes;
+  }
+
+  async getTrackerRecords(): Promise<TrackRecord[]> {
+    const trackers = await this.getTrackers();
+    const records: TrackRecord[] = [];
+
+    for (const tracker of trackers) {
+      for (const record of tracker.trackRecords?.nodes ?? []) {
+        records.push(record);
+      }
+    }
+
+    return records;
+  }
+
+  async loginTrackerOAuth(trackerId: number, callbackUrl: string) {
+    await this.gql(LOGIN_TRACKER_OAUTH, {trackerId, callbackUrl});
+  }
+
+  async loginTrackerCredentials(trackerId: number, username: string, password: string) {
+    await this.gql(LOGIN_TRACKER_CREDENTIALS, {trackerId, username, password});
+  }
+
+  async logoutTracker(trackerId: number) {
+    await this.gql(LOGOUT_TRACKER, {trackerId});
   }
 
   async linkTracker(mangaId: string, trackerId: string, remoteId: string) {

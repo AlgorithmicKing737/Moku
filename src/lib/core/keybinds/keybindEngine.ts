@@ -13,6 +13,12 @@ export function matchesKeybind(e: KeyboardEvent, bind: string): boolean {
   return eventToKeybind(e) === bind;
 }
 
+export function initKeybindEngine(): () => void {
+  // Global matching is event-driven via handleGlobalKeydown in the app shell.
+  // This hook makes boot ordering explicit and reserves a dedicated setup point.
+  return () => {};
+}
+
 export async function toggleFullscreen(): Promise<void> {
   if (typeof window === 'undefined' || !('__TAURI_INTERNALS__' in window)) return;
 

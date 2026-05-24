@@ -3,7 +3,7 @@
   import { onMount } from 'svelte'
   import { page } from '$app/stores'
   import { applyTheme, mountSystemThemeSync, unmountSystemThemeSync } from '$lib/core/theme'
-  import { matchesKeybind, toggleFullscreen } from '$lib/core/keybinds/keybindEngine'
+  import { initKeybindEngine, matchesKeybind, toggleFullscreen } from '$lib/core/keybinds/keybindEngine'
   import { mountIdleDetection } from '$lib/core/ui/idle'
   import { applyZoom, mountZoomKey } from '$lib/core/ui/zoom'
   import { appState } from '$lib/state/app.svelte'
@@ -94,36 +94,6 @@
     }
   }
 
-  let lastPresenceKey = ''
-
-  $effect(() => {
-    const enabled = settingsState.discordRpc && appState.status === 'ready' && !appState.idle && canUseDiscordRpc()
-
-    if (!enabled) {
-      if (lastPresenceKey) {
-        lastPresenceKey = ''
-        void clearDiscordPresence().catch(() => {})
-      }
-      return
-    }
-
-    const isReaderRoute = pathname === '/reader' || pathname.startsWith('/reader/')
-    const title = isReaderRoute ? (readerState.manga?.title ?? 'Moku') : 'Moku'
-    const chapter = isReaderRoute && readerState.chapter
-      ? `Chapter ${readerState.chapter.chapterNumber}`
-      : 'Browsing library'
-
-    const nextKey = `${title}|${chapter}`
-    if (nextKey === lastPresenceKey) return
-
-    lastPresenceKey = nextKey
-    void setDiscordPresence({
-      title,
-      chapter,
-      startTimestamp: Date.now(),
-    }).catch(() => {})
-  })
-
   function onSplashReady() {
     splashVisible = false
   }
@@ -134,6 +104,9 @@
   }
 
   onMount(() => {
+    // Keep shell startup deterministic: keybinds -> visuals -> idle -> platform listeners -> feature loops.
+    const stopKeybindEngine = initKeybindEngine()
+
     applyTheme(settingsState.theme, settingsState.customThemes)
     applyZoom(settingsState.uiZoom)
     mountSystemThemeSync()
@@ -168,6 +141,45 @@
         })
       })
     }
+
+    let lastPresenceKey = ''
+
+    const stopDiscordWatch = $effect.root(() => {
+      $effect(() => {
+        const enabled = settingsState.discordRpc && appState.status === 'ready' && !appState.idle && canUseDiscordRpc()
+
+        if (!enabled) {
+          if (lastPresenceKey) {
+            lastPresenceKey = ''
+            void clearDiscordPresence().catch(() => {})
+          }
+          return
+        }
+
+        const isReaderRoute = pathname === '/reader' || pathname.startsWith('/reader/')
+        const title = isReaderRoute ? (readerState.manga?.title ?? 'Moku') : 'Moku'
+        const chapter = isReaderRoute && readerState.chapter
+          ? `Chapter ${readerState.chapter.chapterNumber}`
+          : 'Browsing library'
+
+        const nextKey = `${title}|${chapter}`
+        if (nextKey === lastPresenceKey) return
+
+        lastPresenceKey = nextKey
+        void setDiscordPresence({
+          title,
+          chapter,
+          startTimestamp: Date.now(),
+        }).catch(() => {})
+      })
+
+      return () => {
+        if (lastPresenceKey) {
+          lastPresenceKey = ''
+          void clearDiscordPresence().catch(() => {})
+        }
+      }
+    })
 
     const DOWNLOAD_POLL_MS = 8_000
     let downloadPollId: ReturnType<typeof setInterval> | null = null
@@ -206,7 +218,9 @@
       appState.idle = false
       stopZoomKey()
       stopIdleDetection()
+      stopKeybindEngine()
       stopDownloadPolling()
+      stopDiscordWatch()
       stopStatusWatch()
       window.removeEventListener('resize', handleResize)
       unmountSystemThemeSync()

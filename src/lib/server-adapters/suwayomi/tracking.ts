@@ -6,10 +6,17 @@ export const GET_TRACKERS = `
         supportsPrivateTracking supportsReadingDates supportsTrackDeletion
         scores
         statuses { value name }
+        trackRecords {
+          nodes {
+            id trackerId remoteId title status score displayScore
+            lastChapterRead totalChapters remoteUrl startDate finishDate private libraryId
+            manga { id title thumbnailUrl inLibrary }
+          }
+        }
       }
     }
   }
-`
+`;
 
 export const GET_MANGA_TRACK_RECORDS = `
   query GetMangaTrackRecords($mangaId: Int!) {
@@ -22,7 +29,7 @@ export const GET_MANGA_TRACK_RECORDS = `
       }
     }
   }
-`
+`;
 
 export const SEARCH_TRACKER = `
   query SearchTracker($trackerId: Int!, $query: String!) {
@@ -33,7 +40,7 @@ export const SEARCH_TRACKER = `
       }
     }
   }
-`
+`;
 
 export const BIND_TRACK = `
   mutation BindTrack($mangaId: Int!, $trackerId: Int!, $remoteId: LongString!) {
@@ -41,7 +48,7 @@ export const BIND_TRACK = `
       trackRecord { id trackerId remoteId }
     }
   }
-`
+`;
 
 export const TRACK_PROGRESS = `
   mutation TrackProgress($mangaId: Int!) {
@@ -49,7 +56,7 @@ export const TRACK_PROGRESS = `
       trackRecords { id trackerId lastChapterRead status }
     }
   }
-`
+`;
 
 export const UPDATE_TRACK = `
   mutation UpdateTrack($recordId: Int!, $status: Int, $score: Float, $lastChapterRead: Float, $startDate: LongString, $finishDate: LongString, $private: Boolean) {
@@ -65,7 +72,7 @@ export const UPDATE_TRACK = `
       trackRecord { id status score lastChapterRead }
     }
   }
-`
+`;
 
 export const UNLINK_TRACK = `
   mutation UnlinkTrack($trackRecordId: Int!) {
@@ -73,7 +80,7 @@ export const UNLINK_TRACK = `
       trackRecord { id }
     }
   }
-`
+`;
 
 export const LOGIN_TRACKER_CREDENTIALS = `
   mutation LoginTrackerCredentials($trackerId: Int!, $username: String!, $password: String!) {
@@ -81,7 +88,15 @@ export const LOGIN_TRACKER_CREDENTIALS = `
       isLoggedIn
     }
   }
-`
+`;
+
+export const LOGIN_TRACKER_OAUTH = `
+  mutation LoginTrackerOAuth($trackerId: Int!, $callbackUrl: String!) {
+    loginTrackerOAuth(input: { trackerId: $trackerId, callbackUrl: $callbackUrl }) {
+      isLoggedIn
+    }
+  }
+`;
 
 export const LOGOUT_TRACKER = `
   mutation LogoutTracker($trackerId: Int!) {
@@ -89,4 +104,4 @@ export const LOGOUT_TRACKER = `
       isLoggedIn
     }
   }
-`
+`;

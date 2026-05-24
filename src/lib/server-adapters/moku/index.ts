@@ -10,6 +10,7 @@ import type {
   UpdateResult,
 } from '$lib/server-adapters/types';
 import type {Manga, Chapter, Extension, Source, Tracker} from '$lib/types';
+import type {TrackRecord} from '$lib/types/tracking';
 
 function notImplemented(): never {
   throw new Error('MokuAdapter: not implemented');
@@ -47,6 +48,10 @@ export class MokuAdapter implements ServerAdapter {
   async browseSource(_sourceId: string, _page: number): Promise<PaginatedResult<Manga>> {return notImplemented();}
 
   async getTrackers(): Promise<Tracker[]> {return notImplemented();}
+  async getTrackerRecords(): Promise<TrackRecord[]> {return notImplemented();}
+  async loginTrackerOAuth(_trackerId: number, _callbackUrl: string): Promise<void> {notImplemented();}
+  async loginTrackerCredentials(_trackerId: number, _username: string, _password: string): Promise<void> {notImplemented();}
+  async logoutTracker(_trackerId: number): Promise<void> {notImplemented();}
   async linkTracker(_mangaId: string, _trackerId: string, _remoteId: string): Promise<void> {notImplemented();}
   async syncTracking(_mangaId: string): Promise<void> {notImplemented();}
 

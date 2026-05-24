@@ -1,63 +1,14 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { settingsState } from '$lib/state/settings.svelte'
   import { trackingState } from '$lib/state/tracking.svelte'
-  import { syncTracking } from '$lib/request-manager/tracking'
-
-  interface GqlTracker {
-    id: number
-    name: string
-    icon?: string | null
-    isLoggedIn: boolean
-    isTokenExpired: boolean
-    authUrl?: string | null
-    trackRecords?: {
-      nodes: Array<{
-        id: number
-        manga?: { id: number; title: string; thumbnailUrl: string; inLibrary: boolean } | null
-      }>
-    }
-  }
-
-  const GET_TRACKERS = `
-    query GetTrackers {
-      trackers {
-        nodes {
-          id name icon isLoggedIn isTokenExpired authUrl
-          trackRecords {
-            nodes {
-              id trackerId remoteId title status score displayScore lastChapterRead totalChapters remoteUrl
-              manga { id title thumbnailUrl inLibrary }
-            }
-          }
-        }
-      }
-    }
-  `
-
-  const LOGIN_TRACKER_OAUTH = `
-    mutation LoginTrackerOAuth($trackerId: Int!, $callbackUrl: String!) {
-      loginTrackerOAuth(input: { trackerId: $trackerId, callbackUrl: $callbackUrl }) {
-        isLoggedIn
-      }
-    }
-  `
-
-  const LOGIN_TRACKER_CREDENTIALS = `
-    mutation LoginTrackerCredentials($trackerId: Int!, $username: String!, $password: String!) {
-      loginTrackerCredentials(input: { trackerId: $trackerId, username: $username, password: $password }) {
-        isLoggedIn
-      }
-    }
-  `
-
-  const LOGOUT_TRACKER = `
-    mutation LogoutTracker($trackerId: Int!) {
-      logoutTracker(input: { trackerId: $trackerId }) {
-        isLoggedIn
-      }
-    }
-  `
+  import {
+    loadTrackers,
+    loginTrackerOAuth,
+    loginTrackerCredentials,
+    logoutTracker,
+    syncTracking,
+  } from '$lib/request-manager/tracking'
+  import type { Tracker } from '$lib/types'
 
   let oauthTrackerId = $state<number | null>(null)
   let oauthCallback = $state('')
@@ -65,84 +16,44 @@
   let credsUsername = $state('')
   let credsPassword = $state('')
 
-  function endpoint() {
-    return `${settingsState.serverUrl.replace(/\/$/, '')}/api/graphql`
-  }
-
-  function authHeaders() {
-    const headers: Record<string, string> = {'Content-Type': 'application/json'}
-    if (settingsState.serverAuthMode === 'BASIC_AUTH' && settingsState.serverAuthUser) {
-      headers.Authorization = `Basic ${btoa(`${settingsState.serverAuthUser}:${settingsState.serverAuthPass}`)}`
-    }
-    return headers
-  }
-
-  async function gql<T>(query: string, variables?: Record<string, unknown>) {
-    const response = await fetch(endpoint(), {
-      method: 'POST',
-      headers: authHeaders(),
-      body: JSON.stringify({query, variables}),
-    })
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`)
-    }
-
-    const json = await response.json() as { data?: T; errors?: { message: string }[] }
-    if (json.errors?.length) {
-      throw new Error(json.errors[0].message)
-    }
-
-    return json.data as T
-  }
-
   async function refreshTrackers() {
-    trackingState.loading = true
-    trackingState.error = null
     try {
-      const data = await gql<{ trackers: { nodes: GqlTracker[] } }>(GET_TRACKERS)
-      trackingState.trackers = data.trackers.nodes as never
+      await loadTrackers()
     } catch (error) {
       trackingState.error = error instanceof Error ? error.message : String(error)
-    } finally {
-      trackingState.loading = false
     }
   }
 
   async function reconnectOAuth() {
     if (!oauthTrackerId || !oauthCallback.trim()) return
-    await gql(LOGIN_TRACKER_OAUTH, {trackerId: oauthTrackerId, callbackUrl: oauthCallback.trim()})
+    await loginTrackerOAuth(oauthTrackerId, oauthCallback.trim())
     oauthTrackerId = null
     oauthCallback = ''
-    await refreshTrackers()
   }
 
   async function connectCredentials() {
     if (!credsTrackerId || !credsUsername.trim() || !credsPassword.trim()) return
-    await gql(LOGIN_TRACKER_CREDENTIALS, {
-      trackerId: credsTrackerId,
-      username: credsUsername.trim(),
-      password: credsPassword,
-    })
+    await loginTrackerCredentials(credsTrackerId, credsUsername.trim(), credsPassword)
     credsTrackerId = null
     credsUsername = ''
     credsPassword = ''
-    await refreshTrackers()
   }
 
   async function disconnectTracker(trackerId: number) {
-    await gql(LOGOUT_TRACKER, {trackerId})
-    await refreshTrackers()
+    await logoutTracker(trackerId)
   }
 
   async function syncAllTrackers() {
     trackingState.syncing = true
     try {
-      const mangaIds = new Set<number>()
+      const mangaIds: number[] = []
 
       for (const tracker of trackingState.trackers) {
         for (const record of tracker.trackRecords?.nodes ?? []) {
-          if (record.manga?.id) mangaIds.add(record.manga.id)
+          const mangaId = record.manga?.id
+          if (mangaId && !mangaIds.includes(mangaId)) {
+            mangaIds.push(mangaId)
+          }
         }
       }
 
@@ -154,14 +65,14 @@
     }
   }
 
-  function openOAuth(tracker: GqlTracker) {
+  function openOAuth(tracker: Tracker) {
     if (tracker.authUrl) window.open(tracker.authUrl, '_blank', 'noopener')
     oauthTrackerId = tracker.id
     oauthCallback = ''
     credsTrackerId = null
   }
 
-  function openCredentials(tracker: GqlTracker) {
+  function openCredentials(tracker: Tracker) {
     credsTrackerId = tracker.id
     credsUsername = ''
     credsPassword = ''
@@ -193,7 +104,7 @@
       <button class="settings-button" type="button" onclick={() => void refreshTrackers()}>Refresh</button>
     </div>
 
-    {#each trackingState.trackers as tracker}
+    {#each trackingState.trackers as tracker (tracker.id)}
       <div class="settings-row settings-tracker-row">
         <div>
           <div class="settings-label">{tracker.name}</div>

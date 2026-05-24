@@ -5,6 +5,7 @@ import type {
   Source,
   Tracker,
 } from '$lib/types';
+import type {TrackRecord} from '$lib/types/tracking';
 
 export interface ServerConfig {
   baseUrl: string;
@@ -88,6 +89,10 @@ export interface ServerAdapter {
   browseSource(sourceId: string, page: number): Promise<PaginatedResult<Manga>>;
 
   getTrackers(): Promise<Tracker[]>;
+  getTrackerRecords(): Promise<TrackRecord[]>;
+  loginTrackerOAuth(trackerId: number, callbackUrl: string): Promise<void>;
+  loginTrackerCredentials(trackerId: number, username: string, password: string): Promise<void>;
+  logoutTracker(trackerId: number): Promise<void>;
   linkTracker(mangaId: string, trackerId: string, remoteId: string): Promise<void>;
   syncTracking(mangaId: string): Promise<void>;
 
