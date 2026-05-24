@@ -3,8 +3,8 @@ import { initPlatformService } from '$lib/platform-service'
 import { appState } from '$lib/state/app.svelte'
 import { configureAuth, probeServer } from '$lib/core/auth'
 
-const SAVED_URL_KEY  = 'moku_server_url'
-const SAVED_AUTH_KEY = 'moku_auth_config'
+const KEY_URL  = 'moku_server_url'
+const KEY_AUTH = 'moku_auth_config'
 
 interface SavedAuth {
   mode: 'NONE' | 'BASIC_AUTH' | 'UI_LOGIN'
@@ -12,24 +12,13 @@ interface SavedAuth {
   pass?: string
 }
 
-function isTauri(): boolean {
-  return '__TAURI_INTERNALS__' in window
-}
+function isTauri():     boolean { return '__TAURI_INTERNALS__' in window }
+function isCapacitor(): boolean { return 'Capacitor' in window }
 
-function isCapacitor(): boolean {
-  return 'Capacitor' in window
-}
-
-function loadSavedServerUrl(): string {
-  return localStorage.getItem(SAVED_URL_KEY) ?? 'http://127.0.0.1:4567'
-}
-
-function loadSavedAuth(): SavedAuth {
-  try {
-    return JSON.parse(localStorage.getItem(SAVED_AUTH_KEY) ?? 'null') ?? { mode: 'NONE' }
-  } catch {
-    return { mode: 'NONE' }
-  }
+function detectPlatform(): 'tauri' | 'capacitor' | 'web' {
+  if (isTauri())     return 'tauri'
+  if (isCapacitor()) return 'capacitor'
+  return 'web'
 }
 
 async function resolvePlatformAdapter() {
@@ -60,30 +49,35 @@ async function boot() {
     initRequestManager(serverAdapter)
     initPlatformService(platformAdapter)
 
-    appState.platform = isTauri() ? 'tauri' : isCapacitor() ? 'capacitor' : 'web'
+    appState.platform = detectPlatform()
     appState.version  = await platformAdapter.getVersion()
 
-    const savedUrl  = loadSavedServerUrl()
-    const savedAuth = loadSavedAuth()
+    const savedUrl     = (await platformAdapter.getCredential(KEY_URL)) ?? 'http://127.0.0.1:4567'
+    const savedAuthRaw = await platformAdapter.getCredential(KEY_AUTH)
+    const savedAuth: SavedAuth = savedAuthRaw ? JSON.parse(savedAuthRaw) : { mode: 'NONE' }
 
     appState.serverUrl = savedUrl
     appState.authMode  = savedAuth.mode
 
     if (isTauri() && platformAdapter.isSupported('server-management')) {
-      await platformAdapter.launchServer({ url: savedUrl }).catch(() => {})
+      // jarPath/port/dataPath come from persisted server config; omitted here
+      // until settings UI writes them — server auto-launch handled by Tauri side
     }
 
     configureAuth(savedUrl, savedAuth.mode, savedAuth.user, savedAuth.pass)
-    await serverAdapter.connect({ baseUrl: savedUrl })
+
+    await serverAdapter.connect({
+      baseUrl: savedUrl,
+      credentials:
+        savedAuth.mode === 'BASIC_AUTH' && savedAuth.user && savedAuth.pass
+          ? { username: savedAuth.user, password: savedAuth.pass }
+          : undefined,
+    })
 
     const probe = await probeServer()
 
-    if (probe === 'auth_required') {
-      appState.status = 'auth'
-      return
-    }
-
-    if (probe === 'unreachable') {
+    if (probe === 'auth_required') { appState.status = 'auth';  return }
+    if (probe === 'unreachable')   {
       appState.error  = `Could not reach server at ${savedUrl}`
       appState.status = 'error'
       return

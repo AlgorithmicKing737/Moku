@@ -7,21 +7,21 @@ export type PlatformFeature =
   | 'discord-rpc'
 
 export interface ServerLaunchConfig {
-  jarPath: string
-  port: number
+  jarPath:  string
+  port:     number
   dataPath: string
 }
 
 export interface DiscordPresence {
-  title: string
-  chapter: string
+  title:           string
+  chapter:         string
   startTimestamp?: number
 }
 
 export interface AppUpdateInfo {
   version: string
-  url: string
-  notes?: string
+  url:     string
+  notes?:  string
 }
 
 export interface PlatformAdapter {

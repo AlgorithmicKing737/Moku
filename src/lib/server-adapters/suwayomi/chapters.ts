@@ -9,6 +9,15 @@ export const GET_CHAPTERS = `
   }
 `
 
+export const GET_CHAPTER = `
+  query GetChapter($id: Int!) {
+    chapter(id: $id) {
+      id name chapterNumber sourceOrder isRead isDownloaded isBookmarked
+      pageCount mangaId uploadDate realUrl lastPageRead lastReadAt scanlator
+    }
+  }
+`
+
 export const GET_RECENTLY_UPDATED = `
   query GetRecentlyUpdated {
     chapters(orderBy: FETCHED_AT, orderByType: DESC, first: 300) {

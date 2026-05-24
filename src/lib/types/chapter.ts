@@ -1,19 +1,23 @@
 export interface Chapter {
-  id: number
-  name: string
+  id:            number
+  name:          string
   chapterNumber: number
-  sourceOrder: number
-  read: boolean
-  downloaded: boolean
-  bookmarked: boolean
-  pageCount: number
-  mangaId: number
-  fetchedAt?: string
-  uploadDate?: string | null
-  realUrl?: string | null
-  url?: string
+  sourceOrder:   number
+  read:          boolean
+  downloaded:    boolean
+  bookmarked:    boolean
+  pageCount:     number
+  mangaId:       number
+  fetchedAt?:    string
+  uploadDate?:   string | null
+  realUrl?:      string | null
   lastPageRead?: number
-  lastReadAt?: string
-  scanlator?: string | null
-  manga?: { id: number; title: string; thumbnailUrl: string; inLibrary: boolean } | null
+  lastReadAt?:   string
+  scanlator?:    string | null
+  manga?: {
+    id:           number
+    title:        string
+    thumbnailUrl: string
+    inLibrary:    boolean
+  } | null
 }

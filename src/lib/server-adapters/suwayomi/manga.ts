@@ -3,9 +3,12 @@ export const GET_LIBRARY = `
     mangas(condition: { inLibrary: true }) {
       nodes {
         id title thumbnailUrl inLibrary downloadCount unreadCount bookmarkCount
-        description status author artist genre inLibraryAt lastFetchedAt
+        description status author artist genre
+        inLibraryAt lastFetchedAt chaptersLastFetchedAt thumbnailUrlLastFetched
         source { id name displayName }
         chapters { totalCount }
+        latestFetchedChapter { id uploadDate }
+        latestUploadedChapter { id uploadDate }
         lastReadChapter { id chapterNumber }
         firstUnreadChapter { id chapterNumber }
       }
@@ -17,7 +20,7 @@ export const GET_MANGA = `
   query GetManga($id: Int!) {
     manga(id: $id) {
       id title description thumbnailUrl status author artist genre inLibrary realUrl
-      inLibraryAt lastFetchedAt updateStrategy
+      inLibraryAt lastFetchedAt thumbnailUrlLastFetched updateStrategy
       source { id name displayName }
       lastReadChapter { id chapterNumber lastPageRead }
       firstUnreadChapter { id chapterNumber }
@@ -39,6 +42,21 @@ export const GET_CATEGORIES = `
   }
 `
 
+export const LIBRARY_UPDATE_STATUS = `
+  query LibraryUpdateStatus {
+    libraryUpdateStatus {
+      jobsInfo {
+        isRunning finishedJobs totalJobs skippedMangasCount skippedCategoriesCount
+      }
+      mangaUpdates {
+        status
+        manga { id title thumbnailUrl unreadCount }
+      }
+    }
+    lastUpdateTimestamp { timestamp }
+  }
+`
+
 export const MANGAS_BY_GENRE = `
   query MangasByGenre($filter: MangaFilterInput, $first: Int, $offset: Int) {
     mangas(filter: $filter, first: $first, offset: $offset, orderBy: IN_LIBRARY_AT, orderByType: DESC) {
@@ -52,18 +70,9 @@ export const MANGAS_BY_GENRE = `
   }
 `
 
-export const LIBRARY_UPDATE_STATUS = `
-  query LibraryUpdateStatus {
-    libraryUpdateStatus {
-      jobsInfo {
-        isRunning finishedJobs totalJobs skippedMangasCount skippedCategoriesCount
-      }
-      mangaUpdates {
-        status
-        manga { id title thumbnailUrl unreadCount }
-      }
-    }
-    lastUpdateTimestamp { timestamp }
+export const GET_DOWNLOADS_PATH = `
+  query GetDownloadsPath {
+    settings { downloadsPath localSourcePath }
   }
 `
 
@@ -142,6 +151,14 @@ export const UPDATE_CATEGORY_ORDER = `
   }
 `
 
+export const UPDATE_CATEGORY_MANGA = `
+  mutation UpdateCategoryManga($categoryId: Int!) {
+    updateCategoryManga(input: { categoryId: $categoryId }) {
+      updateStatus { jobsInfo { isRunning finishedJobs totalJobs } }
+    }
+  }
+`
+
 export const UPDATE_LIBRARY = `
   mutation UpdateLibrary {
     updateLibrary(input: {}) {
@@ -153,6 +170,14 @@ export const UPDATE_LIBRARY = `
 export const UPDATE_LIBRARY_MANGA = `
   mutation UpdateLibraryManga($mangaId: Int!) {
     updateLibraryManga(input: { mangaId: $mangaId }) {
+      updateStatus { jobsInfo { isRunning finishedJobs totalJobs } }
+    }
+  }
+`
+
+export const UPDATE_STOP = `
+  mutation UpdateStop {
+    updateStop(input: {}) {
       updateStatus { jobsInfo { isRunning finishedJobs totalJobs } }
     }
   }
@@ -189,8 +214,11 @@ export const RESTORE_BACKUP = `
   }
 `
 
-export const GET_RESTORE_STATUS = `
-  query GetRestoreStatus($id: String!) {
-    restoreStatus(id: $id) { mangaProgress state totalManga }
+export const FETCH_SOURCE_MANGA = `
+  mutation FetchSourceManga($source: LongString!, $type: FetchSourceMangaType!, $page: Int!, $query: String, $filters: [FilterChangeInput!]) {
+    fetchSourceManga(input: { source: $source, type: $type, page: $page, query: $query, filters: $filters }) {
+      mangas { id title thumbnailUrl inLibrary }
+      hasNextPage
+    }
   }
 `
