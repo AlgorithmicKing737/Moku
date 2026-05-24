@@ -20,10 +20,13 @@
       event.preventDefault()
       event.stopPropagation()
 
+      const activeKey = listeningKey
+      if (!activeKey) return
+
       const binding = eventToKeybind(event)
       if (!binding) return
 
-      setBinding(listeningKey, binding)
+      setBinding(activeKey, binding)
       listeningKey = null
     }
 
@@ -52,7 +55,7 @@
       <button class="settings-button" type="button" onclick={() => updateSettings({keybinds: {...DEFAULT_KEYBINDS}})}>Reset all</button>
     </div>
 
-    {#each Object.keys(KEYBIND_LABELS) as key}
+    {#each Object.keys(KEYBIND_LABELS) as key (key)}
       {@const bindKey = key as keyof Keybinds}
       {@const isListening = listeningKey === bindKey}
       {@const isDefault = settingsState.keybinds[bindKey] === DEFAULT_KEYBINDS[bindKey]}

@@ -4,7 +4,7 @@ import type {
   Extension,
   Source,
   Tracker,
-} from '$lib/types';
+} from '$lib/types/index';
 import type {TrackRecord} from '$lib/types/tracking';
 
 export interface ServerConfig {

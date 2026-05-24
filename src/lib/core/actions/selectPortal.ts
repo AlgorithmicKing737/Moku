@@ -1,28 +1,30 @@
 import type {Attachment} from 'svelte/attachments';
 
-export function selectPortal(triggerEl: HTMLElement & {__selectMenuEl?: HTMLElement | null;}): Attachment {
-    return (menuEl: HTMLElement) => {
+export function selectPortal(triggerEl: HTMLElement & {__selectMenuEl?: HTMLElement | null;}): Attachment<Element> {
+    return (menuEl: Element) => {
+        const menu = menuEl as HTMLElement;
+
         function position() {
             const zoom = parseFloat(document.documentElement.style.zoom) / 100 || 1;
             const rect = triggerEl.getBoundingClientRect();
 
             const top = rect.bottom / zoom + 4;
             const right = rect.right / zoom;
-            const width = menuEl.offsetWidth;
+            const width = menu.offsetWidth;
             const left = Math.max(8, right - width);
 
-            menuEl.style.position = 'fixed';
-            menuEl.style.top = `${top}px`;
-            menuEl.style.left = `${left}px`;
+            menu.style.position = 'fixed';
+            menu.style.top = `${top}px`;
+            menu.style.left = `${left}px`;
         }
 
-        menuEl.style.visibility = 'hidden';
-        document.body.appendChild(menuEl);
-        triggerEl.__selectMenuEl = menuEl;
+        menu.style.visibility = 'hidden';
+        document.body.appendChild(menu);
+        triggerEl.__selectMenuEl = menu;
 
         requestAnimationFrame(() => {
             position();
-            menuEl.style.visibility = '';
+            menu.style.visibility = '';
         });
 
         window.addEventListener('scroll', position, true);
@@ -32,7 +34,7 @@ export function selectPortal(triggerEl: HTMLElement & {__selectMenuEl?: HTMLElem
             window.removeEventListener('scroll', position, true);
             window.removeEventListener('resize', position);
             triggerEl.__selectMenuEl = null;
-            menuEl.remove();
+            menu.remove();
         };
     };
 }

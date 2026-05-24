@@ -105,6 +105,7 @@
     font-weight: var(--weight-medium);
     line-height: var(--leading-snug);
     display: -webkit-box;
+    line-clamp: 2;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
   }

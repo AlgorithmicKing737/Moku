@@ -1,4 +1,4 @@
-import type { Tracker } from '$lib/types'
+import type { Tracker } from '$lib/types/index'
 
 export const trackingState = $state({
   trackers: [] as Tracker[],

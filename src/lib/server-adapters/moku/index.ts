@@ -9,7 +9,7 @@ import type {
   DownloadItem,
   UpdateResult,
 } from '$lib/server-adapters/types';
-import type {Manga, Chapter, Extension, Source, Tracker} from '$lib/types';
+import type {Manga, Chapter, Extension, Source, Tracker} from '$lib/types/index';
 import type {TrackRecord} from '$lib/types/tracking';
 
 function notImplemented(): never {

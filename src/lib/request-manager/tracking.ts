@@ -1,6 +1,6 @@
 import {getAdapter} from '$lib/request-manager';
 import {trackingState} from '$lib/state/tracking.svelte';
-import type {TrackRecord} from '$lib/types';
+import type {TrackRecord} from '$lib/types/index';
 
 export async function loadTrackers() {
   trackingState.loading = true;

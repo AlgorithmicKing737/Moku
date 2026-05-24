@@ -1,4 +1,4 @@
-import type {Manga, Chapter} from '$lib/types';
+import type {Manga, Chapter} from '$lib/types/index';
 import type {Page} from '$lib/server-adapters/types';
 
 export type ReadMode = 'single' | 'strip';

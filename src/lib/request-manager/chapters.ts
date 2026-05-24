@@ -54,13 +54,13 @@ export async function updateProgress(chapterId: string, lastPageRead: number, re
 
 export async function markRead(id: string, read: boolean) {
   await getAdapter().markChapterRead(id, read);
-  const chapter = seriesState.chapters.find(c => c.id === id);
+  const chapter = seriesState.chapters.find(c => String(c.id) === id);
   if (chapter) chapter.read = read;
 }
 
 export async function markManyRead(ids: string[], read: boolean) {
   await getAdapter().markChaptersRead(ids, read);
   for (const c of seriesState.chapters) {
-    if (ids.includes(c.id)) c.read = read;
+    if (ids.includes(String(c.id))) c.read = read;
   }
 }

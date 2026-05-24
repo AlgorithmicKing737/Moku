@@ -1,4 +1,4 @@
-import type {Extension, Source, Manga} from '$lib/types';
+import type {Extension, Source, Manga} from '$lib/types/index';
 import {shouldHideSource} from '$lib/core/util';
 import {settingsState} from '$lib/state/settings.svelte';
 
@@ -24,7 +24,7 @@ export const filteredExtensions = $derived.by(() => {
   let result = extensionsState.items;
 
   if (extensionsState.filter.installed) {
-    result = result.filter(e => e.installed);
+    result = result.filter(e => e.isInstalled);
   }
   if (extensionsState.filter.language !== 'all') {
     result = result.filter(e => e.lang === extensionsState.filter.language);

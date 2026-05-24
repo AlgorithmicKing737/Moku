@@ -1,4 +1,4 @@
-import type { Manga, Chapter } from '$lib/types'
+import type { Manga, Chapter } from '$lib/types/index'
 
 export const seriesState = $state({
   current: null as Manga | null,

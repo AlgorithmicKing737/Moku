@@ -7,19 +7,37 @@
 
   const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 
-  let os: OsKind   = $state('unknown')
+  let os = $state<OsKind>('unknown')
   let isFullscreen = $state(false)
 
-  onMount(async () => {
+  onMount(() => {
     if (!isTauri) return
-    const { getCurrentWindow } = await import('@tauri-apps/api/window')
-    const win    = getCurrentWindow()
-    os           = await detectOs()
-    isFullscreen = await win.isFullscreen()
-    const unlisten = await win.onResized(async () => {
+
+    let disposed = false
+    let unlisten: (() => void) | null = null
+
+    void (async () => {
+      const { getCurrentWindow } = await import('@tauri-apps/api/window')
+      const win = getCurrentWindow()
+      os = await detectOs()
       isFullscreen = await win.isFullscreen()
-    })
-    return unlisten
+
+      const stop = await win.onResized(async () => {
+        isFullscreen = await win.isFullscreen()
+      })
+
+      if (disposed) {
+        stop()
+        return
+      }
+
+      unlisten = stop
+    })()
+
+    return () => {
+      disposed = true
+      unlisten?.()
+    }
   })
 
   const isMac     = $derived(os === 'macos')

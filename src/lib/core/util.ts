@@ -1,5 +1,5 @@
-import type {Manga, Source} from "$lib/types";
-import type {Settings} from "$lib/types/settings";
+import type {Manga, Source} from '$lib/types/index';
+import type {Settings} from '$lib/types/settings';
 
 export {clsx as cn} from "clsx";
 

@@ -9,7 +9,7 @@ import type {
   DownloadItem,
   UpdateResult,
 } from '$lib/server-adapters/types';
-import type {Manga, Chapter, Extension, Source, Tracker} from '$lib/types';
+import type {Manga, Chapter, Extension, Source, Tracker} from '$lib/types/index';
 import type {TrackRecord} from '$lib/types/tracking';
 import {
   GET_LIBRARY,
@@ -19,7 +19,6 @@ import {
   UPDATE_MANGA,
   SET_MANGA_META,
   UPDATE_LIBRARY,
-  FETCH_SOURCE_MANGA,
 } from './manga';
 import {
   GET_CHAPTERS,
@@ -34,6 +33,7 @@ import {
   ENQUEUE_DOWNLOAD,
   DEQUEUE_DOWNLOAD,
   CLEAR_DOWNLOADER,
+  FETCH_SOURCE_MANGA,
 } from './downloads';
 import {
   GET_EXTENSIONS,
@@ -50,12 +50,12 @@ import {
   LOGOUT_TRACKER,
 } from './tracking';
 import {
-  GQLResponse,
   mapManga,
   mapChapter,
   mapExtension,
   mapDownloadItem,
 } from './types';
+import type {GQLResponse} from './types';
 
 const GET_CHAPTER = `
   query GetChapter($id: Int!) {

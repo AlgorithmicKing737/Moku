@@ -1,4 +1,4 @@
-import type { Manga, Chapter, Extension } from '$lib/types'
+import type { Manga, Chapter, Extension } from '$lib/types/index'
 import type { DownloadItem } from '$lib/server-adapters/types'
 
 export interface GQLResponse<T> {

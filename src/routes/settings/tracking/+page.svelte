@@ -8,7 +8,7 @@
     logoutTracker,
     syncTracking,
   } from '$lib/request-manager/tracking'
-  import type { Tracker } from '$lib/types'
+  import type { Tracker } from '$lib/types/index'
 
   let oauthTrackerId = $state<number | null>(null)
   let oauthCallback = $state('')

@@ -1,5 +1,5 @@
 <script lang="ts">
-  export interface MenuItem {
+  interface MenuItem {
     label: string
     icon?: any
     onClick: () => void
@@ -9,11 +9,11 @@
     children?: MenuEntry[]
   }
 
-  export interface MenuSeparator {
+  interface MenuSeparator {
     separator: true
   }
 
-  export type MenuEntry = MenuItem | MenuSeparator
+  type MenuEntry = MenuItem | MenuSeparator
 
   interface Props {
     x: number

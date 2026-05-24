@@ -1,4 +1,4 @@
-import type {Manga} from '$lib/types';
+import type {Manga} from '$lib/types/index';
 import type {MangaStatus} from '$lib/server-adapters/types';
 import {shouldHideNsfw} from '$lib/core/util';
 import {settingsState} from '$lib/state/settings.svelte';
@@ -28,7 +28,7 @@ export const filteredItems = $derived.by(() => {
   result = result.filter(m => !shouldHideNsfw(m, settingsState));
 
   if (libraryState.filter.unread) {
-    result = result.filter(m => m.unreadCount > 0);
+    result = result.filter(m => (m.unreadCount ?? 0) > 0);
   }
   if (libraryState.filter.status !== 'all') {
     result = result.filter(m => m.status === libraryState.filter.status);

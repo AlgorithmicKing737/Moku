@@ -1,7 +1,7 @@
 import {getAdapter} from '$lib/request-manager';
 import {loadChapterPages, updateProgress} from '$lib/request-manager/chapters';
 import {readerState} from '$lib/state/reader.svelte';
-import type {Chapter} from '$lib/types';
+import type {Chapter} from '$lib/types/index';
 
 export function sortChapters(chapters: Chapter[]): Chapter[] {
     return [...chapters].sort((a, b) => a.sourceOrder - b.sourceOrder);
