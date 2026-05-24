@@ -4,6 +4,9 @@
   import { ArrowArcLeft, CaretLeft, CaretRight, Columns, List, SpinnerGap, TextAlignRight } from 'phosphor-svelte'
   import { currentPageData, progress, readerState } from '$lib/state/reader.svelte'
   import { ensureReaderSession, getAdjacentChapters, goToNextReaderPage, goToPreviousReaderPage, setCurrentReaderPage } from '$lib/core/reader/session'
+  import { settingsState } from '$lib/state/settings.svelte'
+  import { matchesKeybind, toggleFullscreen } from '$lib/core/keybinds/keybindEngine'
+  import { addBookmark, getBookmark, removeBookmark } from '$lib/state/history.svelte'
   import Button from '$lib/ui/primitives/Button.svelte'
 
   let initializing = $state(true)
@@ -86,18 +89,94 @@
   }
 
   function handleKeydown(event: KeyboardEvent) {
-    if (event.key === 'ArrowRight') {
+    const binds = settingsState.keybinds
+
+    if (matchesKeybind(event, binds.turnPageRight)) {
       event.preventDefault()
       void (readerState.direction === 'rtl' ? stepBackward() : stepForward())
       return
     }
 
-    if (event.key === 'ArrowLeft') {
+    if (matchesKeybind(event, binds.turnPageLeft)) {
       event.preventDefault()
       void (readerState.direction === 'rtl' ? stepForward() : stepBackward())
       return
     }
 
+    if (matchesKeybind(event, binds.firstPage)) {
+      event.preventDefault()
+      void setCurrentReaderPage(0)
+      return
+    }
+
+    if (matchesKeybind(event, binds.lastPage)) {
+      event.preventDefault()
+      void setCurrentReaderPage(readerState.pages.length - 1)
+      return
+    }
+
+    if (matchesKeybind(event, binds.turnChapterRight)) {
+      event.preventDefault()
+      const neighbors = getAdjacentChapters()
+      if (readerState.manga && neighbors.next) {
+        void goto(`/reader/${readerState.manga.id}/${neighbors.next.id}`)
+      }
+      return
+    }
+
+    if (matchesKeybind(event, binds.turnChapterLeft)) {
+      event.preventDefault()
+      const neighbors = getAdjacentChapters()
+      if (readerState.manga && neighbors.previous) {
+        void goto(`/reader/${readerState.manga.id}/${neighbors.previous.id}`)
+      }
+      return
+    }
+
+    if (matchesKeybind(event, binds.exitReader)) {
+      event.preventDefault()
+      void returnToSeries()
+      return
+    }
+
+    if (matchesKeybind(event, binds.toggleReadingDirection)) {
+      event.preventDefault()
+      readerState.direction = readerState.direction === 'ltr' ? 'rtl' : 'ltr'
+      return
+    }
+
+    if (matchesKeybind(event, binds.togglePageStyle)) {
+      event.preventDefault()
+      readerState.mode = readerState.mode === 'single' ? 'strip' : 'single'
+      return
+    }
+
+    if (matchesKeybind(event, binds.toggleFullscreen)) {
+      event.preventDefault()
+      void toggleFullscreen()
+      return
+    }
+
+    if (matchesKeybind(event, binds.toggleBookmark)) {
+      event.preventDefault()
+      if (!readerState.chapter || !readerState.manga) return
+      const chapterId = readerState.chapter.id
+      if (getBookmark(chapterId)) {
+        removeBookmark(chapterId)
+      } else {
+        addBookmark({
+          mangaId: readerState.manga.id,
+          chapterId,
+          pageNumber: readerState.currentPage,
+          mangaTitle: readerState.manga.title,
+          chapterName: readerState.chapter.name,
+          thumbnailUrl: readerState.manga.thumbnailUrl,
+        })
+      }
+      return
+    }
+
+    // legacy Escape key fallback
     if (event.key === 'Escape') {
       event.preventDefault()
       void returnToSeries()

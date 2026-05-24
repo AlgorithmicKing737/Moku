@@ -3,6 +3,8 @@
 	import { MagnifyingGlass, ArrowSquareOut } from 'phosphor-svelte'
 	import { loadSources } from '$lib/request-manager/extensions'
 	import { extensionsState } from '$lib/state/extensions.svelte'
+	import { settingsState } from '$lib/state/settings.svelte'
+	import { shouldHideSource } from '$lib/core/util'
 
 	let query = $state('')
 	let language = $state('all')
@@ -21,7 +23,7 @@
 
 		return extensionsState.sources.filter(source => {
 			if (language !== 'all' && source.lang !== language) return false
-			if (!includeNsfw && source.isNsfw) return false
+			if (!includeNsfw && shouldHideSource(source, settingsState)) return false
 			if (!q) return true
 
 			return (

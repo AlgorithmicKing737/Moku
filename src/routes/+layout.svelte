@@ -1,12 +1,16 @@
 <script lang="ts">
+  import { goto } from '$app/navigation'
   import { onMount } from 'svelte'
   import { page } from '$app/stores'
   import { applyTheme, mountSystemThemeSync, unmountSystemThemeSync } from '$lib/core/theme'
+  import { matchesKeybind, toggleFullscreen } from '$lib/core/keybinds/keybindEngine'
   import { mountIdleDetection } from '$lib/core/ui/idle'
   import { applyZoom, mountZoomKey } from '$lib/core/ui/zoom'
   import { appState } from '$lib/state/app.svelte'
   import { settingsState, updateSettings } from '$lib/state/settings.svelte'
   import { notificationsState } from '$lib/state/notifications.svelte'
+  import { readerState } from '$lib/state/reader.svelte'
+  import { clearDiscordPresence, isSupported, setDiscordPresence } from '$lib/platform-service'
   import SplashScreen from '$lib/ui/chrome/SplashScreen.svelte'
   import AuthGate     from '$lib/ui/chrome/AuthGate.svelte'
   import Sidebar      from '$lib/ui/chrome/Sidebar.svelte'
@@ -27,6 +31,70 @@
   const showAuthGate = $derived(appState.status === 'auth')
   const showShell = $derived(appState.status === 'ready' || bypassed)
   const splashCards = $derived(settingsState.splashCards ?? true)
+
+  function canUseDiscordRpc(): boolean {
+    try {
+      return isSupported('discord-rpc')
+    } catch {
+      return false
+    }
+  }
+
+  function hasEditableTarget(target: EventTarget | null): boolean {
+    const element = target as HTMLElement | null
+    if (!element) return false
+
+    const tag = element.tagName
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true
+    return element.isContentEditable
+  }
+
+  function handleGlobalKeydown(event: KeyboardEvent) {
+    if (!showShell || hasEditableTarget(event.target)) return
+
+    if (matchesKeybind(event, settingsState.keybinds.openSettings)) {
+      event.preventDefault()
+      if (!pathname.startsWith('/settings')) {
+        void goto('/settings/general')
+      }
+      return
+    }
+
+    if (matchesKeybind(event, settingsState.keybinds.toggleFullscreen)) {
+      event.preventDefault()
+      void toggleFullscreen()
+    }
+  }
+
+  let lastPresenceKey = ''
+
+  $effect(() => {
+    const enabled = settingsState.discordRpc && appState.status === 'ready' && !appState.idle && canUseDiscordRpc()
+
+    if (!enabled) {
+      if (lastPresenceKey) {
+        lastPresenceKey = ''
+        void clearDiscordPresence().catch(() => {})
+      }
+      return
+    }
+
+    const isReaderRoute = pathname === '/reader' || pathname.startsWith('/reader/')
+    const title = isReaderRoute ? (readerState.manga?.title ?? 'Moku') : 'Moku'
+    const chapter = isReaderRoute && readerState.chapter
+      ? `Chapter ${readerState.chapter.chapterNumber}`
+      : 'Browsing library'
+
+    const nextKey = `${title}|${chapter}`
+    if (nextKey === lastPresenceKey) return
+
+    lastPresenceKey = nextKey
+    void setDiscordPresence({
+      title,
+      chapter,
+      startTimestamp: Date.now(),
+    }).catch(() => {})
+  })
 
   function onSplashReady() {
     splashVisible = false
@@ -83,6 +151,8 @@
     }
   })
 </script>
+
+<svelte:window onkeydown={handleGlobalKeydown} />
 
 {#if showSplash && splashVisible}
   <SplashScreen
