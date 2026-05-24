@@ -3,6 +3,7 @@
 
   const sections = [
     ['general', 'General'],
+    ['server', 'Server'],
     ['appearance', 'Appearance'],
     ['reader', 'Reader'],
     ['library', 'Library'],
