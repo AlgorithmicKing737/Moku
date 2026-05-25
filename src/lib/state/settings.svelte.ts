@@ -17,9 +17,19 @@ function save(s: Settings) {
 
 export const settingsState = $state({ settings: load() })
 
+if (typeof document !== 'undefined') {
+  document.documentElement.style.zoom = String(settingsState.settings.uiZoom ?? 1.0)
+}
+
 export function updateSettings(patch: Partial<Settings>) {
   Object.assign(settingsState.settings, patch)
   save(settingsState.settings)
+
+  if (typeof document !== 'undefined') {
+    if (patch.uiZoom !== undefined) {
+      document.documentElement.style.zoom = String(patch.uiZoom)
+    }
+  }
 }
 
 export function resetSettings() {

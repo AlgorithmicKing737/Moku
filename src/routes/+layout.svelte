@@ -1,13 +1,16 @@
 <script lang="ts">
+  import { onMount } from 'svelte'
   import { appState, app } from '$lib/state/app.svelte'
   import { notifications } from '$lib/state/notifications.svelte'
-  import SplashScreen  from '$lib/components/chrome/SplashScreen.svelte'
-  import AuthGate      from '$lib/components/chrome/AuthGate.svelte'
-  import Sidebar       from '$lib/components/chrome/Sidebar.svelte'
-  import TitleBar      from '$lib/components/chrome/TitleBar.svelte'
-  import Toaster       from '$lib/components/chrome/Toaster.svelte'
-  import Settings      from '$lib/components/settings/Settings.svelte'
-  import ThemeEditor   from '$lib/components/settings/ThemeEditor.svelte'
+  import { settingsState, updateSettings } from '$lib/state/settings.svelte'
+  import { applyTheme, mountSystemThemeSync } from '$lib/core/theme'
+  import SplashScreen from '$lib/components/chrome/SplashScreen.svelte'
+  import AuthGate     from '$lib/components/chrome/AuthGate.svelte'
+  import Sidebar      from '$lib/components/chrome/Sidebar.svelte'
+  import TitleBar     from '$lib/components/chrome/TitleBar.svelte'
+  import Toaster      from '$lib/components/chrome/Toaster.svelte'
+  import Settings     from '$lib/components/settings/Settings.svelte'
+  import ThemeEditor  from '$lib/components/settings/ThemeEditor.svelte'
   import '../app.css'
 
   let { children } = $props()
@@ -25,6 +28,32 @@
     appState.status === 'auth'  ||
     bypassed
   )
+
+  // Apply theme immediately on mount (before first paint if possible)
+  onMount(() => {
+    applyTheme(
+      settingsState.settings.theme ?? 'dark',
+      settingsState.settings.customThemes ?? []
+    )
+  })
+
+  $effect(() => {
+    document.documentElement.style.zoom = String(settingsState.settings.uiZoom ?? 1.0)
+  })
+
+  // Reactive theme application — explicitly pass values so Svelte tracks them
+  $effect(() => {
+    const theme        = settingsState.settings.theme ?? 'dark'
+    const customThemes = settingsState.settings.customThemes ?? []
+    applyTheme(theme, customThemes)
+  })
+
+  $effect(() => {
+    const enabled    = settingsState.settings.systemThemeSync ?? false
+    const darkTheme  = settingsState.settings.systemThemeDark  ?? 'dark'
+    const lightTheme = settingsState.settings.systemThemeLight ?? 'light'
+    mountSystemThemeSync(enabled, darkTheme, lightTheme, (id) => updateSettings({ theme: id }))
+  })
 
   function onSplashReady()  { splashVisible = false }
   function onSplashBypass() { bypassed = true; splashVisible = false }
@@ -70,7 +99,10 @@
 {/if}
 
 {#if themeEditorOpen}
-  <ThemeEditor onclose={() => themeEditorOpen = false} editId={themeEditorId} />
+  <ThemeEditor
+    editingId={themeEditorId}
+    onClose={() => themeEditorOpen = false}
+  />
 {/if}
 
 <AuthGate />

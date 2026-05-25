@@ -59,11 +59,6 @@ async function boot() {
     appState.serverUrl = savedUrl
     appState.authMode  = savedAuth.mode
 
-    if (isTauri() && platformAdapter.isSupported('server-management')) {
-      // jarPath/port/dataPath come from persisted server config; omitted here
-      // until settings UI writes them — server auto-launch handled by Tauri side
-    }
-
     configureAuth(savedUrl, savedAuth.mode, savedAuth.user, savedAuth.pass)
 
     await serverAdapter.connect({
