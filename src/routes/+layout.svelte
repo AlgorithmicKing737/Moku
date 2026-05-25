@@ -1,11 +1,13 @@
 <script lang="ts">
-  import { appState } from '$lib/state/app.svelte'
-  import { notificationsState } from '$lib/state/notifications.svelte'
-  import SplashScreen from '$lib/ui/chrome/SplashScreen.svelte'
-  import AuthGate     from '$lib/ui/chrome/AuthGate.svelte'
-  import Sidebar      from '$lib/ui/chrome/Sidebar.svelte'
-  import TitleBar     from '$lib/ui/chrome/TitleBar.svelte'
-  import Toaster      from '$lib/ui/chrome/Toaster.svelte'
+  import { appState, app } from '$lib/state/app.svelte'
+  import { notifications } from '$lib/state/notifications.svelte'
+  import SplashScreen  from '$lib/components/chrome/SplashScreen.svelte'
+  import AuthGate      from '$lib/components/chrome/AuthGate.svelte'
+  import Sidebar       from '$lib/components/chrome/Sidebar.svelte'
+  import TitleBar      from '$lib/components/chrome/TitleBar.svelte'
+  import Toaster       from '$lib/components/chrome/Toaster.svelte'
+  import Settings      from '$lib/components/settings/Settings.svelte'
+  import ThemeEditor   from '$lib/components/settings/ThemeEditor.svelte'
   import '../app.css'
 
   let { children } = $props()
@@ -13,8 +15,10 @@
   const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
   const ringFull = $derived(appState.status !== 'booting')
 
-  let splashVisible = $state(true)
-  let bypassed      = $state(false)
+  let splashVisible   = $state(true)
+  let bypassed        = $state(false)
+  let themeEditorOpen = $state(false)
+  let themeEditorId   = $state<string | null>(null)
 
   const showApp = $derived(
     appState.status === 'ready' ||
@@ -22,13 +26,12 @@
     bypassed
   )
 
-  function onSplashReady() {
-    splashVisible = false
-  }
+  function onSplashReady()  { splashVisible = false }
+  function onSplashBypass() { bypassed = true; splashVisible = false }
 
-  function onSplashBypass() {
-    bypassed      = true
-    splashVisible = false
+  function openThemeEditor(id?: string | null) {
+    themeEditorId   = id ?? null
+    themeEditorOpen = true
   }
 </script>
 
@@ -59,8 +62,19 @@
   </div>
 {/if}
 
+{#if app.settingsOpen}
+  <Settings
+    onclose={() => app.setSettingsOpen(false)}
+    onOpenThemeEditor={openThemeEditor}
+  />
+{/if}
+
+{#if themeEditorOpen}
+  <ThemeEditor onclose={() => themeEditorOpen = false} editId={themeEditorId} />
+{/if}
+
 <AuthGate />
-<Toaster toasts={notificationsState.toasts} />
+<Toaster toasts={notifications.toasts} />
 
 <style>
   .frame {

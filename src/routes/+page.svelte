@@ -6,12 +6,12 @@
   import { libraryState } from '$lib/state/library.svelte'
   import { homeState, setHeroSlot } from '$lib/state/home.svelte'
   import type { HistoryEntry } from '$lib/state/home.svelte'
-  import HeroStage      from '$lib/ui/home/HeroStage.svelte'
-  import HeroSlotPicker from '$lib/ui/home/HeroSlotPicker.svelte'
-  import ActivityFeed   from '$lib/ui/home/ActivityFeed.svelte'
-  import ActivityHeatmap from '$lib/ui/home/ActivityHeatmap.svelte'
-  import RecsRow        from '$lib/ui/home/RecsRow.svelte'
-  import StatsGrid      from '$lib/ui/home/StatsGrid.svelte'
+  import HeroStage      from '$lib/components/home/HeroStage.svelte'
+  import HeroSlotPicker from '$lib/components/home/HeroSlotPicker.svelte'
+  import ActivityFeed   from '$lib/components/home/ActivityFeed.svelte'
+  import ActivityHeatmap from '$lib/components/home/ActivityHeatmap.svelte'
+  import RecsRow        from '$lib/components/home/RecsRow.svelte'
+  import StatsGrid      from '$lib/components/home/StatsGrid.svelte'
   import type { Manga, Chapter } from '$lib/types'
 
   const TOTAL_SLOTS = 4

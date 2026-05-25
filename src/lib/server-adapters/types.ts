@@ -63,6 +63,46 @@ export interface LibraryUpdateProgress {
   totalJobs: number
 }
 
+export interface ServerSecurity {
+  authMode: string
+  authUsername: string
+  socksProxyEnabled: boolean
+  socksProxyHost: string
+  socksProxyPort: string
+  socksProxyVersion: number
+  socksProxyUsername: string
+  flareSolverrEnabled: boolean
+  flareSolverrUrl: string
+  flareSolverrTimeout: number
+  flareSolverrSessionName: string
+  flareSolverrSessionTtl: number
+  flareSolverrAsResponseFallback: boolean
+}
+
+export interface SetServerAuthInput {
+  authMode: string
+  authUsername: string
+  authPassword: string
+}
+
+export interface SetSocksProxyInput {
+  socksProxyEnabled: boolean
+  socksProxyHost: string
+  socksProxyPort: string
+  socksProxyVersion: number
+  socksProxyUsername: string
+  socksProxyPassword: string
+}
+
+export interface SetFlareSolverrInput {
+  flareSolverrEnabled: boolean
+  flareSolverrUrl: string
+  flareSolverrTimeout: number
+  flareSolverrSessionName: string
+  flareSolverrSessionTtl: number
+  flareSolverrAsResponseFallback: boolean
+}
+
 export interface ServerAdapter {
   connect(config: ServerConfig): Promise<void>
   getStatus(): Promise<ServerStatus>
@@ -80,7 +120,7 @@ export interface ServerAdapter {
 
   getChapters(mangaId: string): Promise<Chapter[]>
   getChapter(id: string): Promise<Chapter>
-  getChapterPages(id: string): Promise<Page[]>
+  getChapterPages(id: string, signal?: AbortSignal): Promise<Page[]>
   fetchChapters(mangaId: string): Promise<Chapter[]>
   getRecentlyUpdated(): Promise<Chapter[]>
   markChapterRead(id: string, read: boolean): Promise<void>
@@ -125,7 +165,13 @@ export interface ServerAdapter {
   fetchTrackRecord(recordId: string): Promise<void>
   syncTracking(mangaId: string): Promise<void>
 
+  getServerSecurity(): Promise<ServerSecurity>
+  setServerAuth(input: SetServerAuthInput): Promise<void>
+  setSocksProxy(input: SetSocksProxyInput): Promise<void>
+  setFlareSolverr(input: SetFlareSolverrInput): Promise<void>
+
   checkForUpdates(mangaIds?: string[]): Promise<UpdateResult[]>
   stopLibraryUpdate(): Promise<void>
   getLibraryUpdateStatus(): Promise<LibraryUpdateProgress>
+  clearPageCache(chapterId?: number): void
 }

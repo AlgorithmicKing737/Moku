@@ -1,5 +1,6 @@
 import { getAdapter } from '$lib/request-manager'
 import { extensionsState } from '$lib/state/extensions.svelte'
+import type { SetServerAuthInput, SetSocksProxyInput, SetFlareSolverrInput } from '$lib/server-adapters/types'
 
 export async function loadExtensions() {
   extensionsState.loading = true
@@ -60,4 +61,20 @@ export async function browseSource(sourceId: string, page: number) {
   } finally {
     extensionsState.browseLoading = false
   }
+}
+
+export async function getServerSecurity() {
+  return getAdapter().getServerSecurity()
+}
+
+export async function setServerAuth(input: SetServerAuthInput) {
+  await getAdapter().setServerAuth(input)
+}
+
+export async function setSocksProxy(input: SetSocksProxyInput) {
+  await getAdapter().setSocksProxy(input)
+}
+
+export async function setFlareSolverr(input: SetFlareSolverrInput) {
+  await getAdapter().setFlareSolverr(input)
 }

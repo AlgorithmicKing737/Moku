@@ -18,7 +18,7 @@ export const extensionsState = $state({
   browseHasMore: false,
 })
 
-export const filteredExtensions = $derived.by(() => {
+export function filteredExtensions() {
   let result = extensionsState.items
 
   if (extensionsState.filter.installed) {
@@ -33,4 +33,4 @@ export const filteredExtensions = $derived.by(() => {
   }
 
   return result
-})
+}

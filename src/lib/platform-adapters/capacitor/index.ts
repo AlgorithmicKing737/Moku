@@ -16,9 +16,7 @@ export class CapacitorAdapter implements PlatformAdapter {
 
   async launchServer(_config: ServerLaunchConfig) {}
   async stopServer() {}
-  async getServerStatus(): Promise<'running' | 'stopped' | 'error'> {
-    return 'stopped'
-  }
+  async getServerStatus(): Promise<'running' | 'stopped' | 'error'> { return 'stopped' }
 
   async readFile(path: string): Promise<Uint8Array> {
     const { Filesystem, Directory } = await import('@capacitor/filesystem')
@@ -37,9 +35,7 @@ export class CapacitorAdapter implements PlatformAdapter {
     await Filesystem.writeFile({ path, data: base64, directory: Directory.Data })
   }
 
-  async pickFolder(): Promise<string | null> {
-    return null
-  }
+  async pickFolder(): Promise<string | null> { return null }
 
   async authenticateBiometric(): Promise<boolean> {
     try {
@@ -70,6 +66,7 @@ export class CapacitorAdapter implements PlatformAdapter {
   async minimize() {}
   async maximize() {}
   async close() {}
+  async toggleFullscreen() {}
 
   async setDiscordPresence(_presence: DiscordPresence) {}
   async clearDiscordPresence() {}
@@ -85,9 +82,6 @@ export class CapacitorAdapter implements PlatformAdapter {
     await Browser.open({ url })
   }
 
-  async checkForAppUpdate(): Promise<AppUpdateInfo | null> {
-    return null
-  }
-
+  async checkForAppUpdate(): Promise<AppUpdateInfo | null> { return null }
   async installAppUpdate(): Promise<void> {}
 }

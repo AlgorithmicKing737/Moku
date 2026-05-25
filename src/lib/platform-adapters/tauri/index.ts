@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core'
+import { getCurrentWindow } from '@tauri-apps/api/window'
 import { open } from '@tauri-apps/plugin-dialog'
 import { readFile, writeFile } from '@tauri-apps/plugin-fs'
 import { open as openUrl } from '@tauri-apps/plugin-shell'
@@ -83,6 +84,11 @@ export class TauriAdapter implements PlatformAdapter {
     await invoke('close_window')
   }
 
+  async toggleFullscreen() {
+    const win = getCurrentWindow()
+    await win.setFullscreen(!await win.isFullscreen())
+  }
+
   async setDiscordPresence(presence: DiscordPresence) {
     await invoke('set_discord_presence', { presence })
   }
@@ -104,8 +110,8 @@ export class TauriAdapter implements PlatformAdapter {
     if (!update?.available) return null
     return {
       version: update.version,
-      url: update.body ?? '',
-      notes: update.body,
+      url:     update.body ?? '',
+      notes:   update.body,
     }
   }
 

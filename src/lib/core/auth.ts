@@ -1,16 +1,74 @@
 const DEFAULT_URL = 'http://127.0.0.1:4567'
 
 interface AuthConfig {
-  baseUrl:  string
-  mode:     'NONE' | 'BASIC_AUTH' | 'UI_LOGIN'
-  user?:    string
-  pass?:    string
+  baseUrl: string
+  mode:    'NONE' | 'BASIC_AUTH' | 'UI_LOGIN'
+  user?:   string
+  pass?:   string
 }
+
+export interface UiAuthDebugStatus {
+  mode:               'NONE' | 'BASIC_AUTH' | 'UI_LOGIN'
+  hasSession:         boolean
+  hasRefreshToken:    boolean
+  accessExpiresAt:    number | null
+  refreshExpiresAt:   number | null
+  accessExpiresInMs:  number | null
+  refreshExpiresInMs: number | null
+  shouldRefreshSoon:  boolean
+  refreshInFlight:    boolean
+  skewMs:             number
+}
+
+const SKEW_MS = 60_000 * 2
 
 let config: AuthConfig = { baseUrl: DEFAULT_URL, mode: 'NONE' }
 
-let accessToken:  string | null = null
-let refreshToken: string | null = null
+let accessToken:      string | null = null
+let refreshToken:     string | null = null
+let accessExpiresAt:  number | null = null
+let refreshExpiresAt: number | null = null
+let refreshInFlight                 = false
+
+function parseExpiry(token: string): number | null {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]))
+    return typeof payload.exp === 'number' ? payload.exp * 1000 : null
+  } catch {
+    return null
+  }
+}
+
+export const authSession = {
+  clearTokens() {
+    accessToken      = null
+    refreshToken     = null
+    accessExpiresAt  = null
+    refreshExpiresAt = null
+  },
+}
+
+export function getUIAccessToken(): string | null {
+  return accessToken
+}
+
+export function getUiAuthDebugStatus(): UiAuthDebugStatus {
+  const now = Date.now()
+  const accessExpiresInMs  = accessExpiresAt  !== null ? accessExpiresAt  - now : null
+  const refreshExpiresInMs = refreshExpiresAt !== null ? refreshExpiresAt - now : null
+  return {
+    mode:               config.mode,
+    hasSession:         accessToken  !== null,
+    hasRefreshToken:    refreshToken !== null,
+    accessExpiresAt,
+    refreshExpiresAt,
+    accessExpiresInMs,
+    refreshExpiresInMs,
+    shouldRefreshSoon:  accessExpiresInMs !== null && accessExpiresInMs < SKEW_MS,
+    refreshInFlight,
+    skewMs:             SKEW_MS,
+  }
+}
 
 export function configureAuth(
   baseUrl: string,
@@ -19,8 +77,7 @@ export function configureAuth(
   pass?: string,
 ): void {
   config = { baseUrl: baseUrl.replace(/\/$/, ''), mode, user, pass }
-  accessToken  = null
-  refreshToken = null
+  authSession.clearTokens()
 }
 
 export function authHeaders(): Record<string, string> {
@@ -92,10 +149,12 @@ export async function loginUI(user: string, pass: string): Promise<void> {
   const data = await gqlRaw(LOGIN_MUTATION, { username: user, password: pass }) as {
     login: { accessToken: string; refreshToken: string }
   }
-  accessToken  = data.login.accessToken
-  refreshToken = data.login.refreshToken
-  config.mode  = 'UI_LOGIN'
-  config.user  = user
+  accessToken      = data.login.accessToken
+  refreshToken     = data.login.refreshToken
+  accessExpiresAt  = parseExpiry(accessToken)
+  refreshExpiresAt = parseExpiry(refreshToken)
+  config.mode      = 'UI_LOGIN'
+  config.user      = user
 }
 
 export async function refreshAccessToken(): Promise<boolean> {
@@ -104,9 +163,25 @@ export async function refreshAccessToken(): Promise<boolean> {
     const data = await gqlRaw(REFRESH_MUTATION, { refreshToken }) as {
       refreshToken: { accessToken: string }
     }
-    accessToken = data.refreshToken.accessToken
+    accessToken     = data.refreshToken.accessToken
+    accessExpiresAt = parseExpiry(accessToken)
     return true
   } catch {
     return false
+  }
+}
+
+export async function refreshUiAccessToken(force = false): Promise<string | null> {
+  if (config.mode !== 'UI_LOGIN') return null
+  if (!refreshToken) return null
+  const now = Date.now()
+  if (!force && accessExpiresAt !== null && accessExpiresAt - now > SKEW_MS) return accessToken
+  if (refreshInFlight) return accessToken
+  refreshInFlight = true
+  try {
+    const ok = await refreshAccessToken()
+    return ok ? accessToken : null
+  } finally {
+    refreshInFlight = false
   }
 }

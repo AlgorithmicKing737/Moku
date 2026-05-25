@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import logoUrl from '$lib/assets/moku-icon-splash.svg'
-  import { mountCardCanvas, ringGeometry, animateRingProgress } from '$lib/ui/chrome/splashCanvas'
+  import { mountCardCanvas, ringGeometry, animateRingProgress } from '$lib/components/chrome/splashCanvas'
 
   interface Props {
     mode?:          'loading' | 'idle'

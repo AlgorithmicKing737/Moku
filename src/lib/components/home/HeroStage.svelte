@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Play, ArrowRight, ArrowLeft, BookOpen, Clock, ListBullets, PushPin, X as XIcon } from 'phosphor-svelte'
   import { goto } from '$app/navigation'
-  import { timeAgo } from '$lib/ui/home/homeHelpers'
+  import { timeAgo } from '$lib/components/home/homeHelpers'
   import type { Manga } from '$lib/types'
   import type { Chapter } from '$lib/types'
   import type { HistoryEntry } from '$lib/state/home.svelte'

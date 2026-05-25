@@ -1,35 +1,10 @@
 <script lang="ts">
   import logoUrl from '$lib/assets/moku-icon-splash.svg'
   import { appState } from '$lib/state/app.svelte'
-  import { loginUI, loginBasic, configureAuth } from '$lib/core/auth'
-
-  let loginUser  = $state('')
-  let loginPass  = $state('')
-  let loginBusy  = $state(false)
-  let loginError = $state<string | null>(null)
-
-  async function handleLogin() {
-    if (!loginUser.trim() || !loginPass.trim()) return
-    loginBusy  = true
-    loginError = null
-    try {
-      if (appState.authMode === 'UI_LOGIN') {
-        await loginUI(loginUser.trim(), loginPass.trim())
-      } else {
-        await loginBasic(loginUser.trim(), loginPass.trim())
-      }
-      appState.authenticated = true
-      appState.status        = 'ready'
-    } catch (e) {
-      loginError = e instanceof Error ? e.message : String(e)
-    } finally {
-      loginBusy = false
-    }
-  }
+  import { boot, submitLogin, bypassBoot } from '$lib/state/boot.svelte'
 
   function handleBypass() {
-    appState.authenticated = false
-    appState.status        = 'ready'
+    bypassBoot(appState.authMode, boot.loginUser)
   }
 </script>
 
@@ -43,8 +18,8 @@
       </span>
       <p class="host">{appState.serverUrl || 'localhost:4567'}</p>
 
-      {#if loginError}
-        <p class="error">{loginError}</p>
+      {#if boot.loginError}
+        <p class="error">{boot.loginError}</p>
       {/if}
 
       <div class="fields">
@@ -52,28 +27,28 @@
           class="input"
           type="text"
           placeholder="Username"
-          bind:value={loginUser}
-          disabled={loginBusy}
+          bind:value={boot.loginUser}
+          disabled={boot.loginBusy}
           autocomplete="username"
-          onkeydown={(e) => e.key === 'Enter' && handleLogin()}
+          onkeydown={(e) => e.key === 'Enter' && submitLogin()}
         />
         <input
           class="input"
           type="password"
           placeholder="Password"
-          bind:value={loginPass}
-          disabled={loginBusy}
+          bind:value={boot.loginPass}
+          disabled={boot.loginBusy}
           autocomplete="current-password"
-          onkeydown={(e) => e.key === 'Enter' && handleLogin()}
+          onkeydown={(e) => e.key === 'Enter' && submitLogin()}
         />
       </div>
 
       <button
         class="btn"
-        onclick={handleLogin}
-        disabled={loginBusy || !loginUser.trim() || !loginPass.trim()}
+        onclick={submitLogin}
+        disabled={boot.loginBusy || !boot.loginUser.trim() || !boot.loginPass.trim()}
       >
-        {loginBusy ? 'Signing in…' : 'Sign in'}
+        {boot.loginBusy ? 'Signing in…' : 'Sign in'}
       </button>
       <button class="btn btn--ghost" onclick={handleBypass}>Skip</button>
     </div>

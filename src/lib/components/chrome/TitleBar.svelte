@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { detectOs } from '$lib/ui/chrome/titlebarOs'
-  import type { OsKind } from '$lib/ui/chrome/titlebarOs'
+  import { detectOs } from '$lib/components/chrome/titlebarOs'
+  import type { OsKind } from '$lib/components/chrome/titlebarOs'
 
   let { onClose }: { onClose: () => void } = $props()
 

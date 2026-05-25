@@ -146,13 +146,13 @@ export const CACHE_GROUPS = {
 } as const;
 
 export const CACHE_KEYS = {
-  LIBRARY:    "library",
+  LIBRARY:        "library",
   RECENT_UPDATES: "recent_updates",
-  ALL_MANGA:  "all_manga_unfiltered",
-  CATEGORIES: "categories",
-  SEARCH:     "search_all_manga",
-  SOURCES:    "sources",
-  POPULAR:    "popular",
+  ALL_MANGA:      "all_manga_unfiltered",
+  CATEGORIES:     "categories",
+  SEARCH:         "search_all_manga",
+  SOURCES:        "sources",
+  POPULAR:        "popular",
   GENRE:    (genre: string) => `genre:${genre}`,
   MANGA:    (id: number)    => `manga:${id}`,
   CHAPTERS: (id: number)    => `chapters:${id}`,
@@ -234,7 +234,7 @@ export async function refreshMangaCache(mangaId: number, thumbnailUrl?: string):
   cache.clear(CACHE_KEYS.ALL_MANGA);
 
   if (thumbnailUrl) {
-    const { revokeBlobUrl, getBlobUrl } = await import("@core/cache/imageCache");
+    const { revokeBlobUrl, getBlobUrl } = await import("$lib/core/cache/imageCache");
     revokeBlobUrl(thumbnailUrl);
     getBlobUrl(thumbnailUrl, 999).catch(() => {});
   }

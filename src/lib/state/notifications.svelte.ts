@@ -1,25 +1,38 @@
 export type ToastKind = 'info' | 'success' | 'error' | 'download'
 
 export interface Toast {
-  id: string
-  kind: ToastKind
-  message: string
-  detail?: string
+  id:        string
+  kind:      ToastKind
+  message:   string
+  detail?:   string
   duration?: number
 }
 
-export const notificationsState = $state({
-  toasts: [] as Toast[],
-})
+export interface ActiveDownload {
+  chapterId: number
+  mangaId:   number
+  progress:  number
+}
 
-export function toast(kind: ToastKind, message: string, detail?: string, duration = 4000) {
-  const id = crypto.randomUUID()
-  notificationsState.toasts.push({ id, kind, message, detail, duration })
-  if (duration > 0) {
-    setTimeout(() => dismissToast(id), duration)
+class NotificationStore {
+  toasts:          Toast[]          = $state([])
+  activeDownloads: ActiveDownload[] = $state([])
+
+  toast(toast: Omit<Toast, 'id'>) {
+    this.toasts = [...this.toasts, { ...toast, id: Math.random().toString(36).slice(2) }].slice(-5)
+  }
+
+  dismissToast(id: string) {
+    this.toasts = this.toasts.filter(x => x.id !== id)
+  }
+
+  setActiveDownloads(next: ActiveDownload[]) {
+    this.activeDownloads = next
   }
 }
 
-export function dismissToast(id: string) {
-  notificationsState.toasts = notificationsState.toasts.filter(t => t.id !== id)
-}
+export const notifications = new NotificationStore()
+
+export function toast(toast: Omit<Toast, 'id'>)         { notifications.toast(toast) }
+export function dismissToast(id: string)                    { notifications.dismissToast(id) }
+export function setActiveDownloads(next: ActiveDownload[])  { notifications.setActiveDownloads(next) }

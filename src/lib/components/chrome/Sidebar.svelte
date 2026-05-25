@@ -1,6 +1,7 @@
 <script lang="ts">
   import { page } from '$app/stores'
   import { goto } from '$app/navigation'
+  import { app } from '$lib/state/app.svelte'
   import {
     House, Books, MagnifyingGlass, ClockCounterClockwise,
     DownloadSimple, PuzzlePiece, GearSix, ChartLineUp,
@@ -51,7 +52,7 @@
   </nav>
 
   <div class="bottom">
-    <button class="settings-btn" onclick={() => goto('/settings')} title="Settings">
+    <button class="settings-btn" onclick={() => app.setSettingsOpen(true)} title="Settings">
       <GearSix size={18} weight="light" />
     </button>
   </div>

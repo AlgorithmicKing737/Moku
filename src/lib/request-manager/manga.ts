@@ -78,9 +78,9 @@ export async function refreshLibrary() {
   try {
     await getAdapter().checkForUpdates()
     await loadLibrary()
-    toast('success', 'Library updated')
+    toast({ kind: 'success', message: 'Library updated' })
   } catch (e) {
-    toast('error', 'Update failed', String(e))
+    toast({ kind: 'error', message: 'Update failed', detail: String(e) })
   } finally {
     libraryState.refreshing = false
   }

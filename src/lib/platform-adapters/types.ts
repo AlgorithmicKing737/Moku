@@ -44,6 +44,7 @@ export interface PlatformAdapter {
   minimize(): Promise<void>
   maximize(): Promise<void>
   close(): Promise<void>
+  toggleFullscreen(): Promise<void>
 
   setDiscordPresence(presence: DiscordPresence): Promise<void>
   clearDiscordPresence(): Promise<void>

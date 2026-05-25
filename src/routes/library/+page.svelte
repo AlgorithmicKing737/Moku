@@ -2,8 +2,8 @@
   import { goto }          from '$app/navigation'
   import { libraryState }  from '$lib/state/library.svelte'
   import { loadLibrary, refreshLibrary, removeFromLibrary, bulkRemoveFromLibrary } from '$lib/request-manager/manga'
-  import LibraryToolbar    from '$lib/ui/library/LibraryToolbar.svelte'
-  import LibraryGrid       from '$lib/ui/library/LibraryGrid.svelte'
+  import LibraryToolbar    from '$lib/components/library/LibraryToolbar.svelte'
+  import LibraryGrid       from '$lib/components/library/LibraryGrid.svelte'
   import type { Manga }    from '$lib/types'
 
   const saved      = $derived(libraryState.items.filter(m => m.inLibrary).length)

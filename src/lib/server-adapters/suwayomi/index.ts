@@ -9,6 +9,10 @@ import type {
   DownloadItem,
   UpdateResult,
   LibraryUpdateProgress,
+  ServerSecurity,
+  SetServerAuthInput,
+  SetSocksProxyInput,
+  SetFlareSolverrInput,
 } from '$lib/server-adapters/types'
 import type { Manga, Chapter, Extension, Source, Tracker, Category } from '$lib/types'
 import {
@@ -58,10 +62,12 @@ import {
 import {
   GET_EXTENSIONS,
   GET_SOURCES,
+  GET_SERVER_SECURITY,
   FETCH_EXTENSIONS,
   UPDATE_EXTENSION,
   UPDATE_EXTENSIONS,
   INSTALL_EXTERNAL_EXTENSION,
+  SET_SERVER_AUTH,
 } from './extensions'
 import {
   GET_TRACKERS,
@@ -80,6 +86,51 @@ import {
   mapDownloadItem,
   mapCategory,
 } from './types'
+import { clearPageCache as _clearPageCache } from './pageCache'
+
+const SET_SOCKS_PROXY = `
+  mutation SetSocksProxy(
+    $socksProxyEnabled: Boolean!
+    $socksProxyHost: String!
+    $socksProxyPort: String!
+    $socksProxyVersion: Int!
+    $socksProxyUsername: String!
+    $socksProxyPassword: String!
+  ) {
+    setSettings(input: { settings: {
+      socksProxyEnabled: $socksProxyEnabled
+      socksProxyHost: $socksProxyHost
+      socksProxyPort: $socksProxyPort
+      socksProxyVersion: $socksProxyVersion
+      socksProxyUsername: $socksProxyUsername
+      socksProxyPassword: $socksProxyPassword
+    }}) {
+      settings { socksProxyEnabled socksProxyHost socksProxyPort }
+    }
+  }
+`
+
+const SET_FLARE_SOLVERR = `
+  mutation SetFlareSolverr(
+    $flareSolverrEnabled: Boolean!
+    $flareSolverrUrl: String!
+    $flareSolverrTimeout: Int!
+    $flareSolverrSessionName: String!
+    $flareSolverrSessionTtl: Int!
+    $flareSolverrAsResponseFallback: Boolean!
+  ) {
+    setSettings(input: { settings: {
+      flareSolverrEnabled: $flareSolverrEnabled
+      flareSolverrUrl: $flareSolverrUrl
+      flareSolverrTimeout: $flareSolverrTimeout
+      flareSolverrSessionName: $flareSolverrSessionName
+      flareSolverrSessionTtl: $flareSolverrSessionTtl
+      flareSolverrAsResponseFallback: $flareSolverrAsResponseFallback
+    }}) {
+      settings { flareSolverrEnabled flareSolverrUrl }
+    }
+  }
+`
 
 export class SuwayomiAdapter implements ServerAdapter {
   private baseUrl = 'http://127.0.0.1:4567'
@@ -133,8 +184,6 @@ export class SuwayomiAdapter implements ServerAdapter {
     return json.data
   }
 
-  // ─── Manga ───────────────────────────────────────────────────────────────
-
   async getManga(id: string): Promise<Manga> {
     const data = await this.gql<{ manga: Record<string, unknown> }>(GET_MANGA, { id: Number(id) })
     return mapManga(data.manga)
@@ -150,10 +199,10 @@ export class SuwayomiAdapter implements ServerAdapter {
   async getMangaList(filters: MangaFilters): Promise<PaginatedResult<Manga>> {
     const data = await this.gql<{ mangas: { nodes: Record<string, unknown>[] } }>(GET_LIBRARY)
     let items = data.mangas.nodes.map(mapManga)
-    if (filters.status)      items = items.filter(m => m.status === filters.status)
+    if (filters.status)       items = items.filter(m => m.status === filters.status)
     if (filters.tags?.length) items = items.filter(m => filters.tags!.every(t => m.tags?.includes(t)))
-    if (filters.unread)      items = items.filter(m => (m.unreadCount ?? 0) > 0)
-    if (filters.sourceId)    items = items.filter(m => String(m.source?.id) === filters.sourceId)
+    if (filters.unread)       items = items.filter(m => (m.unreadCount ?? 0) > 0)
+    if (filters.sourceId)     items = items.filter(m => String(m.source?.id) === filters.sourceId)
     return { items, hasNextPage: false }
   }
 
@@ -187,8 +236,6 @@ export class SuwayomiAdapter implements ServerAdapter {
   async deleteMangaMeta(id: string, key: string): Promise<void> {
     await this.gql(DELETE_MANGA_META, { mangaId: Number(id), key })
   }
-
-  // ─── Chapters ────────────────────────────────────────────────────────────
 
   async getChapters(mangaId: string): Promise<Chapter[]> {
     const data = await this.gql<{ chapters: { nodes: Record<string, unknown>[] } }>(
@@ -252,8 +299,6 @@ export class SuwayomiAdapter implements ServerAdapter {
     await this.gql(DELETE_CHAPTER_META, { chapterId: Number(chapterId), key })
   }
 
-  // ─── Downloads ───────────────────────────────────────────────────────────
-
   async getDownloads(): Promise<DownloadItem[]> {
     const data = await this.gql<{ downloadStatus: { queue: Record<string, unknown>[] } }>(
       GET_DOWNLOAD_STATUS
@@ -288,8 +333,6 @@ export class SuwayomiAdapter implements ServerAdapter {
   async stopDownloader(): Promise<void> {
     await this.gql(STOP_DOWNLOADER)
   }
-
-  // ─── Extensions ──────────────────────────────────────────────────────────
 
   async getExtensions(): Promise<Extension[]> {
     await this.gql(FETCH_EXTENSIONS)
@@ -332,8 +375,6 @@ export class SuwayomiAdapter implements ServerAdapter {
     }
   }
 
-  // ─── Categories ──────────────────────────────────────────────────────────
-
   async getCategories(): Promise<Category[]> {
     const data = await this.gql<{ categories: { nodes: Record<string, unknown>[] } }>(GET_CATEGORIES)
     return data.categories.nodes.map(mapCategory)
@@ -369,24 +410,22 @@ export class SuwayomiAdapter implements ServerAdapter {
     await this.gql(UPDATE_CATEGORY_MANGA, { categoryId })
   }
 
-  // ─── Tracking ────────────────────────────────────────────────────────────
-
   async getTrackers(): Promise<Tracker[]> {
     const data = await this.gql<{ trackers: { nodes: Tracker[] } }>(GET_TRACKERS)
     return data.trackers.nodes
   }
 
   async getMangaTrackRecords(mangaId: string): Promise<unknown[]> {
-    const data = await this.gql<{
-      manga: { trackRecords: { nodes: unknown[] } }
-    }>(GET_MANGA_TRACK_RECORDS, { mangaId: Number(mangaId) })
+    const data = await this.gql<{ manga: { trackRecords: { nodes: unknown[] } } }>(
+      GET_MANGA_TRACK_RECORDS, { mangaId: Number(mangaId) }
+    )
     return data.manga.trackRecords.nodes
   }
 
   async searchTracker(trackerId: string, query: string): Promise<unknown[]> {
-    const data = await this.gql<{
-      searchTracker: { trackSearches: unknown[] }
-    }>(SEARCH_TRACKER, { trackerId: Number(trackerId), query })
+    const data = await this.gql<{ searchTracker: { trackSearches: unknown[] } }>(
+      SEARCH_TRACKER, { trackerId: Number(trackerId), query }
+    )
     return data.searchTracker.trackSearches
   }
 
@@ -410,7 +449,26 @@ export class SuwayomiAdapter implements ServerAdapter {
     await this.gql(TRACK_PROGRESS, { mangaId: Number(mangaId) })
   }
 
-  // ─── Library updates ─────────────────────────────────────────────────────
+  async getServerSecurity(): Promise<ServerSecurity> {
+    const data = await this.gql<{ settings: ServerSecurity }>(GET_SERVER_SECURITY)
+    return data.settings
+  }
+
+  async setServerAuth(input: SetServerAuthInput): Promise<void> {
+    await this.gql(SET_SERVER_AUTH, {
+      authMode: input.authMode,
+      authUsername: input.authUsername,
+      authPassword: input.authPassword,
+    })
+  }
+
+  async setSocksProxy(input: SetSocksProxyInput): Promise<void> {
+    await this.gql(SET_SOCKS_PROXY, input)
+  }
+
+  async setFlareSolverr(input: SetFlareSolverrInput): Promise<void> {
+    await this.gql(SET_FLARE_SOLVERR, input)
+  }
 
   async checkForUpdates(mangaIds?: string[]): Promise<UpdateResult[]> {
     if (mangaIds?.length) {
@@ -439,5 +497,9 @@ export class SuwayomiAdapter implements ServerAdapter {
     }>(LIBRARY_UPDATE_STATUS)
     const { isRunning, finishedJobs, totalJobs } = data.libraryUpdateStatus.jobsInfo
     return { isRunning, finishedJobs, totalJobs }
+  }
+
+  clearPageCache(chapterId?: number): void {
+    _clearPageCache(chapterId)
   }
 }
