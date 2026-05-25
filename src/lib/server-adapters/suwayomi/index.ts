@@ -86,7 +86,7 @@ import {
   mapDownloadItem,
   mapCategory,
 } from './types'
-import { clearPageCache as _clearPageCache } from './pageCache'
+import { initPageCache, clearPageCache as _clearPageCache } from './pageCache'
 
 const SET_SOCKS_PROXY = `
   mutation SetSocksProxy(
@@ -142,6 +142,7 @@ export class SuwayomiAdapter implements ServerAdapter {
       const { username, password } = config.credentials
       this.authHeader = 'Basic ' + btoa(`${username}:${password}`)
     }
+    initPageCache(this.gql.bind(this), this.getServerUrl.bind(this))
   }
 
   getServerUrl(): string {

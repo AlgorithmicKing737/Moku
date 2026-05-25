@@ -4,8 +4,6 @@ import { open } from '@tauri-apps/plugin-dialog'
 import { readFile, writeFile } from '@tauri-apps/plugin-fs'
 import { open as openUrl } from '@tauri-apps/plugin-shell'
 import { getVersion } from '@tauri-apps/api/app'
-import { check } from '@tauri-apps/plugin-updater'
-import { relaunch } from '@tauri-apps/plugin-process'
 import type {
   PlatformAdapter,
   PlatformFeature,
@@ -69,19 +67,20 @@ export class TauriAdapter implements PlatformAdapter {
   }
 
   async setTitle(title: string) {
-    await invoke('set_window_title', { title })
+    await getCurrentWindow().setTitle(title)
   }
 
   async minimize() {
-    await invoke('minimize_window')
+    await getCurrentWindow().minimize()
   }
 
   async maximize() {
-    await invoke('maximize_window')
+    const win = getCurrentWindow()
+    await (await win.isMaximized() ? win.unmaximize() : win.maximize())
   }
 
   async close() {
-    await invoke('close_window')
+    await getCurrentWindow().close()
   }
 
   async toggleFullscreen() {
@@ -106,20 +105,23 @@ export class TauriAdapter implements PlatformAdapter {
   }
 
   async checkForAppUpdate(): Promise<AppUpdateInfo | null> {
-    const update = await check()
-    if (!update?.available) return null
-    return {
-      version: update.version,
-      url:     update.body ?? '',
-      notes:   update.body,
-    }
+    const releases = await invoke<Array<{ tag_name: string; html_url: string; body: string }>>('list_releases')
+    const current = await getVersion()
+    const valid = releases.filter(r => r.tag_name?.trim())
+    if (!valid.length) return null
+    const parse = (v: string) => v.replace(/^v/, '').split('.').map(Number)
+    const latest = valid.map(r => r.tag_name).sort((a, b) => {
+      const pa = parse(a), pb = parse(b)
+      for (let i = 0; i < 3; i++) if ((pb[i] ?? 0) !== (pa[i] ?? 0)) return (pb[i] ?? 0) - (pa[i] ?? 0)
+      return 0
+    })[0]
+    const pa = parse(latest), pb = parse(current)
+    if (!pa.some((n, i) => n > (pb[i] ?? 0))) return null
+    const rel = valid.find(r => r.tag_name === latest)!
+    return { version: latest.replace(/^v/, ''), url: rel.html_url, notes: rel.body }
   }
 
-  async installAppUpdate() {
-    const update = await check()
-    if (update?.available) {
-      await update.downloadAndInstall()
-      await relaunch()
-    }
+  async installAppUpdate(tag: string) {
+    await invoke('download_and_install_update', { tag })
   }
 }

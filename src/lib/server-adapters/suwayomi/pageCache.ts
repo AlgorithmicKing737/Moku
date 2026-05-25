@@ -1,7 +1,16 @@
-import { gql, getServerUrl }           from "$lib/server-adapters/suwayomi";
-import { getBlobUrl, preloadBlobUrls }  from "$lib/core/cache/imageCache";
-import { dedupeRequest }                from "$lib/core/async/batchRequests";
-import { FETCH_CHAPTER_PAGES }          from "$lib/server-adapters/suwayomi/chapters";
+import { getBlobUrl, preloadBlobUrls } from "$lib/core/cache/imageCache";
+import { dedupeRequest }               from "$lib/core/async/batchRequests";
+import { FETCH_CHAPTER_PAGES }         from "$lib/server-adapters/suwayomi/chapters";
+
+type GqlFn = <T>(query: string, vars?: Record<string, unknown>, signal?: AbortSignal) => Promise<T>;
+
+let _gql: GqlFn;
+let _getServerUrl: () => string;
+
+export function initPageCache(gql: GqlFn, getServerUrl: () => string): void {
+  _gql = gql;
+  _getServerUrl = getServerUrl;
+}
 
 const pageCache        = new Map<number, string[]>();
 const inflight         = new Map<number, Promise<string[]>>();
@@ -32,9 +41,9 @@ export function fetchPages(
 
   if (!inflight.has(chapterId)) {
     const p = dedupeRequest(`chapter-pages:${chapterId}`, () =>
-      gql<{ fetchChapterPages: { pages: string[] } }>(FETCH_CHAPTER_PAGES, { chapterId })
+      _gql<{ fetchChapterPages: { pages: string[] } }>(FETCH_CHAPTER_PAGES, { chapterId })
         .then(d => {
-          const urls = d.fetchChapterPages.pages.map(p => p.startsWith("http") ? p : `${getServerUrl()}${p}`);
+          const urls = d.fetchChapterPages.pages.map(p => p.startsWith("http") ? p : `${_getServerUrl()}${p}`);
           if (useBlob && urls[priorityPage]) getBlobUrl(urls[priorityPage], 999);
           pageCache.set(chapterId, urls);
           return urls;

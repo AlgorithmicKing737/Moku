@@ -19,5 +19,13 @@ export default defineConfig({
     target: ['es2021', 'chrome100', 'safari13'],
     minify: !process.env.TAURI_DEBUG ? 'oxc' : false,
     sourcemap: !!process.env.TAURI_DEBUG,
+    rollupOptions: {
+      external: [
+        '@capacitor/filesystem',
+        '@capacitor/app',
+        '@capacitor/browser',
+        'capacitor-native-biometric',
+      ],
+    },
   },
 })
