@@ -17,7 +17,7 @@ export function applyTheme(themeId: string, customThemes: CustomTheme[] = []) {
       document.head.appendChild(themeStyleEl)
     }
     themeStyleEl.textContent = `:root {\n${vars}\n}`
-    document.documentElement.removeAttribute('data-theme')
+    document.body.removeAttribute('data-theme')
     return
   }
 
@@ -25,7 +25,7 @@ export function applyTheme(themeId: string, customThemes: CustomTheme[] = []) {
     themeStyleEl.remove()
     themeStyleEl = null
   }
-  document.documentElement.setAttribute('data-theme', themeId)
+  document.body.setAttribute('data-theme', themeId)
 }
 
 export function mountSystemThemeSync(
