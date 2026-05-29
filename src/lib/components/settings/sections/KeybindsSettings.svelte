@@ -1,7 +1,12 @@
 <script lang="ts">
-export { eventToKeybind, matchesKeybind } from './keybindEngine'
-export { DEFAULT_KEYBINDS, KEYBIND_LABELS } from './defaultBinds'
-export type { Keybinds } from './defaultBinds'
+  import { settingsState, updateSettings } from '$lib/state/settings.svelte'
+  import { eventToKeybind } from '$lib/core/keybinds/keybindEngine'
+  import { DEFAULT_KEYBINDS, KEYBIND_LABELS } from '$lib/core/keybinds/defaultBinds'
+  import type { Keybinds } from '$lib/core/keybinds/defaultBinds'
+
+  function resetKeybinds() {
+    updateSettings({ keybinds: { ...DEFAULT_KEYBINDS } })
+  }
 
   let listeningKey: keyof Keybinds | null = $state(null)
 

@@ -35,6 +35,10 @@ export const appState = $state({
   authMode:      'NONE' as 'NONE' | 'BASIC_AUTH' | 'UI_LOGIN',
   platform:      'web' as 'web' | 'tauri' | 'capacitor',
   version:       '',
+  libraryFilter: '',
+  categories:    [] as { id: number; name: string }[],
+  history:       [] as unknown[],
+  toasts:        [] as unknown[],
 })
 
 export function setNavPage(next: NavPage)            { app.setNavPage(next) }

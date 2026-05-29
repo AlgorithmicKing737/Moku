@@ -1,15 +1,20 @@
-import { invoke } from '@tauri-apps/api/core'
+import { invoke }           from '@tauri-apps/api/core'
 import { getCurrentWindow } from '@tauri-apps/api/window'
-import { open } from '@tauri-apps/plugin-dialog'
+import { listen }           from '@tauri-apps/api/event'
+import { open }             from '@tauri-apps/plugin-dialog'
 import { readFile, writeFile } from '@tauri-apps/plugin-fs'
-import { open as openUrl } from '@tauri-apps/plugin-shell'
-import { getVersion } from '@tauri-apps/api/app'
+import { open as openUrl }  from '@tauri-apps/plugin-shell'
+import { getVersion }       from '@tauri-apps/api/app'
 import type {
   PlatformAdapter,
   PlatformFeature,
   ServerLaunchConfig,
   DiscordPresence,
   AppUpdateInfo,
+  StorageInfo,
+  ReleaseInfo,
+  UpdateProgress,
+  MigrateProgress,
 } from '$lib/platform-adapters/types'
 
 export class TauriAdapter implements PlatformAdapter {
@@ -106,8 +111,8 @@ export class TauriAdapter implements PlatformAdapter {
 
   async checkForAppUpdate(): Promise<AppUpdateInfo | null> {
     const releases = await invoke<Array<{ tag_name: string; html_url: string; body: string }>>('list_releases')
-    const current = await getVersion()
-    const valid = releases.filter(r => r.tag_name?.trim())
+    const current  = await getVersion()
+    const valid    = releases.filter(r => r.tag_name?.trim())
     if (!valid.length) return null
     const parse = (v: string) => v.replace(/^v/, '').split('.').map(Number)
     const latest = valid.map(r => r.tag_name).sort((a, b) => {
@@ -123,5 +128,70 @@ export class TauriAdapter implements PlatformAdapter {
 
   async installAppUpdate(tag: string) {
     await invoke('download_and_install_update', { tag })
+  }
+
+  async restartApp() {
+    await invoke('restart_app')
+  }
+
+  async getDefaultDownloadsPath(): Promise<string> {
+    return invoke('get_default_downloads_path')
+  }
+
+  async getStorageInfo(downloadsPath: string): Promise<StorageInfo> {
+    return invoke('get_storage_info', { downloadsPath })
+  }
+
+  async checkPathExists(path: string): Promise<boolean> {
+    return invoke('check_path_exists', { path })
+  }
+
+  async createDirectory(path: string) {
+    await invoke('create_directory', { path })
+  }
+
+  async openPath(path: string) {
+    await invoke('open_path', { path })
+  }
+
+  async getAutoBackupDir(): Promise<string> {
+    return invoke('get_auto_backup_dir')
+  }
+
+  async clearMokuCache() {
+    await invoke('clear_moku_cache')
+  }
+
+  async clearSuwayomiCache() {
+    await invoke('clear_suwayomi_cache')
+  }
+
+  async resetSuwayomiData() {
+    await invoke('reset_suwayomi_data')
+  }
+
+  async exitApp() {
+    await invoke('exit_app')
+  }
+
+  async listReleases(): Promise<ReleaseInfo[]> {
+    const all = await invoke<ReleaseInfo[]>('list_releases')
+    return all.filter(r => typeof r.tag_name === 'string' && r.tag_name.trim())
+  }
+
+  async onUpdateProgress(cb: (p: UpdateProgress) => void): Promise<() => void> {
+    return listen<UpdateProgress>('update-progress', e => cb(e.payload))
+  }
+
+  async onUpdateLaunching(cb: () => void): Promise<() => void> {
+    return listen('update-launching', cb)
+  }
+
+  async onMigrateProgress(cb: (p: MigrateProgress) => void): Promise<() => void> {
+    return listen<MigrateProgress>('migrate_progress', e => cb(e.payload))
+  }
+
+  async migrateDownloads(src: string, dst: string) {
+    await invoke('migrate_downloads', { src, dst })
   }
 }

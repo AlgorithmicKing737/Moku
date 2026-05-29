@@ -1,52 +1,75 @@
 <script lang="ts">
   import {
-    MagnifyingGlass, Books, DownloadSimple,
-    SortAscending, CaretUp, CaretDown, ArrowsClockwise,
+    MagnifyingGlass, Books, DownloadSimple, FolderSimple,
+    SortAscending, CaretUp, CaretDown, ArrowsClockwise, X,
   } from 'phosphor-svelte'
   import LibraryFilters from './LibraryFilters.svelte'
-  import type { LibrarySortOption, LibraryTab } from '$lib/state/library.svelte'
-  import type { MangaStatus } from '$lib/server-adapters/types'
+  import type { LibrarySortOption, LibraryContentFilter, LibraryStatusFilter } from '$lib/state/library.svelte'
+  import type { Category } from '$lib/types'
 
   interface Props {
-    tab:        LibraryTab
-    savedCount: number
-    dlCount:    number
-    sort:       LibrarySortOption
-    sortDesc:   boolean
-    status:     MangaStatus | 'all'
-    unread:     boolean
-    downloaded: boolean
-    bookmarked: boolean
-    hasActiveFilters: boolean
-    refreshing: boolean
-    query:      string
-    onTab:        (t: LibraryTab) => void
-    onQuery:      (q: string) => void
-    onSort:       (s: LibrarySortOption) => void
-    onSortDesc:   () => void
-    onStatus:     (s: MangaStatus | 'all') => void
-    onUnread:     () => void
-    onDownloaded: () => void
-    onBookmarked: () => void
-    onFilterClear: () => void
-    onRefresh:    () => void
+    tab:               string
+    tabSortMode:       LibrarySortOption
+    tabSortDir:        'asc' | 'desc'
+    tabStatus:         LibraryStatusFilter
+    tabFilters:        Partial<Record<LibraryContentFilter, boolean>>
+    hasActiveFilters:  boolean
+    visibleCategories: Category[]
+    visibleTabIds:     string[]
+    counts:            Record<string, number>
+    query:             string
+    refreshing:        boolean
+    refreshProgress:   { finished: number; total: number }
+    refreshDone:       boolean
+    refreshingCatId:   number | null
+    activeDragKind:    'tab' | null
+    dragInsertIdx:     number
+    dragTabId:         string | null
+    dragOverTabId:     string | null
+    onTabChange:        (t: string) => void
+    onQuery:            (q: string) => void
+    onSortChange:       (mode: LibrarySortOption) => void
+    onSortDirToggle:    () => void
+    onStatusChange:     (s: LibraryStatusFilter) => void
+    onFilterToggle:     (f: LibraryContentFilter) => void
+    onFiltersClear:     () => void
+    onRefresh:          () => void
+    onCancelRefresh:    () => void
+    onRefreshCategory:  (catId: number) => void
+    onOpenDownloadsFolder: () => void
+    onTabDragStart:     (e: DragEvent, id: string) => void
+    onTabDragOver:      (e: DragEvent, id: string, idx: number) => void
+    onTabDragLeave:     () => void
+    onTabDrop:          (e: DragEvent, id: string) => void
+    onTabDragEnd:       () => void
   }
 
   let {
-    tab, savedCount, dlCount, sort, sortDesc,
-    status, unread, downloaded, bookmarked, hasActiveFilters, refreshing, query,
-    onTab, onQuery, onSort, onSortDesc,
-    onStatus, onUnread, onDownloaded, onBookmarked, onFilterClear, onRefresh,
+    tab, tabSortMode, tabSortDir, tabStatus, tabFilters,
+    hasActiveFilters, visibleCategories, visibleTabIds, counts, query,
+    refreshing, refreshProgress, refreshDone, refreshingCatId,
+    activeDragKind, dragInsertIdx, dragTabId, dragOverTabId,
+    onTabChange, onQuery, onSortChange, onSortDirToggle,
+    onStatusChange, onFilterToggle, onFiltersClear,
+    onRefresh, onCancelRefresh, onOpenDownloadsFolder,
+    onTabDragStart, onTabDragOver, onTabDragLeave, onTabDrop, onTabDragEnd,
   }: Props = $props()
 
   let sortOpen   = $state(false)
   let filterOpen = $state(false)
 
   const SORT_LABELS: Record<LibrarySortOption, string> = {
-    alphabetical: 'A–Z',
-    unread:       'Unread chapters',
-    lastRead:     'Recently read',
-    dateAdded:    'Date added',
+    alphabetical:   'A–Z',
+    unread:         'Unread chapters',
+    lastRead:       'Recently read',
+    dateAdded:      'Date added',
+    totalChapters:  'Total chapters',
+    latestFetched:  'Latest fetched',
+    latestUploaded: 'Latest uploaded',
+  }
+
+  function catById(id: string): Category | undefined {
+    return visibleCategories.find(c => String(c.id) === id)
   }
 
   function onDocDown(e: MouseEvent) {
@@ -64,17 +87,49 @@
 <div class="toolbar">
   <span class="heading">Library</span>
 
-  <div class="tabs">
-    <button class="tab" class:active={tab === 'saved'} onclick={() => onTab('saved')}>
-      <Books size={11} weight="bold" />
-      Saved
-      <span class="count">{savedCount}</span>
-    </button>
-    <button class="tab" class:active={tab === 'downloaded'} onclick={() => onTab('downloaded')}>
-      <DownloadSimple size={11} weight="bold" />
-      Downloaded
-      <span class="count">{dlCount}</span>
-    </button>
+  <div class="tabs" role="tablist">
+    {#each visibleTabIds as id, idx}
+      {@const isActive   = tab === id}
+      {@const isDragOver = dragOverTabId === id}
+      {@const showInsertBefore = activeDragKind === 'tab' && dragInsertIdx === idx}
+      {@const showInsertAfter  = activeDragKind === 'tab' && dragInsertIdx === idx + 1 && idx === visibleTabIds.length - 1}
+
+      {#if showInsertBefore}
+        <div class="drop-indicator" aria-hidden="true"></div>
+      {/if}
+
+      <button
+        class="tab"
+        class:active={isActive}
+        class:drag-over={isDragOver}
+        role="tab"
+        aria-selected={isActive}
+        draggable="true"
+        ondragstart={(e) => onTabDragStart(e, id)}
+        ondragover={(e) => onTabDragOver(e, id, idx)}
+        ondragleave={onTabDragLeave}
+        ondrop={(e) => onTabDrop(e, id)}
+        ondragend={onTabDragEnd}
+        onclick={() => onTabChange(id)}
+      >
+        {#if id === 'library'}
+          <Books size={11} weight="bold" />
+          Library
+        {:else if id === 'downloaded'}
+          <DownloadSimple size={11} weight="bold" />
+          Downloaded
+        {:else}
+          {@const cat = catById(id)}
+          <FolderSimple size={11} weight="bold" />
+          {cat?.name ?? id}
+        {/if}
+        <span class="count">{counts[id] ?? 0}</span>
+      </button>
+
+      {#if showInsertAfter}
+        <div class="drop-indicator" aria-hidden="true"></div>
+      {/if}
+    {/each}
   </div>
 
   <div class="right">
@@ -88,20 +143,36 @@
       />
     </div>
 
+    {#if tab === 'downloaded'}
+      <button class="icon-btn" title="Open downloads folder" onclick={onOpenDownloadsFolder}>
+        <FolderSimple size={15} weight="bold" />
+      </button>
+    {/if}
+
     <button
       class="icon-btn"
       class:spinning={refreshing}
-      title={refreshing ? 'Checking for updates…' : 'Check for updates'}
-      onclick={onRefresh}
-      disabled={refreshing}
+      class:done={refreshDone}
+      title={refreshing ? 'Cancel update' : 'Check for updates'}
+      onclick={refreshing ? onCancelRefresh : onRefresh}
     >
-      <ArrowsClockwise size={15} weight="bold" />
+      {#if refreshing}
+        <X size={15} weight="bold" />
+      {:else}
+        <ArrowsClockwise size={15} weight="bold" />
+      {/if}
     </button>
+
+    {#if refreshing && refreshProgress.total > 0}
+      <span class="refresh-label">
+        {refreshProgress.finished}/{refreshProgress.total}
+      </span>
+    {/if}
 
     <div class="sort-wrap">
       <button
         class="icon-btn"
-        class:active={sort !== 'alphabetical' || sortDesc}
+        class:active={tabSortMode !== 'alphabetical' || tabSortDir !== 'asc'}
         title="Sort"
         onclick={() => { sortOpen = !sortOpen; filterOpen = false }}
       >
@@ -118,21 +189,21 @@
           {#each Object.entries(SORT_LABELS) as [s, label]}
             <button
               class="item"
-              class:item-active={sort === s}
+              class:item-active={tabSortMode === s}
               role="menuitem"
-              onclick={() => { onSort(s as LibrarySortOption); sortOpen = false }}
+              onclick={() => { onSortChange(s as LibrarySortOption); sortOpen = false }}
             >
               {label}
-              {#if sort === s}
-                {#if sortDesc}<CaretDown size={11} weight="bold" />
+              {#if tabSortMode === s}
+                {#if tabSortDir === 'desc'}<CaretDown size={11} weight="bold" />
                 {:else}<CaretUp size={11} weight="bold" />
                 {/if}
               {/if}
             </button>
           {/each}
-          <button class="item dir-toggle" role="menuitem" onclick={onSortDesc}>
-            {sortDesc ? 'Descending' : 'Ascending'}
-            {#if sortDesc}<CaretDown size={11} weight="bold" />
+          <button class="item dir-toggle" role="menuitem" onclick={onSortDirToggle}>
+            {tabSortDir === 'desc' ? 'Descending' : 'Ascending'}
+            {#if tabSortDir === 'desc'}<CaretDown size={11} weight="bold" />
             {:else}<CaretUp size={11} weight="bold" />
             {/if}
           </button>
@@ -142,12 +213,14 @@
 
     <div class="filter-wrap">
       <LibraryFilters
-        {status} {unread} {downloaded} {bookmarked}
+        status={tabStatus}
+        filters={tabFilters}
         hasActive={hasActiveFilters}
         open={filterOpen}
         onToggle={() => { filterOpen = !filterOpen; sortOpen = false }}
-        {onStatus} {onUnread} {onDownloaded} {onBookmarked}
-        onClear={onFilterClear}
+        {onStatusChange}
+        {onFilterToggle}
+        onClear={onFiltersClear}
       />
     </div>
   </div>
@@ -156,11 +229,13 @@
 <style>
   .toolbar {
     position: relative; z-index: 100;
-    display: flex; align-items: center; gap: var(--sp-4);
+    display: flex; align-items: center; gap: var(--sp-3);
     padding: var(--sp-4) var(--sp-6);
     border-bottom: 1px solid var(--border-dim);
-    flex-shrink: 0; min-width: 0;
+    flex-shrink: 0; min-width: 0; overflow-x: auto;
+    scrollbar-width: none;
   }
+  .toolbar::-webkit-scrollbar { display: none; }
 
   .heading {
     font-family: var(--font-ui); font-size: var(--text-xs);
@@ -172,6 +247,7 @@
     display: flex; align-items: center; gap: 2px;
     background: var(--bg-raised); border: 1px solid var(--border-dim);
     border-radius: var(--radius-md); padding: 2px;
+    flex-shrink: 0;
   }
 
   .tab {
@@ -180,14 +256,21 @@
     letter-spacing: var(--tracking-wide); text-transform: uppercase;
     padding: 4px 10px; border-radius: var(--radius-sm);
     border: 1px solid transparent; color: var(--text-faint);
-    white-space: nowrap;
+    white-space: nowrap; cursor: pointer;
     transition: background var(--t-base), color var(--t-base), border-color var(--t-base);
-    cursor: pointer;
+    user-select: none;
   }
-  .tab:hover { color: var(--text-muted); }
-  .tab.active { background: var(--accent-muted); color: var(--accent-fg); border-color: var(--accent-dim); }
+  .tab:hover        { color: var(--text-muted); }
+  .tab.active       { background: var(--accent-muted); color: var(--accent-fg); border-color: var(--accent-dim); }
+  .tab.drag-over    { border-color: var(--accent); }
 
   .count { font-size: var(--text-2xs); opacity: 0.6; }
+
+  .drop-indicator {
+    width: 2px; height: 20px; background: var(--accent);
+    border-radius: 1px; flex-shrink: 0;
+    animation: fadeIn 0.1s ease both;
+  }
 
   .right {
     display: flex; align-items: center; gap: var(--sp-2);
@@ -205,6 +288,12 @@
   .search::placeholder { color: var(--text-faint); }
   .search:focus { border-color: var(--border-strong); }
 
+  .refresh-label {
+    font-family: var(--font-ui); font-size: var(--text-2xs);
+    color: var(--text-faint); letter-spacing: var(--tracking-wide);
+    white-space: nowrap;
+  }
+
   .icon-btn {
     display: flex; align-items: center; justify-content: center;
     width: 30px; height: 30px;
@@ -216,9 +305,8 @@
   .icon-btn:hover:not(:disabled) { color: var(--text-primary); border-color: var(--border-strong); }
   .icon-btn.active { color: var(--accent-fg); border-color: var(--accent-dim); background: var(--accent-muted); }
   .icon-btn:disabled { opacity: 0.5; cursor: default; }
+  .icon-btn.done { color: var(--color-success, #4caf50); border-color: color-mix(in srgb, var(--color-success, #4caf50) 40%, transparent); }
   .icon-btn.spinning :global(svg) { animation: spin 1s linear infinite; }
-
-  @keyframes spin { to { transform: rotate(360deg); } }
 
   .sort-wrap, .filter-wrap { position: relative; }
 
@@ -249,8 +337,8 @@
     cursor: pointer; text-align: left; gap: var(--sp-2);
     transition: background var(--t-base), color var(--t-base);
   }
-  .item:hover { background: var(--bg-overlay); color: var(--text-primary); }
-  .item-active { color: var(--accent-fg); background: var(--accent-muted); font-weight: var(--weight-medium, 500); }
+  .item:hover       { background: var(--bg-overlay); color: var(--text-primary); }
+  .item-active      { color: var(--accent-fg); background: var(--accent-muted); font-weight: var(--weight-medium, 500); }
   .item-active:hover { background: var(--accent-dim); }
   .dir-toggle {
     justify-content: flex-start; color: var(--text-secondary);
@@ -259,5 +347,6 @@
     margin-top: 2px; padding-top: 9px;
   }
 
-  @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+  @keyframes spin    { to { transform: rotate(360deg); } }
+  @keyframes fadeIn  { from { opacity: 0 } to { opacity: 1 } }
 </style>

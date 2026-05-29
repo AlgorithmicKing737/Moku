@@ -1,30 +1,46 @@
 <script lang="ts">
-  import { CheckSquare, Trash } from 'phosphor-svelte'
-  import type { Manga } from '$lib/types'
+  import { CheckSquare, Trash, Folder } from 'phosphor-svelte'
+  import type { Manga, Category } from '$lib/types'
 
   interface Props {
-    items:       Manga[]
-    loading:     boolean
-    selectMode:  boolean
-    selected:    Set<number>
-    tab:         string
-    onCardClick:    (e: MouseEvent, m: Manga) => void
-    onSelectAll:    () => void
-    onExitSelect:   () => void
-    onBulkRemove:   () => void
+    items:             Manga[]
+    loading:           boolean
+    selectMode:        boolean
+    selected:          Set<number>
+    tab:               string
+    visibleCategories: Category[]
+    bulkWorking:       boolean
+    onCardClick:       (e: MouseEvent, m: Manga) => void
+    onCardContextMenu: (e: MouseEvent, m: Manga) => void
+    onSelectAll:       () => void
+    onExitSelect:      () => void
+    onBulkRemove:      () => void
+    onBulkMove:        (cat: Category) => void
   }
 
   let {
     items, loading, selectMode, selected, tab,
-    onCardClick, onSelectAll, onExitSelect, onBulkRemove,
+    visibleCategories, bulkWorking,
+    onCardClick, onCardContextMenu, onSelectAll, onExitSelect, onBulkRemove, onBulkMove,
   }: Props = $props()
 
   const THUMB_BASE = 'http://127.0.0.1:4567'
+
+  let movePanelOpen = $state(false)
 
   function coverUrl(m: Manga) {
     const url = m.thumbnailUrl ?? ''
     return url.startsWith('http') ? url : `${THUMB_BASE}${url}`
   }
+
+  function onDocDown(e: MouseEvent) {
+    if (movePanelOpen && !(e.target as HTMLElement).closest('.move-wrap')) movePanelOpen = false
+  }
+
+  $effect(() => {
+    document.addEventListener('mousedown', onDocDown, true)
+    return () => document.removeEventListener('mousedown', onDocDown, true)
+  })
 </script>
 
 {#if selectMode}
@@ -32,9 +48,36 @@
     <span class="sel-count">{selected.size} selected</span>
     <button class="sel-text-btn" onclick={onSelectAll}>Select all</button>
     <div class="sel-right">
+      {#if visibleCategories.length > 0}
+        <div class="move-wrap">
+          <button
+            class="sel-action-btn"
+            disabled={selected.size === 0 || bulkWorking}
+            onclick={() => movePanelOpen = !movePanelOpen}
+          >
+            <Folder size={13} weight="bold" />
+            Move to folder
+          </button>
+          {#if movePanelOpen}
+            <div class="move-panel" role="menu">
+              {#each visibleCategories as cat}
+                <button
+                  class="move-item"
+                  role="menuitem"
+                  onclick={() => { onBulkMove(cat); movePanelOpen = false }}
+                >
+                  <Folder size={12} weight="bold" />
+                  {cat.name}
+                </button>
+              {/each}
+            </div>
+          {/if}
+        </div>
+      {/if}
+
       <button
         class="sel-action-btn sel-danger"
-        disabled={selected.size === 0}
+        disabled={selected.size === 0 || bulkWorking}
         onclick={onBulkRemove}
       >
         <Trash size={13} weight="bold" />
@@ -65,7 +108,7 @@
     <div class="empty">
       {tab === 'downloaded'
         ? 'No downloaded manga.'
-        : 'No manga saved to library — browse sources to add some.'}
+        : 'No manga in this library — browse sources to add some.'}
     </div>
 
   {:else}
@@ -78,10 +121,7 @@
           class:card-selected={isSelected}
           class:select-mode={selectMode}
           onclick={(e) => onCardClick(e, m)}
-          oncontextmenu={(e) => {
-            e.preventDefault()
-            onCardClick(e, m)
-          }}
+          oncontextmenu={(e) => onCardContextMenu(e, m)}
         >
           <div class="cover-wrap" class:completed={isCompleted}>
             <img
@@ -157,11 +197,30 @@
     transition: color var(--t-base), border-color var(--t-base), background var(--t-base);
   }
   .sel-action-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .sel-action-btn:hover:not(:disabled) { color: var(--text-primary); border-color: var(--border-strong); }
   .sel-danger:hover:not(:disabled) {
     color: var(--color-error, #e05c5c);
     border-color: color-mix(in srgb, var(--color-error, #e05c5c) 40%, transparent);
     background: color-mix(in srgb, var(--color-error, #e05c5c) 8%, transparent);
   }
+
+  .move-wrap { position: relative; }
+  .move-panel {
+    position: absolute; top: calc(100% + 4px); right: 0; z-index: 9999;
+    min-width: 180px; background: var(--bg-raised);
+    border: 1px solid var(--border-base); border-radius: var(--radius-lg);
+    padding: var(--sp-1); box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    animation: fadeIn 0.1s ease both;
+  }
+  .move-item {
+    display: flex; align-items: center; gap: var(--sp-2);
+    width: 100%; padding: 7px 10px; border-radius: var(--radius-sm);
+    border: none; background: transparent; color: var(--text-muted);
+    font-family: var(--font-ui); font-size: var(--text-xs);
+    cursor: pointer; text-align: left;
+    transition: background var(--t-base), color var(--t-base);
+  }
+  .move-item:hover { background: var(--bg-overlay); color: var(--text-primary); }
 
   .grid {
     display: grid;
@@ -205,9 +264,9 @@
     letter-spacing: 0.04em; line-height: 1; padding: 3px 7px;
     border-radius: 20px; white-space: nowrap;
   }
-  .badge-unread  { background: var(--accent); color: #fff; box-shadow: 0 1px 8px rgba(0,0,0,0.5); }
-  .badge-done    { background: rgba(255,255,255,0.18); color: rgba(255,255,255,0.9); border: 1px solid rgba(255,255,255,0.25); }
-  .badge-dl      { background: rgba(0,0,0,0.55); color: rgba(255,255,255,0.8); border: 1px solid rgba(255,255,255,0.18); margin-left: auto; }
+  .badge-unread { background: var(--accent); color: #fff; box-shadow: 0 1px 8px rgba(0,0,0,0.5); }
+  .badge-done   { background: rgba(255,255,255,0.18); color: rgba(255,255,255,0.9); border: 1px solid rgba(255,255,255,0.25); }
+  .badge-dl     { background: rgba(0,0,0,0.55); color: rgba(255,255,255,0.8); border: 1px solid rgba(255,255,255,0.18); margin-left: auto; }
 
   .select-overlay {
     position: absolute; inset: 0; z-index: 3;
@@ -241,6 +300,6 @@
     text-align: center;
   }
 
-  @keyframes fadeIn  { from { opacity: 0 } to { opacity: 1 } }
-  @keyframes pulse   { 0%, 100% { opacity: 1 } 50% { opacity: 0.4 } }
+  @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+  @keyframes pulse  { 0%, 100% { opacity: 1 } 50% { opacity: 0.4 } }
 </style>

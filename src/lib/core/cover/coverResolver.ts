@@ -1,4 +1,5 @@
-import { appState } from '$lib/state/app.svelte'
+import { settingsState } from '$lib/state/settings.svelte'
+import { seriesState }   from '$lib/state/series.svelte'
 import { searchWithScore } from '$lib/core/algorithms/search'
 import { getHash, areDuplicates } from '$lib/core/cover/coverHash'
 
@@ -24,7 +25,7 @@ function normalizeUrl(url: string): string {
 }
 
 export function resolvedCover(mangaId: number, ownUrl: string): string {
-  return appState.settings.mangaPrefs?.[mangaId]?.coverUrl ?? ownUrl
+  return settingsState.settings.mangaPrefs?.[mangaId]?.coverUrl ?? ownUrl
 }
 
 function fuzzyMatchIds(
@@ -47,9 +48,9 @@ export function coverCandidatesSync(
   ownUrl: string,
   mangaById: Map<number, CoverManga & { title: string }>,
 ): CoverCandidate[] {
-  const linkedIds = appState.getLinkedMangaIds(mangaId)
+  const linkedIds = seriesState.settings.mangaLinks?.[mangaId] ?? []
   const fuzzyIds  = fuzzyMatchIds(mangaId, title, mangaById)
-  const current   = appState.settings.mangaPrefs?.[mangaId]?.coverUrl ?? ownUrl
+  const current   = settingsState.settings.mangaPrefs?.[mangaId]?.coverUrl ?? ownUrl
   const allIds    = Array.from(new Set([...linkedIds, ...fuzzyIds]))
 
   const raw: { mangaId: number; url: string; label: string }[] = [

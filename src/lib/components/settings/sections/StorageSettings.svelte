@@ -1,8 +1,7 @@
 <script lang="ts">
   import { Trash, ClockCounterClockwise } from 'phosphor-svelte'
-  import { invoke } from '@tauri-apps/api/core'
   import { untrack } from 'svelte'
-  import { appState } from '$lib/state/app.svelte'
+  import { platformService } from '$lib/platform-service'
   import { toast } from '$lib/state/notifications.svelte'
   import { settingsState, updateSettings } from '$lib/state/settings.svelte'
   import { exportAppData, importAppData } from '$lib/core/backup'
@@ -13,6 +12,8 @@
   import { clearBlobCache } from '$lib/core/cache/imageCache'
   import { clearPageCache } from '$lib/request-manager'
   import { cache as queryCache } from '$lib/core/cache/queryCache'
+
+  const supportsFilesystem = platformService.isSupported('filesystem')
 
   type ResetState = 'idle' | 'busy' | 'done' | 'error'
   interface ResetItem { key: string; label: string; desc: string; state: ResetState; error: string | null; confirm: boolean }
@@ -76,8 +77,8 @@
     clearPageCache()
     queryCache.clearAll()
     await Promise.all([
-      invoke('clear_moku_cache'),
-      invoke('clear_suwayomi_cache'),
+      platformService.clearMokuCache(),
+      platformService.clearSuwayomiCache(),
       gql(`mutation { clearCachedImages(input: { cachedPages: true, cachedThumbnails: true, downloadedThumbnails: false }) { cachedPages cachedThumbnails } }`),
     ])
   }
@@ -98,14 +99,14 @@
           await persistSettings({ settings: DEFAULT_SETTINGS, storeVersion: 1 })
           patchReset(key, { state: 'done' })
           await showExitCountdown()
-          invoke('exit_app')
+          platformService.exitApp()
           return
         case 'suwayomi-data':
           localStorage.clear()
-          await invoke('reset_suwayomi_data')
+          await platformService.resetSuwayomiData()
           patchReset(key, { state: 'done' })
           await showExitCountdown()
-          invoke('exit_app')
+          platformService.exitApp()
           return
       }
       patchReset(key, { state: 'done' })
@@ -138,8 +139,9 @@
 
   let defaultDownloadsPath = $state('')
   $effect(() => {
+    if (!supportsFilesystem) return
     if (!isExternalServer) {
-      invoke<string>('get_default_downloads_path').then(p => { defaultDownloadsPath = p })
+      platformService.getDefaultDownloadsPath().then(p => { defaultDownloadsPath = p })
     } else {
       defaultDownloadsPath = ''
     }
@@ -163,6 +165,7 @@
   let resetSectionOpen  = $state(false)
 
   async function fetchStorage() {
+    if (!supportsFilesystem) return
     storageLoading = true; storageError = null
     try {
       const pathData = await gql<{ downloadsPath: string | null; localSourcePath: string | null }>(
@@ -183,7 +186,7 @@
       }
       if (dirsToScan.length === 0) { multiStorageInfos = []; storageInfo = null; return }
       const results = await Promise.allSettled(
-        dirsToScan.map(d => invoke<StorageInfo>('get_storage_info', { downloadsPath: d.path }).then(info => ({ ...info, label: d.label })))
+        dirsToScan.map(d => platformService.getStorageInfo(d.path).then(info => ({ ...info, label: d.label })))
       )
       multiStorageInfos = results
         .filter((r): r is PromiseFulfilledResult<StorageInfo & { label: string }> => r.status === 'fulfilled')
@@ -195,17 +198,16 @@
   }
 
   async function validatePath(path: string): Promise<string | null> {
-    if (!path.trim()) return null
-    if (isExternalServer) return null
+    if (!path.trim() || isExternalServer || !supportsFilesystem) return null
     try {
-      const exists = await invoke<boolean>('check_path_exists', { path: path.trim() })
+      const exists = await platformService.checkPathExists(path.trim())
       return exists ? null : 'Directory does not exist'
     } catch { return 'Could not check path' }
   }
 
   async function createDirectory(path: string): Promise<void> {
     if (isExternalServer) throw new Error('Cannot create directories on an external server')
-    await invoke('create_directory', { path })
+    await platformService.createDirectory(path)
   }
 
   async function savePaths() {
@@ -219,11 +221,11 @@
       await gql(`mutation($path: String!) { setDownloadsPath(input: { location: $path }) { location } }`, { path: dl })
       if (loc) await gql(`mutation($path: String!) { setLocalSourcePath(input: { location: $path }) { location } }`, { path: loc })
       updateSettings({ serverDownloadsPath: dl, serverLocalSourcePath: loc })
-      if (!isExternalServer) {
+      if (supportsFilesystem && !isExternalServer) {
         const oldDl = confirmedDownloadsPath || defaultDownloadsPath
         const newDl = dl || defaultDownloadsPath
         if (newDl && oldDl && newDl !== oldDl) {
-          const hadContent = await invoke<boolean>('check_path_exists', { path: oldDl })
+          const hadContent = await platformService.checkPathExists(oldDl)
           if (hadContent) { migrateFrom = oldDl; migrateTo = newDl }
         }
       }
@@ -238,12 +240,9 @@
   async function startMigration() {
     if (!migrateFrom || !migrateTo) return
     migrating = true; migrateError = null; migrateProgress = { done: 0, total: 0, current: '' }
-    const { listen: tauriListen } = await import('@tauri-apps/api/event')
-    migrateUnlisten = await tauriListen<{ done: number; total: number; current: string }>(
-      'migrate_progress', e => { migrateProgress = e.payload }
-    )
+    migrateUnlisten = await platformService.onMigrateProgress(p => { migrateProgress = p })
     try {
-      await invoke('migrate_downloads', { src: migrateFrom, dst: migrateTo })
+      await platformService.migrateDownloads(migrateFrom, migrateTo)
       migrateFrom = null; migrateTo = null; migrateProgress = null
       await fetchStorage()
     } catch (e: any) {
@@ -254,17 +253,17 @@
   function dismissMigration() { migrateFrom = null; migrateTo = null; migrateError = null; migrateProgress = null }
 
   async function browseDownloadsFolder() {
-    const picked = await invoke<string | null>('pick_downloads_folder')
+    const picked = await platformService.pickFolder()
     if (picked) { downloadsPathInput = picked; pathsFieldError = { ...pathsFieldError, dl: undefined }; await savePaths() }
   }
 
   async function browseLocalSourceFolder() {
-    const picked = await invoke<string | null>('pick_downloads_folder')
+    const picked = await platformService.pickFolder()
     if (picked) { localSourcePathInput = picked; pathsFieldError = { ...pathsFieldError, loc: undefined }; await savePaths() }
   }
 
   async function browseExtraScanDir() {
-    const picked = await invoke<string | null>('pick_downloads_folder')
+    const picked = await platformService.pickFolder()
     if (picked) { newScanDir = picked; addExtraScanDir() }
   }
 
@@ -410,6 +409,11 @@
     restoreLoading = true; restoreError = null; restoreStatus = null; restoreJobId = null
     stopRestorePoll()
     try {
+      const form = buildBackupFormData(
+        restoreFile,
+        `mutation RestoreBackup($backup: Upload!) { restoreBackup(input: { backup: $backup }) { id status { mangaProgress state totalManga } } }`,
+        { backup: null }
+      )
       const resp = await fetch(`${serverUrl()}/api/graphql`, { method: 'POST', headers: buildAuthHeaders(), body: form })
       const json = await resp.json()
       if (json.errors?.length) throw new Error(json.errors[0].message)
@@ -445,7 +449,8 @@
   let appDataBackupDir = $state<string | null>(null)
 
   $effect(() => {
-    invoke<string>('get_auto_backup_dir').then(d => { appDataBackupDir = d }).catch(() => {})
+    if (!supportsFilesystem) return
+    platformService.getAutoBackupDir().then(d => { appDataBackupDir = d }).catch(() => {})
   })
 
   async function handleExportAppData() {
@@ -507,6 +512,8 @@
         <p class="s-empty">Reading filesystem…</p>
       {:else if storageError}
         <p class="s-empty" style="color:var(--color-error)">{storageError}</p>
+      {:else if !supportsFilesystem}
+        <p class="s-empty">Disk usage is unavailable in web mode.</p>
       {:else if isExternalServer}
         <p class="s-empty">Disk usage is unavailable for external servers — filesystem access requires a local connection.</p>
       {:else if multiStorageInfos.length > 0}
@@ -551,7 +558,7 @@
           spellcheck="false"
           onkeydown={(e) => e.key === 'Enter' && savePaths()}
           oninput={() => { pathsFieldError = { ...pathsFieldError, dl: undefined } }} />
-        {#if !isExternalServer}
+        {#if !isExternalServer && supportsFilesystem}
           <button class="s-btn" onclick={browseDownloadsFolder}>Browse</button>
         {/if}
       </div>
@@ -565,7 +572,7 @@
           {/if}
         </div>
         <div class="s-btn-row">
-          {#if pathsFieldError.dl && !isExternalServer}
+          {#if pathsFieldError.dl && !isExternalServer && supportsFilesystem}
             <button class="s-btn" onclick={async () => {
               try { await createDirectory(downloadsPathInput.trim()); pathsFieldError = { ...pathsFieldError, dl: undefined } }
               catch (e: any) { pathsFieldError = { ...pathsFieldError, dl: e?.message ?? 'Failed' } }
@@ -624,10 +631,10 @@
                 bind:value={localSourcePathInput} placeholder="Optional" spellcheck="false"
                 onkeydown={(e) => e.key === 'Enter' && savePaths()}
                 oninput={() => { pathsFieldError = { ...pathsFieldError, loc: undefined } }} />
-              {#if !isExternalServer}
+              {#if !isExternalServer && supportsFilesystem}
                 <button class="s-btn" onclick={browseLocalSourceFolder}>Browse</button>
               {/if}
-              {#if pathsFieldError.loc && !isExternalServer}
+              {#if pathsFieldError.loc && !isExternalServer && supportsFilesystem}
                 <button class="s-btn" onclick={async () => {
                   try { await createDirectory(localSourcePathInput.trim()); pathsFieldError = { ...pathsFieldError, loc: undefined } }
                   catch (e: any) { pathsFieldError = { ...pathsFieldError, loc: e?.message ?? 'Failed' } }
@@ -656,7 +663,7 @@
           <div class="s-btn-row">
             <input class="s-input mono" bind:value={newScanDir} placeholder="/path/to/dir" spellcheck="false"
               onkeydown={(e) => e.key === 'Enter' && addExtraScanDir()} />
-            {#if !isExternalServer}
+            {#if !isExternalServer && supportsFilesystem}
               <button class="s-btn" onclick={browseExtraScanDir}>Browse</button>
             {/if}
           </div>
@@ -790,7 +797,7 @@
             <span class="s-label">Export settings</span>
             <span class="s-desc">Save all Moku app settings to a .zip via a native save dialog.</span>
           </div>
-          <button class="s-btn s-btn-accent" onclick={handleExportAppData} disabled={appDataExporting}>
+          <button class="s-btn s-btn-accent" onclick={handleExportAppData} disabled={appDataExporting || !supportsFilesystem}>
             {appDataExporting ? 'Saving…' : 'Export'}
           </button>
         </div>
@@ -800,7 +807,7 @@
             <span class="s-label">Import settings</span>
             <span class="s-desc">Restore from a previously exported .zip file. Reloads the app immediately.</span>
           </div>
-          <button class="s-btn" onclick={handleImportAppData} disabled={appDataImporting}>
+          <button class="s-btn" onclick={handleImportAppData} disabled={appDataImporting || !supportsFilesystem}>
             {appDataImporting ? 'Importing…' : 'Import'}
           </button>
         </div>
@@ -821,7 +828,7 @@
               <span class="s-label">Auto-backup location</span>
               <span class="s-desc">Pre-update snapshots are kept here (last 5).</span>
             </div>
-            <button class="s-btn" onclick={() => invoke('open_path', { path: appDataBackupDir })}>Open folder</button>
+            <button class="s-btn" onclick={() => platformService.openPath(appDataBackupDir!)}>Open folder</button>
           </div>
         {/if}
 

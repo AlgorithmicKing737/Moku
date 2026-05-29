@@ -114,14 +114,16 @@
         const reordered = [...sortable]
         const [moved]   = reordered.splice(sFromIdx, 1)
         reordered.splice(sToIdx, 0, moved)
-        categories = [...zeroCat, ...reordered.map((c, i) => ({ ...c, order: i + 1 }))]
-        getAdapter().updateCategoryOrder({ id: fromNumId, position: sToIdx + 1 })
+        const optimistic = [...zeroCat, ...reordered.map((c, i) => ({ ...c, order: i + 1 }))]
+        categories = optimistic
+        const serverPosition = sToIdx + 1
+        getAdapter().updateCategoryOrder({ id: fromNumId, position: serverPosition })
           .then((updated: Category[]) => {
             categories = [
               ...zeroCat,
               ...updated.sort((a: Category, b: Category) => a.order - b.order).map((fresh: Category) => {
-                const existing = categories.find(c => c.id === fresh.id)
-                return existing ? { ...existing, ...fresh } : fresh
+                const local = optimistic.find(c => c.id === fresh.id)
+                return local ? { ...fresh, mangas: local.mangas } : fresh
               }),
             ]
           })
@@ -203,7 +205,7 @@
                     <DotsSixVertical size={14} weight="bold" />
                   </span>
                   <span class="s-folder-name">{cat?.name ?? 'Completed'}</span>
-                  <span class="s-folder-count">{cat?.mangas?.nodes.length ?? 0} manga</span>
+                  <span class="s-folder-count">{cat?.mangas?.nodes?.length ?? 0} manga</span>
                   <span class="s-folder-badge">built-in</span>
                   <div class="s-folder-actions">
                     <button class="s-btn-icon" class:muted={hidden} onclick={() => toggleHidden(id)} title={hidden ? 'Show tab in library' : 'Hide tab from library'}>

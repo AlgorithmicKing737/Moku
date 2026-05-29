@@ -1,39 +1,4 @@
-Major Revisions:
- - Moku-Share to Easily Migrate/Share Manga (Investigate Usecase/Feasibility)
-   - Moku-Share allows exporting of Manga
-      - Compressed Format (Storage)
-      - Import as Local-Source
-         - Takes existing Local-Source or Creates Own
+Revival of the TODO List!!!!!
 
-Minor Revisions:
- - Investigate feasibility of Multi-Page Screenshot (Reader)
- - Revise Migration (https://github.com/Suwayomi/Suwayomi-WebUI/pull/1073)
 
-Priority Bugs:
- - Fix Library-Refresh System (TESTING)
-
- - Suwayomi RESET
-   - Allow User to Wipe Suwayomi (Scratch)
-   - If Possible, Component based Wipe (Library, Etc)
-
-Pending/On-Hold:
-- Enable Cloudflare Bypass (Suwayomi Config) (Requires Patching)
- - Working on 3D Display Cards
- - Add Flathub Support (Pending Video)
-
- - Change Auto-Link Threshold
-   - Fix Auto-Link De-dupe for Images
-   - Optimize Auto-Link Latency (IP)
-
-In-Progress:
-- Fix Tracking Login
-   - Pasting OAuth URL is not User-Friendly, Look for Alternatives
-
- - Apply Syer's Fix for Library on Backup Load (Manga Metadata)
-   - Note User's have to always install extensions manually
-      - Create "Missing Source" for Manga
-
- - Wire Series-Detail Refresh to Fix Manga-Metadata (MAJOR)
-
- - UI LOGIN DOES NOT WORK OFFLINE
-Notes from last time:
+- Reminder to Completely Test Settings

@@ -87,6 +87,6 @@ export function mapCategory(raw: Record<string, unknown>): Category {
     default:           raw.default as boolean,
     includeInUpdate:   raw.includeInUpdate as boolean,
     includeInDownload: raw.includeInDownload as boolean,
-    mangas:            (raw.mangas as { nodes: Record<string, unknown>[] })?.nodes?.map(mapManga),
+    mangas:            { nodes: (raw.mangas as { nodes: Record<string, unknown>[] })?.nodes?.map(mapManga) ?? [] },
   }
 }

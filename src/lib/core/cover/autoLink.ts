@@ -1,13 +1,25 @@
-import { appState } from '$lib/state/app.svelte'
+import { settingsState, updateSettings } from '$lib/state/settings.svelte'
 import type { Manga } from '$lib/types'
 
-export function autoLinkLibrary(focal: Manga, allManga: Manga[]): Promise<number> {
+function linkManga(focalId: number, targetId: number) {
+  const existing = settingsState.settings.mangaLinks?.[focalId] ?? []
+  if (existing.includes(targetId)) return
+  updateSettings({
+    mangaLinks: {
+      ...settingsState.settings.mangaLinks,
+      [focalId]: [...existing, targetId],
+    },
+  })
+}
+
+export function autoLinkLibrary(focal: Manga | null | undefined, allManga: Manga[]): Promise<number> {
+  if (!focal) return Promise.resolve(0)
   return new Promise(resolve => {
     const worker = new Worker(new URL('./autoLinkWorker.ts', import.meta.url), { type: 'module' })
 
     worker.onmessage = (e: MessageEvent<number[]>) => {
       const matches = e.data
-      for (const id of matches) appState.linkManga(focal.id, id)
+      for (const id of matches) linkManga(focal.id, id)
       worker.terminate()
       resolve(matches.length)
     }
@@ -18,7 +30,7 @@ export function autoLinkLibrary(focal: Manga, allManga: Manga[]): Promise<number
       focalTitle: focal.title,
       focalId:    focal.id,
       allManga:   allManga.map(m => ({ id: m.id, title: m.title })),
-      linkedIds:  appState.settings.mangaLinks?.[focal.id] ?? [],
+      linkedIds:  settingsState.settings.mangaLinks?.[focal.id] ?? [],
     })
   })
 }

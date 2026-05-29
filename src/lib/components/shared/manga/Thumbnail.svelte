@@ -1,7 +1,6 @@
 <script lang="ts">
-  import { settings } from "$lib/state/settings.svelte";
-  import { getBlobUrl } from "$lib/core/cache/imageCache";
-  import { platformService } from "$lib/platform-service/index";
+  import { settingsState } from "$lib/state/settings.svelte";
+  import { getBlobUrl }    from "$lib/core/cache/imageCache";
 
   let {
     src,
@@ -23,7 +22,18 @@
     [key: string]: any;
   } = $props();
 
-  const isAuth = $derived((settings.serverAuthMode ?? "NONE") !== "NONE");
+  function getServerUrl(): string {
+    const url = settingsState.settings.serverUrl;
+    return typeof url === "string" && url.trim() ? url.replace(/\/$/, "") : "http://127.0.0.1:4567";
+  }
+
+  function plainThumbUrl(path: string): string {
+    if (!path) return "";
+    if (path.startsWith("http")) return path;
+    return `${getServerUrl()}${path}`;
+  }
+
+  const isAuth = $derived((settingsState.settings.serverAuthMode ?? "NONE") !== "NONE");
 
   let blobUrl = $state("");
   let reqId   = 0;
@@ -35,8 +45,8 @@
 
     if (!_isAuth || !_src) { blobUrl = ""; return; }
 
-    const id     = ++reqId;
-    const bareUrl = _src.startsWith("http") ? _src : `${platformService.getServerUrl()}${_src}`;
+    const id      = ++reqId;
+    const bareUrl = _src.startsWith("http") ? _src : `${getServerUrl()}${_src}`;
     getBlobUrl(bareUrl, _priority)
       .then(u  => { if (id === reqId) blobUrl = u; })
       .catch(() => { if (id === reqId) blobUrl = ""; });
@@ -45,7 +55,7 @@
   const resolved = $derived(
     isAuth
       ? (blobUrl || undefined)
-      : (src ? platformService.plainThumbUrl(src) : undefined)
+      : (src ? plainThumbUrl(src) : undefined)
   );
 </script>
 

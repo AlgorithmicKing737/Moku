@@ -7,21 +7,38 @@ export type PlatformFeature =
   | 'discord-rpc'
 
 export interface ServerLaunchConfig {
-  jarPath:  string
-  port:     number
-  dataPath: string
+  port?: number
+  [key: string]: unknown
 }
 
 export interface DiscordPresence {
-  title:           string
-  chapter:         string
-  startTimestamp?: number
+  state?: string
+  details?: string
+  [key: string]: unknown
 }
 
 export interface AppUpdateInfo {
   version: string
-  url:     string
-  notes?:  string
+  url: string
+  notes: string
+}
+
+export interface StorageInfo {
+  manga_bytes: number
+  total_bytes: number
+  free_bytes:  number
+  path:        string
+}
+
+export interface MigrateProgress {
+  done:    number
+  total:   number
+  current: string
+}
+
+export interface UpdateProgress {
+  downloaded: number
+  total:      number | null
 }
 
 export interface PlatformAdapter {
@@ -52,5 +69,32 @@ export interface PlatformAdapter {
   getVersion(): Promise<string>
   openExternal(url: string): Promise<void>
   checkForAppUpdate(): Promise<AppUpdateInfo | null>
-  installAppUpdate(): Promise<void>
+  installAppUpdate(tag: string): Promise<void>
+  restartApp(): Promise<void>
+
+  getDefaultDownloadsPath(): Promise<string>
+  getStorageInfo(downloadsPath: string): Promise<StorageInfo>
+  checkPathExists(path: string): Promise<boolean>
+  createDirectory(path: string): Promise<void>
+  openPath(path: string): Promise<void>
+  getAutoBackupDir(): Promise<string>
+
+  clearMokuCache(): Promise<void>
+  clearSuwayomiCache(): Promise<void>
+  resetSuwayomiData(): Promise<void>
+  exitApp(): Promise<void>
+
+  onUpdateProgress(cb: (p: UpdateProgress) => void): Promise<() => void>
+  onUpdateLaunching(cb: () => void): Promise<() => void>
+  listReleases(): Promise<ReleaseInfo[]>
+  onMigrateProgress(cb: (p: MigrateProgress) => void): Promise<() => void>
+  migrateDownloads(src: string, dst: string): Promise<void>
+}
+
+export interface ReleaseInfo {
+  tag_name:     string
+  name:         string
+  body:         string
+  published_at: string
+  html_url:     string
 }

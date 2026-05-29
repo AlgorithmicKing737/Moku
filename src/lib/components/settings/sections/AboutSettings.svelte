@@ -1,14 +1,13 @@
 <script lang="ts">
-  import { invoke } from '@tauri-apps/api/core'
-  import { listen } from '@tauri-apps/api/event'
-  import { getVersion } from '@tauri-apps/api/app'
-  import { open as openUrl } from '@tauri-apps/plugin-shell'
+  import { platformService } from '$lib/platform-service'
   import { autoBackupAppData } from '$lib/core/backup'
   import { requestManager } from '$lib/request-manager'
+  import type { ReleaseInfo } from '$lib/platform-adapters/types'
 
-  interface ReleaseInfo { tag_name: string; name: string; body: string; published_at: string; html_url: string }
   type UpdatePhase = 'idle' | 'downloading' | 'launching' | 'ready' | 'error'
-  const IS_WINDOWS = navigator.userAgent.includes('Windows')
+
+  const supportsUpdates = platformService.isSupported('app-updates')
+  const IS_WINDOWS      = navigator.userAgent.includes('Windows')
 
   interface AboutServer { name: string; version: string; buildType: string; buildTime: number; github: string; discord: string }
   interface AboutWebUI  { channel: string; tag: string; updateTimestamp: number }
@@ -29,32 +28,33 @@
   let webuiInfo  = $state<AboutWebUI | null>(null)
 
   $effect(() => {
-    getVersion().then(v => appVersion = v).catch(() => appVersion = 'unknown')
+    platformService.getVersion().then(v => appVersion = v).catch(() => appVersion = 'unknown')
     if (!releasesLoaded) { releasesLoaded = true; loadReleases() }
+    loadServerInfo()
   })
 
-  $effect(() => { loadServerInfo() })
-
   $effect(() => {
+    if (!supportsUpdates) return
     let unlisten: (() => void) | undefined
-    listen<{ downloaded: number; total: number | null }>('update-progress', e => {
-      dlBytes = e.payload.downloaded; dlTotal = e.payload.total ?? null
+    platformService.onUpdateProgress(p => {
+      dlBytes = p.downloaded; dlTotal = p.total ?? null
     }).then(fn => { unlisten = fn })
     return () => unlisten?.()
   })
 
   $effect(() => {
+    if (!supportsUpdates) return
     let unlisten: (() => void) | undefined
-    listen('update-launching', () => { updatePhase = 'launching' }).then(fn => { unlisten = fn })
+    platformService.onUpdateLaunching(() => { updatePhase = 'launching' }).then(fn => { unlisten = fn })
     return () => unlisten?.()
   })
 
   async function loadReleases() {
+    if (!supportsUpdates) return
     releasesLoading = true; releasesError = null
     try {
       const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Request timed out after 10s')), 10_000))
-      const all = await Promise.race([invoke<ReleaseInfo[]>('list_releases'), timeout])
-      releases = all.filter(r => typeof r.tag_name === 'string' && r.tag_name.trim())
+      releases = await Promise.race([platformService.listReleases(), timeout])
     } catch (e: any) {
       releasesError = e instanceof Error ? e.message : String(e)
     } finally { releasesLoading = false }
@@ -81,7 +81,7 @@
   }
 
   const onLatestVersion = $derived((() => {
-    if (releasesLoading || releases.length === 0 || !appVersion || appVersion === '…') return false
+    if (!supportsUpdates || releasesLoading || releases.length === 0 || !appVersion || appVersion === '…') return false
     const sorted = releases.slice().sort((a, b) => compareSemver(a.tag_name, b.tag_name))
     return compareSemver(appVersion, sorted[0].tag_name) >= 0
   })())
@@ -115,11 +115,11 @@
     try {
       if (IS_WINDOWS) {
         await autoBackupAppData()
-        try { await invoke('kill_server') } catch {}
-        await invoke('download_and_install_update', { tag: release.tag_name })
+        try { await platformService.stopServer() } catch {}
+        await platformService.installAppUpdate(release.tag_name)
         updatePhase = 'ready'
       } else {
-        await openUrl(release.html_url)
+        await platformService.openExternal(release.html_url)
         updatePhase = 'idle'; targetTag = null
       }
     } catch (e: any) {
@@ -128,7 +128,7 @@
     }
   }
 
-  async function restartNow() { await invoke('restart_app') }
+  async function restartNow() { await platformService.restartApp() }
   function cancelUpdate() { updatePhase = 'idle'; updateError = null; targetTag = null; dlBytes = 0; dlTotal = null }
 </script>
 
@@ -149,9 +149,11 @@
     <div class="s-section-body">
       <div class="s-row">
         <div class="s-row-info"><span class="s-label">Installed</span><span class="s-desc">v{appVersion}</span></div>
-        <button class="s-btn" onclick={() => { releasesError = null; loadReleases() }} disabled={releasesLoading}>
-          {releasesLoading ? 'Loading…' : 'Refresh'}
-        </button>
+        {#if supportsUpdates}
+          <button class="s-btn" onclick={() => { releasesError = null; loadReleases() }} disabled={releasesLoading}>
+            {releasesLoading ? 'Loading…' : 'Refresh'}
+          </button>
+        {/if}
       </div>
       {#if onLatestVersion}
         <div class="s-row">
@@ -225,58 +227,60 @@
     </div>
   {/if}
 
-  <div class="s-section">
-    <p class="s-section-title">Releases</p>
-    <div class="s-section-body">
-      {#if releasesError}
-        <p class="s-empty" style="color:var(--color-error)">{releasesError}</p>
-      {:else if releasesLoading}
-        <p class="s-empty">Fetching releases…</p>
-      {:else if releases.length === 0}
-        <p class="s-empty">No releases found.</p>
-      {:else}
-        <div class="s-release-scroll">
-          {#each releases as release}
-            {@const isCurrent    = isCurrentVersion(release.tag_name)}
-            {@const isExpanded   = expandedTag === release.tag_name}
-            {@const isTarget     = targetTag === release.tag_name}
-            {@const isInstalling = isTarget && updatePhase === 'downloading'}
-            <div class="s-release-row" class:current={isCurrent}>
-              <div class="s-release-header">
-                <div class="s-release-meta">
-                  <span class="s-release-tag">{release.tag_name}</span>
-                  {#if isCurrent}<span class="s-release-badge">installed</span>{/if}
-                  {#if release.published_at}<span class="s-release-date">{fmtDate(release.published_at)}</span>{/if}
-                </div>
-                <div class="s-btn-row">
-                  {#if release.body.trim()}
-                    <button class="s-btn" onclick={() => expandedTag = isExpanded ? null : release.tag_name}>
-                      {isExpanded ? 'Hide' : 'Changelog'}
-                    </button>
-                  {/if}
-                  {#if !isCurrent}
-                    {#if IS_WINDOWS}
-                      <button class="s-btn" class:s-btn-accent={!isInstalling}
-                        disabled={updatePhase === 'downloading'} onclick={() => installUpdate(release)}>
-                        {isInstalling ? 'Downloading…' : 'Install'}
+  {#if supportsUpdates}
+    <div class="s-section">
+      <p class="s-section-title">Releases</p>
+      <div class="s-section-body">
+        {#if releasesError}
+          <p class="s-empty" style="color:var(--color-error)">{releasesError}</p>
+        {:else if releasesLoading}
+          <p class="s-empty">Fetching releases…</p>
+        {:else if releases.length === 0}
+          <p class="s-empty">No releases found.</p>
+        {:else}
+          <div class="s-release-scroll">
+            {#each releases as release}
+              {@const isCurrent    = isCurrentVersion(release.tag_name)}
+              {@const isExpanded   = expandedTag === release.tag_name}
+              {@const isTarget     = targetTag === release.tag_name}
+              {@const isInstalling = isTarget && updatePhase === 'downloading'}
+              <div class="s-release-row" class:current={isCurrent}>
+                <div class="s-release-header">
+                  <div class="s-release-meta">
+                    <span class="s-release-tag">{release.tag_name}</span>
+                    {#if isCurrent}<span class="s-release-badge">installed</span>{/if}
+                    {#if release.published_at}<span class="s-release-date">{fmtDate(release.published_at)}</span>{/if}
+                  </div>
+                  <div class="s-btn-row">
+                    {#if release.body.trim()}
+                      <button class="s-btn" onclick={() => expandedTag = isExpanded ? null : release.tag_name}>
+                        {isExpanded ? 'Hide' : 'Changelog'}
                       </button>
-                    {:else}
-                      <button class="s-btn" onclick={() => installUpdate(release)}>Open on GitHub</button>
                     {/if}
-                  {/if}
+                    {#if !isCurrent}
+                      {#if IS_WINDOWS}
+                        <button class="s-btn" class:s-btn-accent={!isInstalling}
+                          disabled={updatePhase === 'downloading'} onclick={() => installUpdate(release)}>
+                          {isInstalling ? 'Downloading…' : 'Install'}
+                        </button>
+                      {:else}
+                        <button class="s-btn" onclick={() => installUpdate(release)}>Open on GitHub</button>
+                      {/if}
+                    {/if}
+                  </div>
                 </div>
+                {#if isExpanded && release.body.trim()}
+                  <div class="s-release-body">
+                    <pre class="s-release-body pre">{release.body.trim()}</pre>
+                  </div>
+                {/if}
               </div>
-              {#if isExpanded && release.body.trim()}
-                <div class="s-release-body">
-                  <pre class="s-release-body pre">{release.body.trim()}</pre>
-                </div>
-              {/if}
-            </div>
-          {/each}
-        </div>
-      {/if}
+            {/each}
+          </div>
+        {/if}
+      </div>
     </div>
-  </div>
+  {/if}
 
   <div class="s-section">
     <p class="s-section-title">Links</p>

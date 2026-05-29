@@ -1,28 +1,31 @@
 <script lang="ts">
   import { Check, Funnel } from 'phosphor-svelte'
-  import type { MangaStatus } from '$lib/server-adapters/types'
+  import type { LibraryContentFilter, LibraryStatusFilter } from '$lib/state/library.svelte'
 
   interface Props {
-    status:        MangaStatus | 'all'
-    unread:        boolean
-    downloaded:    boolean
-    bookmarked:    boolean
+    status:        LibraryStatusFilter
+    filters:       Partial<Record<LibraryContentFilter, boolean>>
     hasActive:     boolean
     open:          boolean
     onToggle:      () => void
-    onStatus:      (s: MangaStatus | 'all') => void
-    onUnread:      () => void
-    onDownloaded:  () => void
-    onBookmarked:  () => void
+    onStatusChange: (s: LibraryStatusFilter) => void
+    onFilterToggle: (f: LibraryContentFilter) => void
     onClear:       () => void
   }
 
   let {
-    status, unread, downloaded, bookmarked, hasActive, open,
-    onToggle, onStatus, onUnread, onDownloaded, onBookmarked, onClear,
+    status, filters, hasActive, open,
+    onToggle, onStatusChange, onFilterToggle, onClear,
   }: Props = $props()
 
-  const STATUSES: [MangaStatus, string][] = [
+  const CONTENT_FILTERS: [LibraryContentFilter, string][] = [
+    ['unread',     'Unread'],
+    ['started',    'Started'],
+    ['downloaded', 'Downloaded'],
+    ['bookmarked', 'Bookmarked'],
+  ]
+
+  const STATUSES: [LibraryStatusFilter, string][] = [
     ['ONGOING',             'Ongoing'],
     ['COMPLETED',           'Completed'],
     ['ON_HIATUS',           'Hiatus'],
@@ -53,21 +56,17 @@
       <div class="divider"></div>
       <p class="section-label">Content</p>
 
-      {#each [
-        { label: 'Unread',     active: unread,     handler: onUnread },
-        { label: 'Downloaded', active: downloaded, handler: onDownloaded },
-        { label: 'Bookmarked', active: bookmarked, handler: onBookmarked },
-      ] as f}
+      {#each CONTENT_FILTERS as [key, label]}
         <button
           class="item"
-          class:item-active={f.active}
+          class:item-active={!!filters[key]}
           role="menuitem"
-          onclick={f.handler}
+          onclick={() => onFilterToggle(key)}
         >
-          <span class="check" class:check-on={f.active}>
-            {#if f.active}<Check size={9} weight="bold" />{/if}
+          <span class="check" class:check-on={!!filters[key]}>
+            {#if filters[key]}<Check size={9} weight="bold" />{/if}
           </span>
-          {f.label}
+          {label}
         </button>
       {/each}
 
@@ -79,7 +78,7 @@
           class="item"
           class:item-active={status === s}
           role="menuitem"
-          onclick={() => onStatus(status === s ? 'all' : s)}
+          onclick={() => onStatusChange(status === s ? 'ALL' : s)}
         >
           <span class="check" class:check-on={status === s}>
             {#if status === s}<Check size={9} weight="bold" />{/if}
@@ -97,24 +96,19 @@
   .icon-btn {
     display: flex; align-items: center; justify-content: center;
     width: 30px; height: 30px;
-    border-radius: var(--radius-md);
-    border: 1px solid var(--border-dim);
-    background: var(--bg-raised);
-    color: var(--text-faint);
+    border-radius: var(--radius-md); border: 1px solid var(--border-dim);
+    background: var(--bg-raised); color: var(--text-faint);
     cursor: pointer;
     transition: color var(--t-base), border-color var(--t-base), background var(--t-base);
   }
-  .icon-btn:hover { color: var(--text-primary); border-color: var(--border-strong); }
+  .icon-btn:hover  { color: var(--text-primary); border-color: var(--border-strong); }
   .icon-btn.active { color: var(--accent-fg); border-color: var(--accent-dim); background: var(--accent-muted); }
 
   .panel {
     position: absolute; top: calc(100% + 6px); right: 0; z-index: 9999;
-    min-width: 220px;
-    background: var(--bg-raised);
-    border: 1px solid var(--border-base);
-    border-radius: var(--radius-lg);
-    padding: var(--sp-1);
-    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    min-width: 220px; background: var(--bg-raised);
+    border: 1px solid var(--border-base); border-radius: var(--radius-lg);
+    padding: var(--sp-1); box-shadow: 0 8px 32px rgba(0,0,0,0.5);
     animation: fadeIn 0.1s ease both;
   }
 
@@ -152,15 +146,14 @@
     cursor: pointer; text-align: left;
     transition: background var(--t-base), color var(--t-base);
   }
-  .item:hover { background: var(--bg-overlay); color: var(--text-primary); }
-  .item-active { color: var(--accent-fg); background: var(--accent-muted); font-weight: var(--weight-medium, 500); }
+  .item:hover        { background: var(--bg-overlay); color: var(--text-primary); }
+  .item-active       { color: var(--accent-fg); background: var(--accent-muted); font-weight: var(--weight-medium, 500); }
   .item-active:hover { background: var(--accent-dim); }
 
   .check {
     width: 13px; height: 13px; border-radius: 2px;
-    border: 1px solid var(--border-strong);
-    background: transparent; flex-shrink: 0;
-    display: flex; align-items: center; justify-content: center;
+    border: 1px solid var(--border-strong); background: transparent;
+    flex-shrink: 0; display: flex; align-items: center; justify-content: center;
     color: var(--bg-base);
     transition: background var(--t-base), border-color var(--t-base);
   }
