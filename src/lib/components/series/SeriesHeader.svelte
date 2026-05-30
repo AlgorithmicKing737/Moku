@@ -4,12 +4,14 @@
     Eye, ArrowsClockwise, LinkSimpleHorizontalBreak, ChartLineUp,
     MapPin, Gear, Trash, Image,
   } from 'phosphor-svelte'
-  import Thumbnail        from '$lib/components/shared/manga/Thumbnail.svelte'
+  import { goto }          from '$app/navigation'
+  import { page }          from '$app/stores'
+  import { get }           from 'svelte/store'
+  import Thumbnail         from '$lib/components/shared/manga/Thumbnail.svelte'
   import { resolvedCover } from '$lib/core/cover/coverResolver'
   import type { MangaPrefs }                                    from '$lib/state/series.svelte'
-  import type { Manga, Chapter, Category }                      from '$lib/types'
   import { setGenreFilter, setNavPage }                         from '$lib/state/app.svelte'
-  import { seriesState, setPreviewManga }                       from '$lib/state/series.svelte'
+  import { seriesState, setActiveManga, setPreviewManga }       from '$lib/state/series.svelte'
 
   interface ContinueChapter {
     chapter:    Chapter
@@ -66,16 +68,24 @@
   )
 
   const hasCoverOverride = $derived(
-    !!seriesState.settings.mangaPrefs?.[seriesState.activeManga?.id ?? manga?.id ?? 0]?.coverUrl
+    !!seriesState.settings.mangaPrefs?.[seriesState.activeManga?.id ?? -1]?.coverUrl
   )
 
   const altTitles = $derived(
     (manga as any)?.alternativeTitles ?? (manga as any)?.altTitles ?? []
   )
+
+  function goBack() {
+    const currentUrl = get(page).url.pathname
+    history.back()
+    setTimeout(() => {
+      if (get(page).url.pathname === currentUrl) goto('/library')
+    }, 100)
+  }
 </script>
 
 <div class="sidebar">
-  <button class="back" onclick={() => history.back()}>
+  <button class="back" onclick={goBack}>
     <ArrowLeft size={13} weight="light" /> Back
   </button>
 
@@ -122,7 +132,7 @@
       {#if manga?.genre?.length}
         <div class="genres">
           {#each (genresExpanded ? manga.genre : manga.genre.slice(0, 3)) as g}
-            <button class="genre" onclick={() => { setGenreFilter(g); setNavPage('search'); history.back() }}>{g}</button>
+            <button class="genre" onclick={() => { setGenreFilter(g); setNavPage('search'); setActiveManga(null) }}>{g}</button>
           {/each}
           {#if manga.genre.length > 3}
             <button class="genre-toggle" onclick={() => genresExpanded = !genresExpanded}>
@@ -242,9 +252,14 @@
     overflow: hidden; background: var(--bg-raised);
     border: 1px solid var(--border-dim); flex-shrink: 0;
     cursor: pointer; transition: opacity var(--t-base); padding: 0;
+    position: relative;
   }
   .cover-wrap:hover { opacity: 0.88; }
-  :global(.cover) { width: 100%; height: 100%; object-fit: cover; }
+  :global(.cover) {
+    display: block;
+    position: absolute; inset: 0;
+    width: 100%; height: 100%; object-fit: cover;
+  }
 
   .meta-skeleton { display: flex; flex-direction: column; gap: var(--sp-2); }
   .sk-line { border-radius: var(--radius-sm); }

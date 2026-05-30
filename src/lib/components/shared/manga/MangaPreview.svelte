@@ -4,18 +4,22 @@
     X, BookmarkSimple, ArrowSquareOut, Play, CircleNotch,
     Books, CaretDown, FolderSimplePlus, Folder, LinkSimpleHorizontalBreak, Image,
   } from "phosphor-svelte";
-  import Thumbnail          from "$lib/components/manga/Thumbnail.svelte";
-  import { appState }       from "$lib/state/app.svelte";
-  import { settings }       from "$lib/state/settings.svelte";
-  import { requestManager } from "$lib/request-manager/index";
-  import { queryCache }     from "$lib/core/cache/queryCache";
-  import { resolvedCover }  from "$lib/core/cover/coverResolver";
-  import { autoLinkLibrary } from "$lib/core/cover/autoLink";
-  import { toast }       from "$lib/state/notifications.svelte";
-  import { addBookmark }    from "$lib/state/app.svelte";
-  import CoverPickerPanel   from "$lib/components/series/CoverPickerPanel.svelte";
-  import SeriesLinkPanel    from "$lib/components/series/SeriesLinkPanel.svelte";
-  import type { Manga, Chapter, Category } from "$lib/types/index";
+  import Thumbnail        from "$lib/components/shared/manga/Thumbnail.svelte";
+  import CoverPickerPanel from "$lib/components/series/panels/CoverPickerPanel.svelte";
+  import SeriesLinkPanel  from "$lib/components/shared/manga/SeriesLinkPanel.svelte";
+  import { getAdapter }   from "$lib/request-manager";
+  import { cache, CACHE_KEYS } from "$lib/core/cache/queryCache";
+  import { resolvedCover }     from "$lib/core/cover/coverResolver";
+  import { autoLinkLibrary }   from "$lib/core/cover/autoLink";
+  import { settingsState }     from "$lib/state/settings.svelte";
+  import { addToast }          from "$lib/state/notifications.svelte";
+  import {
+    seriesState,
+    setPreviewManga, setActiveManga, openReader, addBookmark,
+  } from "$lib/state/series.svelte";
+  import { app, setNavPage, setGenreFilter } from "$lib/state/app.svelte";
+  import type { Manga, Chapter, Category } from "$lib/types";
+
 
   let manga: Manga | null         = $state(null);
   let chapters: Chapter[]         = $state([]);
@@ -32,26 +36,31 @@
   let queueingAll                 = $state(false);
   let fetchError: string | null   = $state(null);
   let folderRef: HTMLDivElement   = $state() as HTMLDivElement;
-  let linkPickerOpen              = $state(false);
-  let allMangaForLink: Manga[]    = $state([]);
-  let loadingLinkList             = $state(false);
-  let coverPickerOpen             = $state(false);
 
-  let originNavPage = appState.navPage;
+  let linkPickerOpen           = $state(false);
+  let allMangaForLink: Manga[] = $state([]);
+  let loadingLinkList          = $state(false);
+  let coverPickerOpen          = $state(false);
+
+  let originNavPage = app.navPage;
 
   const linkedIds = $derived(
-    appState.previewManga ? (settings.mangaLinks?.[appState.previewManga.id] ?? []) : [],
+    seriesState.previewManga
+      ? (settingsState.settings.mangaLinks?.[seriesState.previewManga.id] ?? [])
+      : [],
   );
+
   const hasCoverOverride = $derived(
-    !!settings.mangaPrefs?.[appState.previewManga?.id ?? -1]?.coverUrl
+    !!settingsState.settings.mangaPrefs?.[seriesState.previewManga?.id ?? -1]?.coverUrl,
   );
-  const displayManga    = $derived(manga ?? appState.previewManga);
+
+  const displayManga    = $derived(manga ?? seriesState.previewManga);
   const totalCount      = $derived(chapters.length);
-  const readCount       = $derived(chapters.filter((c) => c.isRead).length);
+  const readCount       = $derived(chapters.filter((c) => c.read).length);
   const unreadCount     = $derived(totalCount - readCount);
-  const downloadedCount = $derived(chapters.filter((c) => c.isDownloaded).length);
-  const bookmarkCount   = $derived(chapters.filter((c) => c.isBookmarked).length);
-  const inLibrary       = $derived(manga?.inLibrary ?? appState.previewManga?.inLibrary ?? false);
+  const downloadedCount = $derived(chapters.filter((c) => c.downloaded).length);
+  const bookmarkCount   = $derived(chapters.filter((c) => c.bookmarked).length);
+  const inLibrary       = $derived(manga?.inLibrary ?? seriesState.previewManga?.inLibrary ?? false);
   const scanlators      = $derived(
     [...new Set(chapters.map((c) => c.scanlator).filter((s): s is string => !!s?.trim()))],
   );
@@ -60,7 +69,9 @@
       .map((c) => (c.uploadDate ? new Date(c.uploadDate).getTime() : null))
       .filter((d): d is number => d !== null && !isNaN(d)),
   );
-  const statusLabel = $derived(
+  const firstUpload  = $derived(uploadDates.length ? new Date(Math.min(...uploadDates)) : null);
+  const lastUpload   = $derived(uploadDates.length ? new Date(Math.max(...uploadDates)) : null);
+  const statusLabel  = $derived(
     displayManga?.status
       ? displayManga.status.charAt(0) + displayManga.status.slice(1).toLowerCase()
       : null,
@@ -69,24 +80,25 @@
 
   const continueChapter = $derived.by(() => {
     if (!chapters.length) return null;
-    const asc     = [...chapters];
-    const anyRead = asc.some((c) => c.isRead);
+    const asc      = [...chapters];
+    const anyRead  = asc.some((c) => c.read);
     const bookmark = displayManga
-      ? appState.bookmarks.find((b) => b.mangaId === displayManga!.id)
+      ? seriesState.bookmarks.find((b) => b.mangaId === displayManga!.id)
       : null;
 
     if (bookmark) {
       const ch = asc.find((c) => c.id === bookmark.chapterId);
       if (ch) {
         const isLastChapter = asc[asc.length - 1]?.id === ch.id;
-        const allRead       = asc.every((c) => c.isRead);
+        const allRead       = asc.every((c) => c.read);
         if (!(isLastChapter && allRead))
           return { ch, type: "continue" as const, resumePage: bookmark.pageNumber };
       }
     }
-    const inProgress  = asc.find((c) => !c.isRead && (c.lastPageRead ?? 0) > 0);
+
+    const inProgress  = asc.find((c) => !c.read && (c.lastPageRead ?? 0) > 0);
     if (inProgress)   return { ch: inProgress, type: "continue" as const, resumePage: inProgress.lastPageRead! };
-    const firstUnread = asc.find((c) => !c.isRead);
+    const firstUnread = asc.find((c) => !c.read);
     if (firstUnread)  return { ch: firstUnread, type: (anyRead ? "continue" : "start") as const, resumePage: null };
     return { ch: asc[0], type: "reread" as const, resumePage: null };
   });
@@ -99,55 +111,64 @@
     return `Continue · Ch.${ch.chapterNumber}${resumePage ? ` p.${resumePage}` : ""}`;
   });
 
+
   let detailAbort: AbortController | null  = null;
   let chapterAbort: AbortController | null = null;
+
 
   function close() {
     detailAbort?.abort();
     chapterAbort?.abort();
-    appState.previewManga = null;
+    setPreviewManga(null);
     manga = null; chapters = []; descExpanded = false;
     folderOpen = false; creatingFolder = false; newFolderName = ""; fetchError = null;
+  }
+
+  function formatDate(d: Date) {
+    return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
   }
 
   async function openLinkPicker() {
     linkPickerOpen = true;
     if (allMangaForLink.length) return;
     loadingLinkList = true;
-    requestManager.getAllManga()
-      .then((d) => { allMangaForLink = d; })
+    getAdapter().getMangaList({})
+      .then((d) => { allMangaForLink = d.items; })
       .catch(console.error)
       .finally(() => { loadingLinkList = false; });
   }
+
+  function closeLinkPicker() { linkPickerOpen = false; }
 
   async function openCoverPicker() {
     coverPickerOpen = true;
     if (allMangaForLink.length) return;
     loadingLinkList = true;
-    requestManager.getAllManga()
-      .then((d) => { allMangaForLink = d; })
+    getAdapter().getMangaList({})
+      .then((d) => { allMangaForLink = d.items; })
       .catch(console.error)
       .finally(() => { loadingLinkList = false; });
   }
 
   $effect(() => {
-    const focal = appState.previewManga;
+    const shouldAutoLink = settingsState.settings.autoLinkOnOpen;
+    const focal = seriesState.previewManga;
     if (focal) {
-      originNavPage = appState.navPage;
+      originNavPage = app.navPage;
       load(focal.id);
       loadCategories(focal.id);
-      if (settings.autoLinkOnOpen) {
+      if (shouldAutoLink) {
         if (allMangaForLink.length) {
           autoLinkLibrary(focal, allMangaForLink)
-            .then(n => { if (n > 0) toast({ kind: "success", title: "Series linked", body: `${n} new link${n === 1 ? "" : "s"} found` }); });
+            .then(n => { if (n > 0) addToast({ kind: "success", title: "Series linked", body: `${n} new link${n === 1 ? "" : "s"} found` }); });
         } else {
           loadingLinkList = true;
-          requestManager.getAllManga()
-            .then((nodes) => {
-              allMangaForLink = nodes;
-              return autoLinkLibrary(focal, nodes);
+          getAdapter().getMangaList({})
+            .then((d) => {
+              allMangaForLink = d.items;
+              return autoLinkLibrary(focal, d.items);
             })
-            .then(n => { if (n > 0) toast({ kind: "success", title: "Series linked", body: `${n} new link${n === 1 ? "" : "s"} found` }); })
+            .then(n => { if (n > 0) addToast({ kind: "success", title: "Series linked", body: `${n} new link${n === 1 ? "" : "s"} found` }); })
             .catch(console.error)
             .finally(() => { loadingLinkList = false; });
         }
@@ -159,29 +180,42 @@
     detailAbort?.abort(); chapterAbort?.abort();
     const dCtrl = new AbortController(), cCtrl = new AbortController();
     detailAbort = dCtrl; chapterAbort = cCtrl;
-    manga = appState.previewManga as Manga;
+    manga = seriesState.previewManga as Manga;
     chapters = []; descExpanded = false; fetchError = null;
     loadingDetail = true; loadingChapters = true;
 
-    requestManager.fetchManga(id, dCtrl.signal)
+    (async (): Promise<Manga> => {
+      const key = CACHE_KEYS.MANGA(id);
+      if (cache.has(key)) return cache.get(key, () => Promise.resolve(seriesState.previewManga as Manga)) as Promise<Manga>;
+      try {
+        return await getAdapter().fetchManga(String(id), dCtrl.signal);
+      } catch (e: any) {
+        if (e?.name === "AbortError") throw e;
+        const local = await getAdapter().getManga(String(id), dCtrl.signal);
+        if (local) return local;
+        throw new Error("Could not load manga details");
+      }
+    })()
       .then((fullManga) => {
         if (dCtrl.signal.aborted) return;
+        if (!cache.has(CACHE_KEYS.MANGA(id)))
+          cache.get(CACHE_KEYS.MANGA(id), () => Promise.resolve(fullManga));
         manga = fullManga; loadingDetail = false;
       })
       .catch((e) => {
         if (e?.name === "AbortError") return;
-        manga = appState.previewManga as Manga;
+        manga = seriesState.previewManga as Manga;
         fetchError = "Could not load full details — showing cached data";
         loadingDetail = false;
       });
 
-    requestManager.getChapters(id, cCtrl.signal)
+    getAdapter().getChapters(String(id), cCtrl.signal)
       .then(async (nodes) => {
         if (cCtrl.signal.aborted) return;
         let sorted = [...nodes].sort((a, b) => a.sourceOrder - b.sourceOrder);
         if (sorted.length === 0) {
           try {
-            const fetched = await requestManager.fetchChapters(id, cCtrl.signal);
+            const fetched = await getAdapter().fetchChapters(String(id), cCtrl.signal);
             if (!cCtrl.signal.aborted)
               sorted = [...fetched].sort((a, b) => a.sourceOrder - b.sourceOrder);
           } catch (e: any) {
@@ -201,36 +235,38 @@
     if (!manga) return;
     togglingLib = true;
     const next = !manga.inLibrary;
-    await requestManager.updateManga(manga.id, { inLibrary: next }).catch(console.error);
+    if (next) await getAdapter().addToLibrary(String(manga.id)).catch(console.error);
+    else      await getAdapter().removeFromLibrary(String(manga.id)).catch(console.error);
     manga = { ...manga, inLibrary: next };
-    queryCache.clear(`manga:${manga.id}`);
-    queryCache.clear("library");
+    cache.clear(CACHE_KEYS.MANGA(manga.id));
+    cache.get(CACHE_KEYS.MANGA(manga.id), () => Promise.resolve(manga!));
+    cache.clear(CACHE_KEYS.LIBRARY);
     togglingLib = false;
-    toast({ kind: "success", title: next ? "Added to library" : "Removed from library" });
+    addToast({ kind: "success", title: next ? "Added to library" : "Removed from library" });
   }
 
   async function downloadAll() {
-    const ids = chapters.filter((c) => !c.isDownloaded && !c.isRead).map((c) => c.id);
+    const ids = chapters.filter((c) => !c.downloaded && !c.read).map((c) => String(c.id));
     if (!ids.length) return;
     queueingAll = true;
-    await requestManager.enqueueChaptersDownload(ids).catch(console.error);
-    toast({ kind: "download", title: "Downloading", body: `${ids.length} chapters queued` });
+    await getAdapter().enqueueDownloads(ids).catch(console.error);
+    addToast({ kind: "download", title: "Downloading", body: `${ids.length} chapters queued` });
     queueingAll = false;
   }
 
   function openSeriesDetail() {
     if (!displayManga) return;
-    appState.activeManga = displayManga;
-    appState.navPage     = originNavPage;
+    setActiveManga(displayManga);
+    setNavPage(originNavPage);
     close();
   }
 
   function loadCategories(mangaId: number) {
     catsLoading = true;
-    requestManager.getCategories()
+    getAdapter().getCategories()
       .then((cats) => {
-        allCategories   = cats.filter((c: Category) => c.id !== 0);
-        mangaCategories = allCategories.filter((c: Category) => c.mangas?.nodes.some((m: Manga) => m.id === mangaId));
+        allCategories   = cats.filter((c) => c.id !== 0);
+        mangaCategories = allCategories.filter((c) => c.mangas?.some((m) => m.id === mangaId));
       })
       .catch(console.error)
       .finally(() => { catsLoading = false; });
@@ -239,26 +275,35 @@
   async function checkAndMarkCompleted(mangaId: number, chaps: Chapter[]) {
     const mangaStatus = (manga ?? displayManga)?.status;
     const isOngoing   = mangaStatus === "ONGOING";
-    if (chaps.length && !isOngoing) {
-      const allRead   = chaps.every((c) => c.isRead);
-      const completed = allCategories.find((c) => c.name === "Completed");
-      if (completed) {
-        const inCompleted = mangaCategories.some((c) => c.id === completed.id);
-        if (allRead && !inCompleted)       mangaCategories = [...mangaCategories, completed];
-        else if (!allRead && inCompleted)  mangaCategories = mangaCategories.filter((c) => c.id !== completed.id);
-      }
+    if (!chaps.length || isOngoing) return;
+
+    const allRead   = chaps.every((c) => c.read);
+    const completed = allCategories.find((c) => c.name === "Completed");
+    if (!completed) return;
+
+    const inCompleted = mangaCategories.some((c) => c.id === completed.id);
+    if (allRead && !inCompleted) {
+      await getAdapter().updateMangaCategories(String(mangaId), [completed.id], []).catch(console.error);
+      mangaCategories = [...mangaCategories, completed];
+    } else if (!allRead && inCompleted) {
+      await getAdapter().updateMangaCategories(String(mangaId), [], [completed.id]).catch(console.error);
+      mangaCategories = mangaCategories.filter((c) => c.id !== completed.id);
     }
   }
 
   async function toggleCategory(cat: Category) {
-    if (!appState.previewManga) return;
-    const mangaId = appState.previewManga.id;
+    if (!seriesState.previewManga) return;
+    const mangaId = seriesState.previewManga.id;
     const inCat   = mangaCategories.some((c) => c.id === cat.id);
-    await requestManager.updateMangaCategories(mangaId, inCat ? [] : [cat.id], inCat ? [cat.id] : []).catch(console.error);
+    await getAdapter().updateMangaCategories(
+      String(mangaId),
+      inCat ? [] : [cat.id],
+      inCat ? [cat.id] : [],
+    ).catch(console.error);
     if (!inCat && !inLibrary) {
-      await requestManager.updateManga(mangaId, { inLibrary: true }).catch(console.error);
+      await getAdapter().addToLibrary(String(mangaId)).catch(console.error);
       if (manga) manga = { ...manga, inLibrary: true };
-      queryCache.clear("library");
+      cache.clear(CACHE_KEYS.LIBRARY);
     }
     mangaCategories = inCat
       ? mangaCategories.filter((c) => c.id !== cat.id)
@@ -267,15 +312,15 @@
 
   async function handleFolderCreate() {
     const name = newFolderName.trim();
-    if (!name || !appState.previewManga) return;
+    if (!name || !seriesState.previewManga) return;
     try {
-      const cat = await requestManager.createCategory(name);
+      const cat = await getAdapter().createCategory(name);
       allCategories = [...allCategories, cat];
-      await requestManager.updateMangaCategories(appState.previewManga.id, [cat.id], []);
+      await getAdapter().updateMangaCategories(String(seriesState.previewManga.id), [cat.id], []);
       if (!inLibrary) {
-        await requestManager.updateManga(appState.previewManga.id, { inLibrary: true }).catch(console.error);
+        await getAdapter().addToLibrary(String(seriesState.previewManga.id)).catch(console.error);
         if (manga) manga = { ...manga, inLibrary: true };
-        queryCache.clear("library");
+        cache.clear(CACHE_KEYS.LIBRARY);
       }
       mangaCategories = [...mangaCategories, cat];
     } catch (e) { console.error(e); }
@@ -295,6 +340,8 @@
     }
   });
 
+  function focusAction(node: HTMLElement) { node.focus(); }
+
   function onKey(e: KeyboardEvent) { if (e.key === "Escape") close(); }
   onMount(() => window.addEventListener("keydown", onKey));
   onDestroy(() => {
@@ -302,11 +349,9 @@
     detailAbort?.abort();
     chapterAbort?.abort();
   });
-
-  function focusAction(node: HTMLElement) { node.focus(); }
 </script>
 
-{#if appState.previewManga}
+{#if seriesState.previewManga}
 <div
   class="backdrop"
   role="button"
@@ -319,7 +364,7 @@
 
     <div class="cover-col">
       <div class="cover-wrap">
-        <Thumbnail src={resolvedCover(appState.previewManga.id, appState.previewManga.thumbnailUrl)} alt={displayManga?.title} class="cover" />
+        <Thumbnail src={resolvedCover(seriesState.previewManga.id, seriesState.previewManga.thumbnailUrl)} alt={displayManga?.title} class="cover" />
         {#if loadingDetail}
           <div class="cover-spinner">
             <CircleNotch size={18} weight="light" class="anim-spin" />
@@ -503,7 +548,7 @@
               <button class="read-btn" onclick={() => {
                 const { ch, type, resumePage } = continueChapter!;
                 if (type === "continue" && resumePage && resumePage > 1) {
-                  const existing = appState.bookmarks.find((b) => b.chapterId === ch.id);
+                  const existing = seriesState.bookmarks.find((b) => b.chapterId === ch.id);
                   if (!existing || existing.pageNumber < resumePage) {
                     addBookmark({
                       mangaId:      displayManga!.id,
@@ -515,7 +560,7 @@
                     });
                   }
                 }
-                appState.openReader(ch, chapters, displayManga);
+                openReader(ch, chapters, displayManga);
                 close();
               }}>
                 <Play size={12} weight="fill" />{continueLabel}
@@ -553,7 +598,7 @@
             {#each displayManga.genre as g}
               <button
                 class="genre-tag"
-                onclick={() => { appState.genreFilter = g; appState.navPage = "search"; close(); }}
+                onclick={() => { setGenreFilter(g); setNavPage("search"); close(); }}
               >{g}</button>
             {/each}
           </div>
@@ -612,21 +657,23 @@
 </div>
 {/if}
 
-{#if linkPickerOpen && appState.previewManga}
+{#if linkPickerOpen && seriesState.previewManga}
   <SeriesLinkPanel
-    manga={displayManga ?? appState.previewManga}
+    manga={displayManga ?? seriesState.previewManga}
     allManga={allMangaForLink}
-    onClose={() => linkPickerOpen = false}
+    onClose={closeLinkPicker}
   />
 {/if}
 
-{#if coverPickerOpen && appState.previewManga}
+{#if coverPickerOpen && seriesState.previewManga}
   <CoverPickerPanel
-    manga={displayManga ?? appState.previewManga}
+    manga={displayManga ?? seriesState.previewManga}
     allManga={allMangaForLink}
-    onClose={() => coverPickerOpen = false}
+    onClose={() => { coverPickerOpen = false; }}
   />
 {/if}
+
+
 
 <style>
   .backdrop {
@@ -640,7 +687,8 @@
   .modal {
     width: min(800px, calc(100vw - 48px));
     height: min(560px, calc(100vh - 80px));
-    display: flex; flex-direction: row;
+    display: flex;
+    flex-direction: row;
     background: var(--bg-surface);
     border: 1px solid var(--border-base);
     border-radius: var(--radius-xl);
@@ -655,18 +703,22 @@
     border-right: 1px solid var(--border-dim);
     display: flex; flex-direction: column;
     padding: var(--sp-5) var(--sp-4) var(--sp-4);
-    gap: var(--sp-3); overflow: hidden;
+    gap: var(--sp-3);
+    overflow: hidden;
   }
-  .cover-wrap { position: relative; width: 100%; }
+  .cover-wrap { position: relative; width: 100%; aspect-ratio: 2/3; }
   :global(.cover) {
     width: 100%; aspect-ratio: 2/3;
-    object-fit: cover; border-radius: var(--radius-md);
-    border: 1px solid var(--border-dim); display: block;
+    object-fit: cover;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-dim);
+    display: block;
   }
   .cover-spinner {
     position: absolute; inset: 0;
     display: flex; align-items: center; justify-content: center;
-    background: rgba(0,0,0,0.35); border-radius: var(--radius-md);
+    background: rgba(0,0,0,0.35);
+    border-radius: var(--radius-md);
     color: var(--text-faint);
   }
   .cover-actions { display: flex; flex-direction: column; gap: var(--sp-2); }
@@ -686,20 +738,25 @@
   .action-icon  { display: flex; align-items: center; justify-content: center; width: 16px; flex-shrink: 0; }
   .action-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 
-  .folder-wrap  { position: relative; width: 100%; }
-  .folder-menu  {
-    position: absolute; bottom: calc(100% + 4px); left: 0; right: 0;
-    background: var(--bg-raised); border: 1px solid var(--border-base); border-radius: var(--radius-md);
-    padding: var(--sp-1); display: flex; flex-direction: column; gap: 1px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.5); z-index: 10;
-    animation: scaleIn 0.1s ease both; transform-origin: bottom center;
+  .folder-wrap { position: relative; width: 100%; }
+  .folder-menu {
+    position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+    background: var(--bg-raised);
+    border: 1px solid var(--border-base); border-radius: var(--radius-md);
+    padding: var(--sp-1);
+    display: flex; flex-direction: column; gap: 1px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    z-index: 10;
+    animation: scaleIn 0.1s ease both;
+    transform-origin: top center;
   }
   .folder-empty { font-family: var(--font-ui); font-size: var(--text-xs); color: var(--text-faint); padding: var(--sp-2) var(--sp-3); }
-  .folder-item  {
+  .folder-item {
     display: flex; align-items: center; gap: var(--sp-2);
     padding: 6px var(--sp-3); border-radius: var(--radius-sm);
     font-family: var(--font-ui); font-size: var(--text-xs);
-    color: var(--text-muted); background: none; border: none; cursor: pointer; text-align: left;
+    color: var(--text-muted); background: none; border: none;
+    cursor: pointer; text-align: left;
     transition: background var(--t-fast), color var(--t-fast);
   }
   .folder-item:hover          { background: var(--bg-overlay); color: var(--text-primary); }
@@ -708,16 +765,19 @@
   .folder-create-row  { display: flex; gap: var(--sp-1); padding: var(--sp-1); }
   .folder-input {
     flex: 1; min-width: 0;
-    background: var(--bg-overlay); border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+    background: var(--bg-overlay);
+    border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
     padding: 4px 8px; color: var(--text-secondary);
-    font-family: var(--font-ui); font-size: var(--text-xs); outline: none;
+    font-family: var(--font-ui); font-size: var(--text-xs);
+    outline: none;
   }
   .folder-input:focus { border-color: var(--border-focus); }
   .folder-ok {
     font-family: var(--font-ui); font-size: var(--text-xs);
     padding: 4px 8px; border-radius: var(--radius-sm);
     border: 1px solid var(--border-strong); background: none; color: var(--text-muted);
-    cursor: pointer; flex-shrink: 0; transition: color var(--t-base);
+    cursor: pointer; flex-shrink: 0;
+    transition: color var(--t-base);
   }
   .folder-ok:disabled             { opacity: 0.4; cursor: default; }
   .folder-ok:not(:disabled):hover { color: var(--accent-fg); border-color: var(--accent); }
@@ -729,11 +789,16 @@
   }
   .folder-new:hover { color: var(--accent-fg); }
 
-  .content { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
+  .content {
+    flex: 1; min-width: 0;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
   .content-header {
     display: flex; align-items: flex-start; justify-content: space-between;
     gap: var(--sp-4); padding: var(--sp-5) var(--sp-6) var(--sp-4);
-    border-bottom: 1px solid var(--border-dim); flex-shrink: 0;
+    border-bottom: 1px solid var(--border-dim);
+    flex-shrink: 0;
   }
   .title-block { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--sp-1); }
   .title   { font-size: var(--text-lg); font-weight: var(--weight-medium); color: var(--text-primary); letter-spacing: var(--tracking-tight); line-height: var(--leading-tight); }
@@ -749,7 +814,8 @@
   .close-btn:hover { color: var(--text-muted); background: var(--bg-raised); }
 
   .content-body {
-    flex: 1; min-height: 0; overflow-y: auto;
+    flex: 1; min-height: 0;
+    overflow-y: auto;
     padding: var(--sp-5) var(--sp-6);
     display: flex; flex-direction: column; gap: var(--sp-4);
     scrollbar-width: none;
@@ -788,7 +854,8 @@
     font-family: var(--font-ui); font-size: var(--text-2xs); letter-spacing: var(--tracking-wide);
     padding: 3px 10px; border-radius: var(--radius-sm);
     border: 1px solid var(--border-dim); background: none; color: var(--text-faint);
-    cursor: pointer; transition: color var(--t-base), border-color var(--t-base);
+    cursor: pointer;
+    transition: color var(--t-base), border-color var(--t-base);
   }
   .dl-all-btn:hover:not(:disabled) { color: var(--text-muted); border-color: var(--border-strong); }
   .dl-all-btn:disabled             { opacity: 0.5; cursor: default; }
@@ -799,7 +866,8 @@
     padding: 8px var(--sp-4); border-radius: var(--radius-md);
     font-family: var(--font-ui); font-size: var(--text-xs); letter-spacing: var(--tracking-wide);
     background: var(--accent-muted); border: 1px solid var(--accent-dim); color: var(--accent-fg);
-    cursor: pointer; transition: filter var(--t-base);
+    cursor: pointer;
+    transition: filter var(--t-base);
   }
   .read-btn:hover { filter: brightness(1.1); }
 
@@ -809,7 +877,8 @@
   .desc-toggle {
     display: flex; align-items: center; gap: var(--sp-1); align-self: flex-start;
     font-family: var(--font-ui); font-size: var(--text-xs); color: var(--text-faint);
-    background: none; border: none; cursor: pointer; padding: 0; transition: color var(--t-base);
+    background: none; border: none; cursor: pointer; padding: 0;
+    transition: color var(--t-base);
   }
   .desc-toggle:hover { color: var(--accent-fg); }
 
@@ -818,7 +887,8 @@
     font-family: var(--font-ui); font-size: var(--text-2xs); letter-spacing: var(--tracking-wide);
     padding: 3px 8px; border-radius: var(--radius-sm);
     border: 1px solid var(--border-dim); background: var(--bg-raised); color: var(--text-faint);
-    cursor: pointer; transition: color var(--t-base), border-color var(--t-base), background var(--t-base);
+    cursor: pointer;
+    transition: color var(--t-base), border-color var(--t-base), background var(--t-base);
   }
   .genre-tag:hover { color: var(--accent-fg); border-color: var(--accent-dim); background: var(--accent-muted); }
 
@@ -834,6 +904,6 @@
   :global(.anim-spin) { animation: anim-spin 0.8s linear infinite; }
   @keyframes anim-spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }
   @keyframes pulse     { 0%, 100% { opacity: 0.4 } 50% { opacity: 0.8 } }
-  @keyframes fadeIn    { from { opacity: 0 }                          to { opacity: 1 }               }
-  @keyframes scaleIn   { from { opacity: 0; transform: scale(0.97) }  to { opacity: 1; transform: scale(1) } }
+  @keyframes fadeIn    { from { opacity: 0 }                         to { opacity: 1 }              }
+  @keyframes scaleIn   { from { opacity: 0; transform: scale(0.97) } to { opacity: 1; transform: scale(1) } }
 </style>

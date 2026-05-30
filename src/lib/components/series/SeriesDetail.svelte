@@ -15,8 +15,9 @@
   import { saveScroll, getScroll }     from '$lib/state/app.svelte'
   import { seriesState, openReader, setActiveManga, addBookmark,
            acknowledgeUpdate, clearMarkersForManga,
-           DEFAULT_MANGA_PREFS }       from '$lib/state/series.svelte'
-  import type { MangaPrefs }           from '$lib/state/series.svelte'
+           setPreviewManga }           from '$lib/state/series.svelte'
+  import { DEFAULT_MANGA_PREFS }       from '$lib/types/settings'
+  import type { MangaPrefs }           from '$lib/types/settings'
   import { addToast }                  from '$lib/state/notifications.svelte'
   import { trackingState }             from '$lib/state/tracking.svelte'
   import { autoLinkLibrary }           from '$lib/core/cover/autoLink'
@@ -29,6 +30,7 @@
   import MigrateModal     from '$lib/components/shared/manga/MigrateModal.svelte'
   import SeriesLinkPanel  from '$lib/components/shared/manga/SeriesLinkPanel.svelte'
   import TrackingPanel    from '$lib/components/tracking/TrackingPanel.svelte'
+  import MangaPreview     from '$lib/components/shared/manga/MangaPreview.svelte'
   const CHAPTERS_PER_PAGE = 25
   const MANGA_TTL_MS      = 5 * 60 * 1000
   const CHAPTER_TTL_MS    = 2 * 60 * 1000
@@ -96,24 +98,24 @@
   const sortedChapters  = $derived(buildChapterList(chapters, currentPrefs))
   const totalPages      = $derived(Math.ceil(sortedChapters.length / CHAPTERS_PER_PAGE))
   const pageChapters    = $derived(sortedChapters.slice((chapterPage - 1) * CHAPTERS_PER_PAGE, chapterPage * CHAPTERS_PER_PAGE))
-  const readCount       = $derived(sortedChapters.filter(c => c.isRead).length)
+  const readCount       = $derived(sortedChapters.filter(c => c.read).length)
   const totalCount      = $derived(sortedChapters.length)
   const progressPct     = $derived(totalCount > 0 ? (readCount / totalCount) * 100 : 0)
-  const downloadedCount = $derived(chapters.filter(c => c.isDownloaded).length)
+  const downloadedCount = $derived(chapters.filter(c => c.downloaded).length)
 
   const continueChapter = $derived((() => {
     if (!sortedChapters.length) return null
     const asc      = [...sortedChapters].sort((a, b) => a.sourceOrder - b.sourceOrder)
-    const anyRead  = asc.some(c => c.isRead)
+    const anyRead  = asc.some(c => c.read)
     const bookmark = seriesState.activeManga
       ? seriesState.bookmarks.find(b => b.mangaId === seriesState.activeManga!.id)
       : null
     const bookmarkedCh = bookmark ? asc.find(c => c.id === bookmark.chapterId) : null
-    if (bookmarkedCh && !bookmarkedCh.isRead) {
+    if (bookmarkedCh && !bookmarkedCh.read) {
       return { chapter: bookmarkedCh, type: (anyRead ? 'continue' : 'start') as const, resumePage: bookmark!.pageNumber }
     }
-    const inProgress  = asc.find(c => !c.isRead && (c.lastPageRead ?? 0) > 0)
-    const firstUnread = asc.find(c => !c.isRead)
+    const inProgress  = asc.find(c => !c.read && (c.lastPageRead ?? 0) > 0)
+    const firstUnread = asc.find(c => !c.read)
     const target      = inProgress ?? firstUnread
     if (target) return { chapter: target, type: (anyRead ? 'continue' : 'start') as const, resumePage: null }
     return { chapter: asc[0], type: 'reread' as const, resumePage: null }
@@ -145,7 +147,7 @@
   function applyChapters(nodes: Chapter[]) {
     if (get('autoDownload') && prevChapterIds.size > 0) {
       const filtered    = buildChapterList(nodes, currentPrefs)
-      const newChapters = filtered.filter(c => !prevChapterIds.has(c.id) && !c.isDownloaded)
+      const newChapters = filtered.filter(c => !prevChapterIds.has(c.id) && !c.downloaded)
       if (newChapters.length) enqueueMultiple(newChapters.map(c => c.id))
     }
     prevChapterIds = new Set(nodes.map(c => c.id))
@@ -158,7 +160,7 @@
     getCategories()
       .then(d => {
         allCategories   = d.filter(c => c.id !== 0)
-        mangaCategories = allCategories.filter(c => c.mangas?.nodes.some((m: Manga) => m.id === mangaId))
+        mangaCategories = allCategories.filter(c => c.mangas?.some((m: Manga) => m.id === mangaId))
       })
       .catch(console.error)
       .finally(() => { catsLoading = false })
@@ -166,7 +168,7 @@
 
   async function checkAndMarkCompleted(mangaId: number, chaps: Chapter[]) {
     if (chaps.length && manga?.status !== 'ONGOING') {
-      const allRead   = chaps.every(c => c.isRead)
+      const allRead   = chaps.every(c => c.read)
       const completed = allCategories.find(c => c.name === 'Completed')
       if (completed) {
         const inCompleted = mangaCategories.some(c => c.id === completed.id)
@@ -239,7 +241,7 @@
         const { markedIds } = await trackingState.syncFromRemote(mangaId, record, chaps, currentPrefs)
         if (markedIds.length > 0) {
           const idSet = new Set(markedIds)
-          chapters = chapters.map(c => idSet.has(c.id) ? { ...c, isRead: true } : c)
+          chapters = chapters.map(c => idSet.has(c.id) ? { ...c, read: true } : c)
           if (seriesState.activeManga) chapterCache.set(seriesState.activeManga.id, { data: chapters, fetchedAt: Date.now() })
         }
       } catch {}
@@ -335,7 +337,7 @@
   async function markRead(chapterId: number, isRead: boolean) {
     const mangaId = seriesState.activeManga?.id
     await markChapterRead(chapterId, isRead).catch(console.error)
-    chapters = chapters.map(c => c.id === chapterId ? { ...c, isRead } : c)
+    chapters = chapters.map(c => c.id === chapterId ? { ...c, read } : c)
     if (mangaId) {
       chapterCache.set(mangaId, { data: chapters, fetchedAt: Date.now() })
       checkAndMarkCompleted(mangaId, chapters)
@@ -348,7 +350,7 @@
     if (isRead) {
       if (get('deleteOnRead')) {
         const ch = chapters.find(c => c.id === chapterId)
-        if (ch?.isDownloaded) {
+        if (ch?.downloaded) {
           const delayMs = (get('deleteDelayHours') as number) * 60 * 60 * 1000
           if (delayMs === 0) deleteDownloaded(chapterId)
           else setTimeout(() => deleteDownloaded(chapterId), delayMs)
@@ -358,7 +360,7 @@
       if (ahead > 0) {
         const idx = sortedChapters.findIndex(c => c.id === chapterId)
         if (idx >= 0) {
-          const toQueue = sortedChapters.slice(idx + 1, idx + 1 + ahead).filter(c => !c.isDownloaded).map(c => c.id)
+          const toQueue = sortedChapters.slice(idx + 1, idx + 1 + ahead).filter(c => !c.downloaded).map(c => c.id)
           if (toQueue.length) enqueueMultiple(toQueue)
         }
       }
@@ -370,7 +372,7 @@
     const mangaId = seriesState.activeManga?.id
     await markChaptersRead(ids, isRead).catch(console.error)
     const idSet = new Set(ids)
-    chapters = chapters.map(c => idSet.has(c.id) ? { ...c, isRead } : c)
+    chapters = chapters.map(c => idSet.has(c.id) ? { ...c, read } : c)
     if (mangaId) {
       chapterCache.set(mangaId, { data: chapters, fetchedAt: Date.now() })
       checkAndMarkCompleted(mangaId, chapters)
@@ -383,12 +385,12 @@
       }
     }
     if (isRead && get('deleteOnRead')) {
-      const toDelete = ids.filter(id => chapters.find(c => c.id === id)?.isDownloaded)
+      const toDelete = ids.filter(id => chapters.find(c => c.id === id)?.downloaded)
       if (toDelete.length) {
         const delayMs = (get('deleteDelayHours') as number) * 60 * 60 * 1000
         const doDelete = async () => {
           await deleteDownloadedChapters(toDelete).catch(console.error)
-          chapters = chapters.map(c => toDelete.includes(c.id) ? { ...c, isDownloaded: false } : c)
+          chapters = chapters.map(c => toDelete.includes(c.id) ? { ...c, downloaded: false } : c)
           if (mangaId) chapterCache.set(mangaId, { data: chapters, fetchedAt: Date.now() })
         }
         if (delayMs === 0) doDelete(); else setTimeout(doDelete, delayMs)
@@ -397,17 +399,17 @@
   }
 
   async function deleteSelected() {
-    const ids = [...selectedIds].filter(id => chapters.find(c => c.id === id)?.isDownloaded)
+    const ids = [...selectedIds].filter(id => chapters.find(c => c.id === id)?.downloaded)
     if (ids.length) {
       await deleteDownloadedChapters(ids).catch(console.error)
-      chapters = chapters.map(c => ids.includes(c.id) ? { ...c, isDownloaded: false } : c)
+      chapters = chapters.map(c => ids.includes(c.id) ? { ...c, downloaded: false } : c)
       if (seriesState.activeManga) chapterCache.set(seriesState.activeManga.id, { data: chapters, fetchedAt: Date.now() })
     }
     clearSelection()
   }
 
   async function downloadSelected() {
-    await enqueueMultiple([...selectedIds].filter(id => !chapters.find(c => c.id === id)?.isDownloaded))
+    await enqueueMultiple([...selectedIds].filter(id => !chapters.find(c => c.id === id)?.downloaded))
     clearSelection()
   }
 
@@ -416,23 +418,23 @@
     clearSelection()
   }
 
-  const markAboveRead   = (i: number) => markBulk(sortedChapters.slice(0, i + 1).filter(c => !c.isRead).map(c => c.id), true)
-  const markBelowRead   = (i: number) => markBulk(sortedChapters.slice(i).filter(c => !c.isRead).map(c => c.id), true)
-  const markAboveUnread = (i: number) => markBulk(sortedChapters.slice(0, i + 1).filter(c => c.isRead).map(c => c.id), false)
-  const markBelowUnread = (i: number) => markBulk(sortedChapters.slice(i).filter(c => c.isRead).map(c => c.id), false)
+  const markAboveRead   = (i: number) => markBulk(sortedChapters.slice(0, i + 1).filter(c => !c.read).map(c => c.id), true)
+  const markBelowRead   = (i: number) => markBulk(sortedChapters.slice(i).filter(c => !c.read).map(c => c.id), true)
+  const markAboveUnread = (i: number) => markBulk(sortedChapters.slice(0, i + 1).filter(c => c.read).map(c => c.id), false)
+  const markBelowUnread = (i: number) => markBulk(sortedChapters.slice(i).filter(c => c.read).map(c => c.id), false)
 
   async function deleteDownloaded(chapterId: number) {
     await deleteDownloadedChapters([chapterId]).catch(console.error)
-    chapters = chapters.map(c => c.id === chapterId ? { ...c, isDownloaded: false } : c)
+    chapters = chapters.map(c => c.id === chapterId ? { ...c, downloaded: false } : c)
     if (seriesState.activeManga) chapterCache.set(seriesState.activeManga.id, { data: chapters, fetchedAt: Date.now() })
   }
 
   async function deleteAllDownloads() {
-    const ids = chapters.filter(c => c.isDownloaded).map(c => c.id)
+    const ids = chapters.filter(c => c.downloaded).map(c => c.id)
     if (!ids.length) return
     deletingAll = true
     await deleteDownloadedChapters(ids).catch(console.error)
-    chapters = chapters.map(c => ({ ...c, isDownloaded: false }))
+    chapters = chapters.map(c => ({ ...c, downloaded: false }))
     if (seriesState.activeManga) chapterCache.set(seriesState.activeManga.id, { data: chapters, fetchedAt: Date.now() })
     deletingAll = false
   }
@@ -453,19 +455,19 @@
     const below = sortedChapters.slice(idx)
     const last  = sortedChapters.length - 1
     return [
-      { label: ch.isRead ? 'Mark as unread' : 'Mark as read', icon: ch.isRead ? Circle : CheckCircle, onClick: () => markRead(ch.id, !ch.isRead) },
+      { label: ch.read ? 'Mark as unread' : 'Mark as read', icon: ch.read ? Circle : CheckCircle, onClick: () => markRead(ch.id, !ch.read) },
       { label: 'Select', icon: CheckSquare, onClick: () => { const next = new Set(selectedIds); next.add(ch.id); selectedIds = next } },
       { separator: true },
-      { label: 'Mark above as read',   icon: ArrowFatLinesUp,   onClick: () => markAboveRead(idx),   disabled: above.filter(c => !c.isRead).length === 0 },
-      { label: 'Mark above as unread', icon: ArrowFatLineUp,    onClick: () => markAboveUnread(idx), disabled: above.filter(c => c.isRead).length === 0 },
+      { label: 'Mark above as read',   icon: ArrowFatLinesUp,   onClick: () => markAboveRead(idx),   disabled: above.filter(c => !c.read).length === 0 },
+      { label: 'Mark above as unread', icon: ArrowFatLineUp,    onClick: () => markAboveUnread(idx), disabled: above.filter(c => c.read).length === 0 },
       { separator: true },
-      { label: 'Mark below as read',   icon: ArrowFatLinesDown, onClick: () => markBelowRead(idx),   disabled: idx === last || below.filter(c => !c.isRead).length === 0 },
-      { label: 'Mark below as unread', icon: ArrowFatLineDown,  onClick: () => markBelowUnread(idx), disabled: idx === last || below.filter(c => c.isRead).length === 0 },
+      { label: 'Mark below as read',   icon: ArrowFatLinesDown, onClick: () => markBelowRead(idx),   disabled: idx === last || below.filter(c => !c.read).length === 0 },
+      { label: 'Mark below as unread', icon: ArrowFatLineDown,  onClick: () => markBelowUnread(idx), disabled: idx === last || below.filter(c => c.read).length === 0 },
       { separator: true },
-      { label: ch.isDownloaded ? 'Delete download' : 'Download', icon: ch.isDownloaded ? Trash : Download, danger: ch.isDownloaded, onClick: () => ch.isDownloaded ? deleteDownloaded(ch.id) : enqueueDownload(ch.id) },
+      { label: ch.downloaded ? 'Delete download' : 'Download', icon: ch.downloaded ? Trash : Download, danger: ch.downloaded, onClick: () => ch.downloaded ? deleteDownloaded(ch.id) : enqueueDownload(ch.id) },
       { separator: true },
-      { label: 'Download next 5 from here', icon: DownloadSimple, onClick: () => enqueueMultiple(sortedChapters.slice(idx, idx + 5).filter(c => !c.isDownloaded).map(c => c.id)) },
-      { label: 'Download all from here',    icon: DownloadSimple, onClick: () => enqueueMultiple(sortedChapters.slice(idx).filter(c => !c.isDownloaded).map(c => c.id)) },
+      { label: 'Download next 5 from here', icon: DownloadSimple, onClick: () => enqueueMultiple(sortedChapters.slice(idx, idx + 5).filter(c => !c.downloaded).map(c => c.id)) },
+      { label: 'Download all from here',    icon: DownloadSimple, onClick: () => enqueueMultiple(sortedChapters.slice(idx).filter(c => !c.downloaded).map(c => c.id)) },
     ]
   }
 
@@ -473,7 +475,7 @@
     if (!continueChapter) return
     const idx = sortedChapters.indexOf(continueChapter.chapter)
     if (idx < 0) return
-    enqueueMultiple(sortedChapters.slice(idx, idx + n).filter(c => !c.isDownloaded).map(c => c.id))
+    enqueueMultiple(sortedChapters.slice(idx, idx + n).filter(c => !c.downloaded).map(c => c.id))
   }
 
   function openReaderWithAhead(ch: Chapter, inProgress: boolean) {
@@ -483,7 +485,7 @@
     if (ahead > 0) {
       const idx = ascList.indexOf(ch)
       if (idx >= 0) {
-        const toQueue = ascList.slice(idx + 1, idx + 1 + ahead).filter(c => !c.isDownloaded).map(c => c.id)
+        const toQueue = ascList.slice(idx + 1, idx + 1 + ahead).filter(c => !c.downloaded).map(c => c.id)
         if (toQueue.length) enqueueMultiple(toQueue)
       }
     }
@@ -510,7 +512,7 @@
     if (ahead > 0) {
       const idx = ascList.indexOf(cc.chapter)
       if (idx >= 0) {
-        const toQueue = ascList.slice(idx + 1, idx + 1 + ahead).filter(c => !c.isDownloaded).map(c => c.id)
+        const toQueue = ascList.slice(idx + 1, idx + 1 + ahead).filter(c => !c.downloaded).map(c => c.id)
         if (toQueue.length) enqueueMultiple(toQueue)
       }
     }
@@ -677,32 +679,28 @@
 {/if}
 
 {#if autoOpen && manga}
-  <div class="panel-overlay" role="presentation" onclick={() => autoOpen = false}>
-    <div class="panel-drawer" role="presentation" onclick={(e) => e.stopPropagation()}>
-      <AutomationPanel mangaId={manga.id} {manga} onClose={() => autoOpen = false} />
-    </div>
-  </div>
+  <AutomationPanel mangaId={manga.id} {manga} onClose={() => autoOpen = false} />
 {/if}
 
 {#if trackingOpen && manga}
-  <div class="panel-overlay" role="presentation" onclick={() => trackingOpen = false}>
-    <div class="panel-drawer" role="presentation" onclick={(e) => e.stopPropagation()}>
+  <div class="modal-overlay" role="presentation" onclick={() => trackingOpen = false}>
+    <div class="modal-dialog" role="presentation" onclick={(e) => e.stopPropagation()}>
       <TrackingPanel mangaId={manga.id} mangaTitle={manga.title} onClose={() => trackingOpen = false} />
     </div>
   </div>
 {/if}
 
 {#if linkPickerOpen && manga}
-  <div class="panel-overlay" role="presentation" onclick={() => linkPickerOpen = false}>
-    <div class="panel-drawer" role="presentation" onclick={(e) => e.stopPropagation()}>
+  <div class="modal-overlay" role="presentation" onclick={() => linkPickerOpen = false}>
+    <div class="modal-dialog" role="presentation" onclick={(e) => e.stopPropagation()}>
       <SeriesLinkPanel {manga} allManga={allMangaForLink} onClose={() => linkPickerOpen = false} />
     </div>
   </div>
 {/if}
 
 {#if coverPickerOpen && manga}
-  <div class="panel-overlay" role="presentation" onclick={() => coverPickerOpen = false}>
-    <div class="panel-drawer" role="presentation" onclick={(e) => e.stopPropagation()}>
+  <div class="modal-overlay" role="presentation" onclick={() => coverPickerOpen = false}>
+    <div class="modal-dialog" role="presentation" onclick={(e) => e.stopPropagation()}>
       <CoverPickerPanel {manga} allManga={allMangaForLink} onClose={() => coverPickerOpen = false} />
     </div>
   </div>
@@ -718,6 +716,8 @@
 {/if}
 
 {/if}
+
+<MangaPreview />
 
 <style>
   .root {
@@ -744,4 +744,22 @@
 
   @keyframes fadeIn   { from { opacity: 0 }                               to { opacity: 1 } }
   @keyframes drawerIn { from { opacity: 0; transform: translateX(-12px) } to { opacity: 1; transform: translateX(0) } }
+
+  .modal-overlay {
+    position: fixed; inset: 0; z-index: var(--z-settings);
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.5);
+    animation: fadeIn 0.12s ease both;
+  }
+  .modal-dialog {
+    width: 480px; max-width: 90vw; max-height: 80vh;
+    background: var(--bg-surface); border: 1px solid var(--border-base);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 8px 48px rgba(0,0,0,0.5);
+    display: flex; flex-direction: column;
+    animation: modalIn 0.18s cubic-bezier(0.16,1,0.3,1) both;
+  }
+  @keyframes modalIn { from { opacity: 0; transform: scale(0.96) translateY(8px) } to { opacity: 1; transform: scale(1) translateY(0) } }
+
+
 </style>

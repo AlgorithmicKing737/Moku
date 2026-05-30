@@ -12,7 +12,7 @@
     onerror    = undefined,
     ...rest
   }: {
-    src:       string;
+    src:       string | null | undefined;
     alt?:      string;
     class?:    string;
     loading?:  string;
@@ -27,7 +27,7 @@
     return typeof url === "string" && url.trim() ? url.replace(/\/$/, "") : "http://127.0.0.1:4567";
   }
 
-  function plainThumbUrl(path: string): string {
+  function plainThumbUrl(path: string | null | undefined): string {
     if (!path) return "";
     if (path.startsWith("http")) return path;
     return `${getServerUrl()}${path}`;
@@ -52,11 +52,8 @@
       .catch(() => { if (id === reqId) blobUrl = ""; });
   });
 
-  const resolved = $derived(
-    isAuth
-      ? (blobUrl || undefined)
-      : (src ? plainThumbUrl(src) : undefined)
-  );
+  const plainUrl  = $derived(plainThumbUrl(src));
+  const resolved  = $derived(isAuth ? (blobUrl || plainUrl) || undefined : plainUrl || undefined);
 </script>
 
 <img src={resolved} {alt} class={cls} {loading} {decoding} {onerror} {...rest} />

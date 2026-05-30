@@ -1,7 +1,8 @@
 import { settingsState, updateSettings } from '$lib/state/settings.svelte'
-import type { MangaPrefs }               from '$lib/state/series.svelte'
+import { DEFAULT_MANGA_PREFS }           from '$lib/types/settings'
+import type { MangaPrefs }               from '$lib/types/settings'
 
-export { DEFAULT_MANGA_PREFS } from '$lib/state/series.svelte'
+export { DEFAULT_MANGA_PREFS }           from '$lib/types/settings'
 
 export function getPref<K extends keyof MangaPrefs>(mangaId: number, key: K): MangaPrefs[K] {
   const prefs = settingsState.settings.mangaPrefs?.[mangaId] ?? {}
