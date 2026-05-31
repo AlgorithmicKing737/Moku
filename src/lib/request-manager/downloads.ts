@@ -1,44 +1,60 @@
-import { getAdapter }     from "$lib/request-manager";
-import { downloadsState } from "$lib/state/downloads.svelte";
+import { getAdapter }  from "$lib/request-manager";
+import { invoke }      from "@tauri-apps/api/core";
+import type { DownloadStatus } from "$lib/types/api";
 
-export async function loadDownloads() {
+export async function loadDownloadStatus(): Promise<DownloadStatus | null> {
   try {
-    downloadsState.items = await getAdapter().getDownloads();
-  } catch (e) {
-    downloadsState.error = String(e);
+    return await getAdapter().getDownloadStatus();
+  } catch {
+    return null;
   }
 }
 
-export async function enqueueDownload(chapterId: string) {
+export async function enqueueDownload(chapterId: string): Promise<void> {
   await getAdapter().enqueueDownload(chapterId);
-  await loadDownloads();
 }
 
-export async function enqueueDownloads(chapterIds: string[]) {
+export async function enqueueDownloads(chapterIds: string[]): Promise<void> {
   await getAdapter().enqueueDownloads(chapterIds);
-  await loadDownloads();
 }
 
-export async function dequeueDownload(chapterId: string) {
+export async function dequeueDownload(chapterId: string): Promise<void> {
   await getAdapter().dequeueDownload(chapterId);
-  downloadsState.items = downloadsState.items.filter(d => d.chapterId !== chapterId);
 }
 
-export async function dequeueDownloads(chapterIds: string[]) {
-  const ids = new Set(chapterIds);
+export async function dequeueDownloads(chapterIds: string[]): Promise<void> {
   await getAdapter().dequeueDownloads(chapterIds);
-  downloadsState.items = downloadsState.items.filter(d => !ids.has(d.chapterId));
 }
 
-export async function clearDownloads() {
+export async function reorderDownload(chapterId: number, to: number): Promise<DownloadStatus | null> {
+  try {
+    return await getAdapter().reorderDownload(String(chapterId), to);
+  } catch {
+    return null;
+  }
+}
+
+export async function clearDownloads(): Promise<void> {
   await getAdapter().clearDownloads();
-  downloadsState.items = [];
 }
 
-export async function startDownloader() {
-  await getAdapter().startDownloader();
+export async function startDownloader(): Promise<DownloadStatus | null> {
+  try {
+    return await getAdapter().startDownloader();
+  } catch {
+    return null;
+  }
 }
 
-export async function stopDownloader() {
-  await getAdapter().stopDownloader();
+export async function stopDownloader(): Promise<DownloadStatus | null> {
+  try {
+    return await getAdapter().stopDownloader();
+  } catch {
+    return null;
+  }
+}
+
+export async function getStorageInfo(downloadsPath: string): Promise<{ freeBytes: number }> {
+  const info = await invoke<{ free_bytes: number }>("get_storage_info", { downloadsPath });
+  return { freeBytes: info.free_bytes };
 }

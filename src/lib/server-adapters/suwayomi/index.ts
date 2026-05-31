@@ -14,6 +14,7 @@ import type {
   SetSocksProxyInput,
   SetFlareSolverrInput,
 } from '$lib/server-adapters/types'
+import type { DownloadStatus } from '$lib/types/api'
 import type { Manga, Chapter, Extension, Source, Tracker, Category } from '$lib/types'
 import {
   GET_LIBRARY,
@@ -35,6 +36,7 @@ import {
   DELETE_MANGA_META,
   FETCH_SOURCE_MANGA,
   LIBRARY_UPDATE_STATUS,
+  MANGAS_BY_GENRE,
 } from './manga'
 import {
   GET_CHAPTERS,
@@ -55,6 +57,7 @@ import {
   ENQUEUE_CHAPTERS_DOWNLOAD,
   DEQUEUE_DOWNLOAD,
   DEQUEUE_CHAPTERS_DOWNLOAD,
+  REORDER_DOWNLOAD,
   START_DOWNLOADER,
   STOP_DOWNLOADER,
   CLEAR_DOWNLOADER,
@@ -131,6 +134,20 @@ const SET_FLARE_SOLVERR = `
     }
   }
 `
+
+type RawQueueItem = Record<string, unknown>
+
+function mapDownloadStatus(raw: { state: string; queue: RawQueueItem[] }): DownloadStatus {
+  return {
+    state: raw.state,
+    queue: raw.queue.map(item => ({
+      progress: (item.progress as number) ?? 0,
+      state:    item.state as string,
+      tries:    (item.tries as number) ?? 0,
+      chapter:  item.chapter as DownloadStatus['queue'][number]['chapter'],
+    })),
+  }
+}
 
 export class SuwayomiAdapter implements ServerAdapter {
   private baseUrl = 'http://127.0.0.1:4567'
@@ -300,11 +317,29 @@ export class SuwayomiAdapter implements ServerAdapter {
     await this.gql(DELETE_CHAPTER_META, { chapterId: Number(chapterId), key })
   }
 
+  // ── Downloads ──────────────────────────────────────────────────────────────
+
+  /** @deprecated Use getDownloadStatus() — kept for any legacy callers. */
   async getDownloads(): Promise<DownloadItem[]> {
-    const data = await this.gql<{ downloadStatus: { queue: Record<string, unknown>[] } }>(
-      GET_DOWNLOAD_STATUS
-    )
-    return data.downloadStatus.queue.map(mapDownloadItem)
+    const status = await this.getDownloadStatus()
+    return status.queue.map(item => ({
+      chapterId:   String(item.chapter.id),
+      mangaId:     String(item.chapter.mangaId ?? item.chapter.manga?.id),
+      chapterName: item.chapter.name,
+      mangaTitle:  item.chapter.manga?.title ?? '',
+      progress:    item.progress,
+      state:       item.state === 'DOWNLOADING' ? 'downloading'
+                 : item.state === 'FINISHED'    ? 'finished'
+                 : item.state === 'ERROR'       ? 'error'
+                 : 'queued',
+    }))
+  }
+
+  async getDownloadStatus(): Promise<DownloadStatus> {
+    const data = await this.gql<{
+      downloadStatus: { state: string; queue: RawQueueItem[] }
+    }>(GET_DOWNLOAD_STATUS)
+    return mapDownloadStatus(data.downloadStatus)
   }
 
   async enqueueDownload(chapterId: string): Promise<void> {
@@ -323,17 +358,40 @@ export class SuwayomiAdapter implements ServerAdapter {
     await this.gql(DEQUEUE_CHAPTERS_DOWNLOAD, { chapterIds: chapterIds.map(Number) })
   }
 
+  async reorderDownload(chapterId: string, to: number): Promise<DownloadStatus | null> {
+    try {
+      const data = await this.gql<{
+        reorderChapterDownload: { downloadStatus: { state: string; queue: RawQueueItem[] } }
+      }>(REORDER_DOWNLOAD, { chapterId: Number(chapterId), to })
+      return mapDownloadStatus(data.reorderChapterDownload.downloadStatus)
+    } catch {
+      return null
+    }
+  }
+
   async clearDownloads(): Promise<void> {
     await this.gql(CLEAR_DOWNLOADER)
   }
 
-  async startDownloader(): Promise<void> {
-    await this.gql(START_DOWNLOADER)
+  async startDownloader(): Promise<DownloadStatus | null> {
+    try {
+      const data = await this.gql<{
+        startDownloader: { downloadStatus: { state: string; queue: RawQueueItem[] } }
+      }>(START_DOWNLOADER)
+      return mapDownloadStatus(data.startDownloader.downloadStatus)
+    } catch { return null }
   }
 
-  async stopDownloader(): Promise<void> {
-    await this.gql(STOP_DOWNLOADER)
+  async stopDownloader(): Promise<DownloadStatus | null> {
+    try {
+      const data = await this.gql<{
+        stopDownloader: { downloadStatus: { state: string; queue: RawQueueItem[] } }
+      }>(STOP_DOWNLOADER)
+      return mapDownloadStatus(data.stopDownloader.downloadStatus)
+    } catch { return null }
   }
+
+  // ── Extensions & Sources ───────────────────────────────────────────────────
 
   async getExtensions(): Promise<Extension[]> {
     await this.gql(FETCH_EXTENSIONS)
@@ -376,6 +434,8 @@ export class SuwayomiAdapter implements ServerAdapter {
     }
   }
 
+  // ── Categories ─────────────────────────────────────────────────────────────
+
   async getCategories(): Promise<Category[]> {
     const data = await this.gql<{ categories: { nodes: Record<string, unknown>[] } }>(GET_CATEGORIES)
     return data.categories.nodes.map(mapCategory)
@@ -410,6 +470,8 @@ export class SuwayomiAdapter implements ServerAdapter {
   async updateCategoryManga(categoryId: number): Promise<void> {
     await this.gql(UPDATE_CATEGORY_MANGA, { categoryId })
   }
+
+  // ── Tracking ───────────────────────────────────────────────────────────────
 
   async getTrackers(): Promise<Tracker[]> {
     const data = await this.gql<{ trackers: { nodes: Tracker[] } }>(GET_TRACKERS)
@@ -450,6 +512,8 @@ export class SuwayomiAdapter implements ServerAdapter {
     await this.gql(TRACK_PROGRESS, { mangaId: Number(mangaId) })
   }
 
+  // ── Security ───────────────────────────────────────────────────────────────
+
   async getServerSecurity(): Promise<ServerSecurity> {
     const data = await this.gql<{ settings: ServerSecurity }>(GET_SERVER_SECURITY)
     return data.settings
@@ -470,6 +534,45 @@ export class SuwayomiAdapter implements ServerAdapter {
   async setFlareSolverr(input: SetFlareSolverrInput): Promise<void> {
     await this.gql(SET_FLARE_SOLVERR, input)
   }
+
+  // ── Browse / Search ────────────────────────────────────────────────────────
+ 
+  async searchSource(
+    sourceId: string,
+    query:    string,
+    page      = 1,
+    signal?:  AbortSignal,
+  ): Promise<PaginatedResult<Manga>> {
+    const data = await this.gql<{
+      fetchSourceManga: { mangas: Record<string, unknown>[]; hasNextPage: boolean }
+    }>(FETCH_SOURCE_MANGA, { source: sourceId, type: 'SEARCH', page, query }, signal)
+    return {
+      items:       data.fetchSourceManga.mangas.map(mapManga),
+      hasNextPage: data.fetchSourceManga.hasNextPage,
+    }
+  }
+ 
+  async getMangasByGenre(
+    filter:  Record<string, unknown>,
+    first:   number,
+    offset:  number,
+    signal?: AbortSignal,
+  ): Promise<{ items: Manga[]; hasNextPage: boolean; totalCount: number }> {
+    const data = await this.gql<{
+      mangas: {
+        nodes:     Record<string, unknown>[];
+        pageInfo:  { hasNextPage: boolean };
+        totalCount: number;
+      }
+    }>(MANGAS_BY_GENRE, { filter, first, offset }, signal)
+    return {
+      items:      data.mangas.nodes.map(mapManga),
+      hasNextPage: data.mangas.pageInfo.hasNextPage,
+      totalCount:  data.mangas.totalCount,
+    }
+  }
+
+  // ── Library updates ────────────────────────────────────────────────────────
 
   async checkForUpdates(mangaIds?: string[]): Promise<UpdateResult[]> {
     if (mangaIds?.length) {
@@ -504,3 +607,4 @@ export class SuwayomiAdapter implements ServerAdapter {
     _clearPageCache(chapterId)
   }
 }
+

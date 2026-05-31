@@ -1,7 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
-  import { loadDownloads, startDownloader, stopDownloader, clearDownloads } from '$lib/request-manager/downloads'
-  import { downloadsState } from '$lib/state/downloads.svelte'
+  import Downloads from '$lib/components/downloads/Downloads.svelte'
 </script>
 
-<p>Downloads — stub</p>
+<Downloads />

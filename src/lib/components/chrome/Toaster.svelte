@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte'
   import { dismissToast } from '$lib/state/notifications.svelte'
   import type { Toast } from '$lib/state/notifications.svelte'
 
@@ -17,10 +18,11 @@
     timers.set(t.id, setTimeout(() => dismiss(t.id), dur))
   }
 
-  function dismiss(id: string) {
+  async function dismiss(id: string) {
     if (leaving.has(id)) return
     leaving.add(id)
     if (timers.has(id)) { clearTimeout(timers.get(id)!); timers.delete(id) }
+    await tick()
     const el = document.querySelector<HTMLElement>(`[data-toast-id="${id}"]`)
     if (!el) { finalize(id); return }
     el.style.setProperty('--exit-h', `${el.offsetHeight}px`)
@@ -30,6 +32,7 @@
 
   function finalize(id: string) {
     leaving.delete(id)
+    if (detail?.id === id) return
     dismissToast(id)
   }
 
@@ -39,8 +42,9 @@
     if (timers.has(t.id)) { clearTimeout(timers.get(t.id)!); timers.delete(t.id) }
   }
 
-  function onBackdropKey(e: KeyboardEvent) {
-    if (e.key === 'Escape') detail = null
+  function closeDetail() {
+    if (detail) dismiss(detail.id)
+    detail = null
   }
 
   $effect(() => {
@@ -66,7 +70,7 @@
       <button
         class="toast toast-{t.kind}"
         data-toast-id={t.id}
-        aria-label="{t.message}{t.detail ? ': ' + t.detail : ''}"
+        aria-label="{t.title}{t.body ? ': ' + t.body : ''}"
         onclick={() => dismiss(t.id)}
         oncontextmenu={(e) => openDetail(e, t)}
       >
@@ -77,8 +81,8 @@
           </svg>
         </span>
         <div class="body">
-          <p class="message">{t.message}</p>
-          <p class="sub">{t.detail ?? '\u00a0'}</p>
+          <p class="message">{t.title}</p>
+          <p class="sub">{t.body ?? '\u00a0'}</p>
         </div>
       </button>
     {/each}
@@ -89,14 +93,14 @@
   <div
     class="detail-backdrop"
     role="presentation"
-    onclick={() => (detail = null)}
-    onkeydown={onBackdropKey}
+    onclick={() => closeDetail()}
+    onkeydown={(e) => { if (e.key === 'Escape') closeDetail() }}
   >
     <div
       class="detail-panel detail-{detail.kind}"
       role="dialog"
       aria-modal="true"
-      aria-label={detail.message}
+      aria-label={detail.title}
       tabindex="-1"
       onclick={(e) => e.stopPropagation()}
       onkeydown={(e) => e.stopPropagation()}
@@ -105,21 +109,21 @@
       <div class="detail-body">
         <div class="detail-header">
           <span class="detail-kind">{detail.kind}</span>
-          <button class="detail-close" onclick={() => (detail = null)} aria-label="Close">
+          <button class="detail-close" onclick={closeDetail} aria-label="Close">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
               <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
             </svg>
           </button>
         </div>
-        <p class="detail-message">{detail.message}</p>
-        {#if detail.detail}
-          <pre class="detail-text">{detail.detail}</pre>
+        <p class="detail-message">{detail.title}</p>
+        {#if detail.body}
+          <pre class="detail-text">{detail.body}</pre>
         {/if}
         <div class="detail-actions">
-          <button class="detail-copy" onclick={() => navigator.clipboard.writeText(`${detail!.message}${detail!.detail ? '\n' + detail!.detail : ''}`)}>
+          <button class="detail-copy" onclick={() => navigator.clipboard.writeText(`${detail!.title}${detail!.body ? '\n' + detail!.body : ''}`)}>
             Copy
           </button>
-          <button class="detail-dismiss" onclick={() => { dismiss(detail!.id); detail = null }}>
+          <button class="detail-dismiss" onclick={closeDetail}>
             Dismiss
           </button>
         </div>
@@ -129,13 +133,13 @@
 {/if}
 
 <style>
-  .toaster { position:fixed; bottom:var(--sp-5); right:var(--sp-5); z-index:9999; display:flex; flex-direction:column; gap:5px; pointer-events:none; }
+  .toaster { position:fixed; bottom:var(--sp-5); right:var(--sp-5); z-index:9999; display:flex; flex-direction:column; gap:6px; pointer-events:none; }
 
   .toast {
-    display:flex; align-items:center; gap:10px; padding:12px var(--sp-3) 12px 0;
+    display:flex; align-items:center; gap:12px; padding:14px var(--sp-4) 14px 0;
     border-radius:var(--radius-md); background:var(--bg-raised); border:1px solid var(--border-dim);
     box-shadow:0 8px 32px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.04) inset;
-    pointer-events:all; width:280px; overflow:hidden; cursor:pointer;
+    pointer-events:all; width:320px; overflow:hidden; cursor:pointer;
     font-family:inherit; font-size:inherit; color:inherit; text-align:left;
     will-change:transform, opacity;
     animation:slideIn 0.35s cubic-bezier(0.16,1,0.3,1) both;
@@ -166,8 +170,8 @@
   .toast-download .icon { color:var(--accent-fg); }
 
   .body    { flex:1; min-width:0; display:flex; flex-direction:column; gap:5px; }
-  .message { font-size:var(--text-xs); font-family:var(--font-ui); color:var(--text-secondary); font-weight:var(--weight-medium); letter-spacing:var(--tracking-wide); line-height:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .sub     { font-family:var(--font-ui); font-size:var(--text-2xs); color:var(--text-faint); letter-spacing:var(--tracking-wide); line-height:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .message { font-size:var(--text-sm); font-family:var(--font-ui); color:var(--text-secondary); font-weight:var(--weight-medium); letter-spacing:var(--tracking-wide); line-height:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .sub     { font-family:var(--font-ui); font-size:var(--text-xs); color:var(--text-faint); letter-spacing:var(--tracking-wide); line-height:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
   .detail-backdrop { position:fixed; inset:0; z-index:10000; background:rgba(0,0,0,0.45); display:flex; align-items:center; justify-content:center; animation:fadeIn 0.15s ease both; }
   @keyframes fadeIn { from { opacity:0 } to { opacity:1 } }

@@ -113,9 +113,9 @@
 
   {:else}
     <div class="grid">
-      {#each items as m (m.id)}
-        {@const isSelected  = selected.has(m.id)}
-        {@const isCompleted = !m.unreadCount && (m.chapters?.totalCount ?? 0) > 0}
+    {#each items as m (m.id)}
+      {@const isSelected  = selected.has(m.id)}
+      {@const isCompleted = m.status === 'COMPLETED' || (!m.unreadCount && (m.chapters?.totalCount ?? 0) > 0)}
         <button
           class="card"
           class:card-selected={isSelected}

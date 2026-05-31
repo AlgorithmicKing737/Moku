@@ -11,9 +11,22 @@
   import Toaster      from '$lib/components/chrome/Toaster.svelte'
   import Settings     from '$lib/components/settings/Settings.svelte'
   import ThemeEditor  from '$lib/components/settings/ThemeEditor.svelte'
+  import { downloadStore } from '$lib/state/downloads.svelte'
+  import { seriesState }  from '$lib/state/series.svelte'
+  import MangaPreview     from '$lib/components/shared/manga/MangaPreview.svelte'
   import '../app.css'
 
   let { children } = $props()
+
+  const POLL_MS = 1500
+  let pollTimer: ReturnType<typeof setTimeout> | null = null
+  let polling = false
+
+  async function pollLoop() {
+    if (!polling) return
+    await downloadStore.poll()
+    if (polling) pollTimer = setTimeout(pollLoop, POLL_MS)
+  }
 
   const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
   const ringFull = $derived(appState.status !== 'booting')
@@ -31,6 +44,8 @@
 
   // Apply theme immediately on mount (before first paint if possible)
   onMount(() => {
+    polling = true
+    pollLoop()
     applyTheme(
       settingsState.settings.theme ?? 'dark',
       settingsState.settings.customThemes ?? []
@@ -53,6 +68,11 @@
     const darkTheme  = settingsState.settings.systemThemeDark  ?? 'dark'
     const lightTheme = settingsState.settings.systemThemeLight ?? 'light'
     mountSystemThemeSync(enabled, darkTheme, lightTheme, (id) => updateSettings({ theme: id }))
+  })
+
+  $effect(() => () => {
+    polling = false
+    if (pollTimer !== null) { clearTimeout(pollTimer); pollTimer = null }
   })
 
   function onSplashReady()  { splashVisible = false }
@@ -107,6 +127,9 @@
 
 <AuthGate />
 <Toaster toasts={notifications.toasts} />
+{#if seriesState.previewManga}
+  <MangaPreview />
+{/if}
 
 <style>
   .frame {

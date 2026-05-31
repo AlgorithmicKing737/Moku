@@ -1,3 +1,4 @@
+import type { DownloadStatus } from '$lib/types/api'
 import type { Manga, Chapter, Extension, Source, Tracker, Category } from '$lib/types'
 
 export interface ServerConfig {
@@ -131,13 +132,15 @@ export interface ServerAdapter {
   deleteChapterMeta(chapterId: string, key: string): Promise<void>
 
   getDownloads(): Promise<DownloadItem[]>
+  getDownloadStatus(): Promise<DownloadStatus>
   enqueueDownload(chapterId: string): Promise<void>
   enqueueDownloads(chapterIds: string[]): Promise<void>
   dequeueDownload(chapterId: string): Promise<void>
   dequeueDownloads(chapterIds: string[]): Promise<void>
+  reorderDownload(chapterId: string, to: number): Promise<DownloadStatus | null>
   clearDownloads(): Promise<void>
-  startDownloader(): Promise<void>
-  stopDownloader(): Promise<void>
+  startDownloader(): Promise<DownloadStatus | null>
+  stopDownloader(): Promise<DownloadStatus | null>
 
   getExtensions(): Promise<Extension[]>
   installExtension(id: string): Promise<void>

@@ -8,6 +8,7 @@
   import CoverPickerPanel from "$lib/components/series/panels/CoverPickerPanel.svelte";
   import SeriesLinkPanel  from "$lib/components/shared/manga/SeriesLinkPanel.svelte";
   import { getAdapter }   from "$lib/request-manager";
+  import { goto }         from "$app/navigation";
   import { cache, CACHE_KEYS } from "$lib/core/cache/queryCache";
   import { resolvedCover }     from "$lib/core/cover/coverResolver";
   import { autoLinkLibrary }   from "$lib/core/cover/autoLink";
@@ -17,7 +18,7 @@
     seriesState,
     setPreviewManga, setActiveManga, openReader, addBookmark,
   } from "$lib/state/series.svelte";
-  import { app, setNavPage, setGenreFilter } from "$lib/state/app.svelte";
+  import { app } from "$lib/state/app.svelte";
   import type { Manga, Chapter, Category } from "$lib/types";
 
 
@@ -266,7 +267,7 @@
     getAdapter().getCategories()
       .then((cats) => {
         allCategories   = cats.filter((c) => c.id !== 0);
-        mangaCategories = allCategories.filter((c) => c.mangas?.some((m) => m.id === mangaId));
+        mangaCategories = allCategories.filter((c) => c.mangas?.nodes?.some((m) => m.id === mangaId));
       })
       .catch(console.error)
       .finally(() => { catsLoading = false; });
@@ -593,12 +594,12 @@
           </div>
         {/if}
 
-        {#if !loadingDetail && displayManga?.genre?.length}
+        {#if !loadingDetail && displayManga?.tags?.length}
           <div class="genres">
-            {#each displayManga.genre as g}
+            {#each displayManga.tags as g}
               <button
                 class="genre-tag"
-                onclick={() => { setGenreFilter(g); setNavPage("search"); close(); }}
+                onclick={() => { close(); goto(`/browse?genre=${encodeURIComponent(g)}`); }}
               >{g}</button>
             {/each}
           </div>

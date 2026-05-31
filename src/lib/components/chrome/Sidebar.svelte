@@ -1,33 +1,33 @@
 <script lang="ts">
-  import { page } from '$app/stores'
-  import { goto } from '$app/navigation'
-  import { app } from '$lib/state/app.svelte'
+  import { goto }   from '$app/navigation'
+  import { page }   from '$app/stores'
+  import { app }    from '$lib/state/app.svelte'
   import {
     House, Books, MagnifyingGlass, ClockCounterClockwise,
     DownloadSimple, PuzzlePiece, GearSix, ChartLineUp,
   } from 'phosphor-svelte'
   import logoUrl from '$lib/assets/moku-icon-wordmark.svg'
 
-  const TABS = [
-    { path: '/',           label: 'Home',       icon: House },
-    { path: '/library',    label: 'Library',    icon: Books },
+  const TABS: { path: string; label: string; icon: any }[] = [
+    { path: '/',           label: 'Home',       icon: House           },
+    { path: '/library',    label: 'Library',    icon: Books           },
     { path: '/browse',     label: 'Browse',     icon: MagnifyingGlass },
-    { path: '/downloads',  label: 'Downloads',  icon: DownloadSimple },
-    { path: '/extensions', label: 'Extensions', icon: PuzzlePiece },
-    { path: '/tracking',   label: 'Tracking',   icon: ChartLineUp },
-  ] as const
+    { path: '/downloads',  label: 'Downloads',  icon: DownloadSimple  },
+    { path: '/extensions', label: 'Extensions', icon: PuzzlePiece     },
+    { path: '/tracking',   label: 'Tracking',   icon: ChartLineUp     },
+  ]
 
   const TAB_SIZE = 36
   const TAB_GAP  = 4
 
-  const activeIndex = $derived(
-    TABS.findIndex(t => {
-      if (t.path === '/') return $page.url.pathname === '/'
-      return $page.url.pathname.startsWith(t.path)
-    })
-  )
+  function isActive(path: string): boolean {
+    const pathname = $page.url.pathname
+    if (path === '/') return pathname === '/'
+    return pathname.startsWith(path)
+  }
 
-  const indicatorY = $derived(activeIndex * (TAB_SIZE + TAB_GAP))
+  const activeIndex = $derived(TABS.findIndex(t => isActive(t.path)))
+  const indicatorY  = $derived(activeIndex * (TAB_SIZE + TAB_GAP))
 </script>
 
 <aside class="root">

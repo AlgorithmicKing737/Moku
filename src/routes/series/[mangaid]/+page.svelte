@@ -1,12 +1,8 @@
 <script lang="ts">
-  import { page }             from '$app/stores'
-  import { setActiveMangaId } from '$lib/state/series.svelte'
-  import SeriesDetail         from '$lib/components/series/SeriesDetail.svelte'
+  import { page }       from '$app/stores'
+  import SeriesDetail   from '$lib/components/series/SeriesDetail.svelte'
 
-  $effect(() => {
-    setActiveMangaId(Number($page.params.mangaid) || null)
-    return () => setActiveMangaId(null)
-  })
+  const mangaId = $derived(Number($page.params.mangaid))
 </script>
 
-<SeriesDetail />
+<SeriesDetail {mangaId} />

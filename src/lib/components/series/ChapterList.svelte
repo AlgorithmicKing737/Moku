@@ -65,11 +65,11 @@
 
   {:else if viewMode === 'grid'}
     {#each sortedChapters as ch, i}
-      {@const inProgress     = !ch.isRead && (ch.lastPageRead ?? 0) > 0}
+      {@const inProgress     = !ch.read && (ch.lastPageRead ?? 0) > 0}
       {@const isGridSelected = selectedIds.has(ch.id)}
       <button
         class="grid-cell"
-        class:read={ch.isRead}
+        class:read={ch.read}
         class:in-progress={inProgress}
         class:grid-selected={isGridSelected}
         use:chapterLongPress={[ch, i]}
@@ -79,8 +79,8 @@
       >
         {#if isGridSelected}<span class="grid-cell-check">✓</span>{/if}
         <span class="grid-cell-num">{ch.chapterNumber % 1 === 0 ? ch.chapterNumber.toFixed(0) : ch.chapterNumber}</span>
-        {#if ch.isDownloaded}<span class="grid-cell-dl" title="Downloaded"></span>{/if}
-        {#if ch.isRead}<span class="grid-cell-dot"></span>{/if}
+        {#if ch.downloaded}<span class="grid-cell-dl" title="Downloaded"></span>{/if}
+        {#if ch.read}<span class="grid-cell-dot"></span>{/if}
         {#if enqueueing.has(ch.id)}<span class="grid-cell-spinner"><CircleNotch size={10} weight="light" class="anim-spin" /></span>{/if}
       </button>
     {/each}
@@ -89,12 +89,12 @@
     {#each pageChapters as ch}
       {@const idxInSorted  = sortedChapters.indexOf(ch)}
       {@const isSelected   = selectedIds.has(ch.id)}
-      {@const chInProgress = !ch.isRead && (ch.lastPageRead ?? 0) > 0}
+      {@const chInProgress = !ch.read && (ch.lastPageRead ?? 0) > 0}
       <div
         role="button"
         tabindex="0"
         class="ch-row"
-        class:read={ch.isRead}
+        class:read={ch.read}
         class:ch-selected={isSelected}
         use:chapterLongPress={[ch, idxInSorted]}
         onclick={(e) => hasSelection ? onToggleSelect(ch.id, e) : onOpen(ch, chInProgress)}
@@ -109,12 +109,12 @@
           <div class="ch-meta">
             {#if ch.scanlator}<span class="ch-meta-item">{ch.scanlator}</span>{/if}
             {#if ch.uploadDate}<span class="ch-meta-item">{formatDate(ch.uploadDate)}</span>{/if}
-            {#if ch.lastPageRead && ch.lastPageRead > 0 && !ch.isRead}<span class="ch-meta-item">p.{ch.lastPageRead}</span>{/if}
+            {#if ch.lastPageRead && ch.lastPageRead > 0 && !ch.read}<span class="ch-meta-item">p.{ch.lastPageRead}</span>{/if}
           </div>
         </div>
         <div class="ch-right">
-          {#if ch.isRead}<CheckCircle size={14} weight="light" class="read-icon" />{/if}
-          {#if ch.isDownloaded}
+          {#if ch.read}<CheckCircle size={14} weight="light" class="read-icon" />{/if}
+          {#if ch.downloaded}
             <div class="ch-dl-wrap">
               <Download size={13} weight="fill" class="ch-dl-icon" />
               <button class="dl-btn dl-btn-delete" onclick={(e) => { e.stopPropagation(); onDeleteDownload(ch.id) }} title="Delete download">

@@ -1,6 +1,7 @@
 import type { Manga }       from "$lib/types";
 import type { MangaStatus } from "$lib/server-adapters/types";
 import type { Category }    from "$lib/types";
+import { settingsState, updateSettings } from "$lib/state/settings.svelte";
 
 export type LibrarySortOption =
   | "alphabetical"
@@ -201,6 +202,12 @@ class LibraryState {
   clearTabFilters(tab: string) {
     this.tabStatus  = { ...this.tabStatus,  [tab]: "ALL" };
     this.tabFilters = { ...this.tabFilters, [tab]: {} };
+  }
+
+  syncFromSettings(s: { hiddenLibraryTabs?: string[]; libraryPinnedTabOrder?: string[]; defaultLibraryCategoryId?: number | null }) {
+    if (s.hiddenLibraryTabs)      this.hiddenTabs        = new Set(s.hiddenLibraryTabs);
+    if (s.libraryPinnedTabOrder)  this.pinnedTabOrder    = s.libraryPinnedTabOrder;
+    if (s.defaultLibraryCategoryId !== undefined) this.defaultCategoryId = s.defaultLibraryCategoryId ?? null;
   }
 
   setCategories(cats: Category[]) {

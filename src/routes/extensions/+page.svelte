@@ -1,7 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
-  import { loadExtensions, loadSources } from '$lib/request-manager/extensions'
-  import { extensionsState } from '$lib/state/extensions.svelte'
+  import Extensions from '$lib/components/extensions/Extensions.svelte';
 </script>
 
-<p>Extensions — stub</p>
+<Extensions />

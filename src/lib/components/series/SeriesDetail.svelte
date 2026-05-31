@@ -1,5 +1,6 @@
 <script lang="ts">
   import { untrack }      from 'svelte'
+  import { goto }         from '$app/navigation'
   import SeriesHeader     from '$lib/components/series/SeriesHeader.svelte'
   import SeriesActions    from '$lib/components/series/SeriesActions.svelte'
   import ChapterList      from '$lib/components/series/ChapterList.svelte'
@@ -10,12 +11,11 @@
   import type { MenuEntry }            from '$lib/components/shared/ui/ContextMenu.svelte'
   import { getManga, getMangaList }    from '$lib/request-manager/manga'
   import { getChapters, fetchChapters, markChapterRead, markChaptersRead, deleteDownloadedChapters } from '$lib/request-manager/chapters'
-  import { enqueueDownload }           from '$lib/request-manager/downloads'
+  import { downloadStore }             from '$lib/state/downloads.svelte'
   import { getCategories, updateMangaCategories, createCategory as createCategoryReq, updateManga } from '$lib/request-manager/manga'
   import { saveScroll, getScroll }     from '$lib/state/app.svelte'
-  import { seriesState, openReader, setActiveManga, addBookmark,
-           acknowledgeUpdate, clearMarkersForManga,
-           setPreviewManga }           from '$lib/state/series.svelte'
+  import { seriesState, openReader, addBookmark,
+           acknowledgeUpdate, clearMarkersForManga }  from '$lib/state/series.svelte'
   import { DEFAULT_MANGA_PREFS }       from '$lib/types/settings'
   import type { MangaPrefs }           from '$lib/types/settings'
   import { addToast }                  from '$lib/state/notifications.svelte'
@@ -23,6 +23,7 @@
   import { autoLinkLibrary }           from '$lib/core/cover/autoLink'
   import { buildChapterList }          from '$lib/components/series/lib/chapterList'
   import { getPref, setPref }          from '$lib/components/series/lib/mangaPrefs'
+  import { openMangaFolder }           from '$lib/core/filesystem'
   import type { Manga, Chapter, Category } from '$lib/types'
   import AutomationPanel  from '$lib/components/series/panels/AutomationPanel.svelte'
   import CoverPickerPanel from '$lib/components/series/panels/CoverPickerPanel.svelte'
@@ -30,7 +31,10 @@
   import MigrateModal     from '$lib/components/shared/manga/MigrateModal.svelte'
   import SeriesLinkPanel  from '$lib/components/shared/manga/SeriesLinkPanel.svelte'
   import TrackingPanel    from '$lib/components/tracking/TrackingPanel.svelte'
-  import MangaPreview     from '$lib/components/shared/manga/MangaPreview.svelte'
+
+  interface Props { mangaId: number }
+  let { mangaId }: Props = $props()
+
   const CHAPTERS_PER_PAGE = 25
   const MANGA_TTL_MS      = 5 * 60 * 1000
   const CHAPTER_TTL_MS    = 2 * 60 * 1000
@@ -69,9 +73,9 @@
   let prevMangaId:   number | null = null
 
   const get = <K extends keyof MangaPrefs>(key: K) =>
-    seriesState.activeManga ? getPref(seriesState.activeManga.id, key) : DEFAULT_MANGA_PREFS[key]
+    mangaId ? getPref(mangaId, key) : DEFAULT_MANGA_PREFS[key]
   const set = <K extends keyof MangaPrefs>(key: K, value: MangaPrefs[K]) => {
-    if (seriesState.activeManga) setPref(seriesState.activeManga.id, key, value)
+    if (mangaId) setPref(mangaId, key, value)
   }
 
   const hasSelection       = $derived(selectedIds.size > 0)
@@ -107,8 +111,8 @@
     if (!sortedChapters.length) return null
     const asc      = [...sortedChapters].sort((a, b) => a.sourceOrder - b.sourceOrder)
     const anyRead  = asc.some(c => c.read)
-    const bookmark = seriesState.activeManga
-      ? seriesState.bookmarks.find(b => b.mangaId === seriesState.activeManga!.id)
+    const bookmark = mangaId
+      ? seriesState.bookmarks.find(b => b.mangaId === mangaId)
       : null
     const bookmarkedCh = bookmark ? asc.find(c => c.id === bookmark.chapterId) : null
     if (bookmarkedCh && !bookmarkedCh.read) {
@@ -131,9 +135,7 @@
     !!(get('preferredScanlator') as string)
   )
 
-  const linkedIds = $derived(
-    seriesState.activeManga ? (seriesState.settings.mangaLinks?.[seriesState.activeManga.id] ?? []) : []
-  )
+  const linkedIds = $derived(seriesState.settings.mangaLinks?.[mangaId] ?? [])
 
   function clearSelection() { selectedIds = new Set() }
 
@@ -152,21 +154,21 @@
     }
     prevChapterIds = new Set(nodes.map(c => c.id))
     chapters = nodes
-    if (seriesState.activeManga && nodes.length > 0) checkAndMarkCompleted(seriesState.activeManga.id, nodes)
+    if (mangaId && nodes.length > 0) checkAndMarkCompleted(mangaId, nodes)
   }
 
-  function loadCategories(mangaId: number) {
+  function loadCategories(id: number) {
     catsLoading = true
     getCategories()
       .then(d => {
         allCategories   = d.filter(c => c.id !== 0)
-        mangaCategories = allCategories.filter(c => c.mangas?.some((m: Manga) => m.id === mangaId))
+        mangaCategories = allCategories.filter(c => c.mangas?.nodes?.some((m: Manga) => m.id === id))
       })
       .catch(console.error)
       .finally(() => { catsLoading = false })
   }
 
-  async function checkAndMarkCompleted(mangaId: number, chaps: Chapter[]) {
+  async function checkAndMarkCompleted(id: number, chaps: Chapter[]) {
     if (chaps.length && manga?.status !== 'ONGOING') {
       const allRead   = chaps.every(c => c.read)
       const completed = allCategories.find(c => c.name === 'Completed')
@@ -232,42 +234,41 @@
     }).catch(() => { if (!ctrl.signal.aborted) loadingChapters = false })
   }
 
-  async function syncTrackersIntoChapters(mangaId: number, chaps: Chapter[]) {
+  async function syncTrackersIntoChapters(id: number, chaps: Chapter[]) {
     if (!seriesState.settings.trackerSyncBack) return
-    const records = trackingState.recordsFor(mangaId)
+    const records = trackingState.recordsFor(id)
     if (!records.length) return
     for (const record of records) {
       try {
-        const { markedIds } = await trackingState.syncFromRemote(mangaId, record, chaps, currentPrefs)
+        const { markedIds } = await trackingState.syncFromRemote(id, record, chaps, currentPrefs)
         if (markedIds.length > 0) {
           const idSet = new Set(markedIds)
           chapters = chapters.map(c => idSet.has(c.id) ? { ...c, read: true } : c)
-          if (seriesState.activeManga) chapterCache.set(seriesState.activeManga.id, { data: chapters, fetchedAt: Date.now() })
+          chapterCache.set(id, { data: chapters, fetchedAt: Date.now() })
         }
       } catch {}
     }
   }
 
   $effect(() => {
-    const id             = seriesState.activeMangaId
-    const m              = seriesState.activeManga
+    const id             = mangaId
     const shouldAutoLink = seriesState.settings.autoLinkOnOpen
     if (id) untrack(() => {
-      if (m) acknowledgeUpdate(m.id)
+      acknowledgeUpdate(id)
       loadMangaData(id)
       loadChaptersData(id)
       loadCategories(id)
       trackingState.loadForManga(id).then(() => syncTrackersIntoChapters(id, chapters))
       if (shouldAutoLink) {
         if (allMangaForLink.length) {
-          autoLinkLibrary(m, allMangaForLink)
+          autoLinkLibrary(manga, allMangaForLink)
             .then(n => { if (n > 0) addToast({ kind: 'success', title: 'Series linked', body: `${n} new link${n === 1 ? '' : 's'} found` }) })
         } else {
           loadingLinkList = true
           getMangaList()
             .then(list => {
               allMangaForLink = list
-              return autoLinkLibrary(m, list)
+              return autoLinkLibrary(manga, list)
             })
             .then(n => { if (n > 0) addToast({ kind: 'success', title: 'Series linked', body: `${n} new link${n === 1 ? '' : 's'} found` }) })
             .catch(console.error)
@@ -281,19 +282,18 @@
   $effect(() => {
     const wasOpen = prevChapterId !== null
     prevChapterId = seriesState.activeChapter?.id ?? null
-    if (wasOpen && !seriesState.activeChapter && seriesState.activeManga) {
-      const id = seriesState.activeManga.id
-      untrack(() => { reloadChapters(id) })
+    if (wasOpen && !seriesState.activeChapter) {
+      untrack(() => { reloadChapters(mangaId) })
     }
   })
 
   $effect(() => {
-    const mangaId = seriesState.activeManga?.id ?? null
-    if (mangaId === prevMangaId) return
+    const id = mangaId
+    if (id === prevMangaId) return
     if (chapterListEl && prevMangaId !== null) saveScroll(`series:${prevMangaId}`, chapterListEl.scrollTop)
-    prevMangaId = mangaId
-    if (chapterListEl && mangaId !== null) {
-      chapterListEl.scrollTo({ top: getScroll(`series:${mangaId}`) })
+    prevMangaId = id
+    if (chapterListEl && id !== null) {
+      chapterListEl.scrollTo({ top: getScroll(`series:${id}`) })
     }
   })
 
@@ -318,38 +318,34 @@
   async function enqueue(ch: Chapter, e: MouseEvent) {
     e.stopPropagation()
     enqueueing = new Set(enqueueing).add(ch.id)
-    await enqueueDownload(ch.id)
-    addToast({ kind: 'download', title: 'Download queued', body: ch.name })
+    const allowed = await downloadStore.enqueue(ch.id)
+    if (allowed) addToast({ kind: 'download', title: 'Download queued', body: ch.name })
     enqueueing.delete(ch.id); enqueueing = new Set(enqueueing)
-    if (seriesState.activeManga) reloadChapters(seriesState.activeManga.id)
+    reloadChapters(mangaId)
   }
 
   async function enqueueMultiple(chapterIds: number[]) {
     if (!chapterIds.length) return
     for (const id of chapterIds) {
-      const allowed = await enqueueDownload(id)
+      const allowed = await downloadStore.enqueue(id)
       if (!allowed) return
     }
     addToast({ kind: 'download', title: 'Download queued', body: `${chapterIds.length} chapter${chapterIds.length !== 1 ? 's' : ''} added` })
-    if (seriesState.activeManga) reloadChapters(seriesState.activeManga.id)
+    reloadChapters(mangaId)
   }
 
   async function markRead(chapterId: number, isRead: boolean) {
-    const mangaId = seriesState.activeManga?.id
     await markChapterRead(chapterId, isRead).catch(console.error)
-    chapters = chapters.map(c => c.id === chapterId ? { ...c, read } : c)
-    if (mangaId) {
-      chapterCache.set(mangaId, { data: chapters, fetchedAt: Date.now() })
-      checkAndMarkCompleted(mangaId, chapters)
-      const ch = chapters.find(c => c.id === chapterId)
-      if (ch) {
-        if (isRead) await trackingState.updateFromRead(mangaId, ch, chapters, currentPrefs)
-        else        await trackingState.updateFromUnread(mangaId, chapters, currentPrefs)
-      }
+    chapters = chapters.map(c => c.id === chapterId ? { ...c, read: isRead } : c)
+    chapterCache.set(mangaId, { data: chapters, fetchedAt: Date.now() })
+    checkAndMarkCompleted(mangaId, chapters)
+    const ch = chapters.find(c => c.id === chapterId)
+    if (ch) {
+      if (isRead) await trackingState.updateFromRead(mangaId, ch, chapters, currentPrefs)
+      else        await trackingState.updateFromUnread(mangaId, chapters, currentPrefs)
     }
     if (isRead) {
       if (get('deleteOnRead')) {
-        const ch = chapters.find(c => c.id === chapterId)
         if (ch?.downloaded) {
           const delayMs = (get('deleteDelayHours') as number) * 60 * 60 * 1000
           if (delayMs === 0) deleteDownloaded(chapterId)
@@ -369,20 +365,17 @@
 
   async function markBulk(ids: number[], isRead: boolean) {
     if (!ids.length) return
-    const mangaId = seriesState.activeManga?.id
     await markChaptersRead(ids, isRead).catch(console.error)
     const idSet = new Set(ids)
-    chapters = chapters.map(c => idSet.has(c.id) ? { ...c, read } : c)
-    if (mangaId) {
-      chapterCache.set(mangaId, { data: chapters, fetchedAt: Date.now() })
-      checkAndMarkCompleted(mangaId, chapters)
-      if (isRead) {
-        const ascending   = [...chapters].sort((a, b) => a.sourceOrder - b.sourceOrder)
-        const lastInBatch = ascending.filter(c => idSet.has(c.id)).at(-1)
-        if (lastInBatch) await trackingState.updateFromRead(mangaId, lastInBatch, chapters, currentPrefs)
-      } else {
-        await trackingState.updateFromUnread(mangaId, chapters, currentPrefs)
-      }
+    chapters = chapters.map(c => idSet.has(c.id) ? { ...c, read: isRead } : c)
+    chapterCache.set(mangaId, { data: chapters, fetchedAt: Date.now() })
+    checkAndMarkCompleted(mangaId, chapters)
+    if (isRead) {
+      const ascending   = [...chapters].sort((a, b) => a.sourceOrder - b.sourceOrder)
+      const lastInBatch = ascending.filter(c => idSet.has(c.id)).at(-1)
+      if (lastInBatch) await trackingState.updateFromRead(mangaId, lastInBatch, chapters, currentPrefs)
+    } else {
+      await trackingState.updateFromUnread(mangaId, chapters, currentPrefs)
     }
     if (isRead && get('deleteOnRead')) {
       const toDelete = ids.filter(id => chapters.find(c => c.id === id)?.downloaded)
@@ -391,7 +384,7 @@
         const doDelete = async () => {
           await deleteDownloadedChapters(toDelete).catch(console.error)
           chapters = chapters.map(c => toDelete.includes(c.id) ? { ...c, downloaded: false } : c)
-          if (mangaId) chapterCache.set(mangaId, { data: chapters, fetchedAt: Date.now() })
+          chapterCache.set(mangaId, { data: chapters, fetchedAt: Date.now() })
         }
         if (delayMs === 0) doDelete(); else setTimeout(doDelete, delayMs)
       }
@@ -403,7 +396,7 @@
     if (ids.length) {
       await deleteDownloadedChapters(ids).catch(console.error)
       chapters = chapters.map(c => ids.includes(c.id) ? { ...c, downloaded: false } : c)
-      if (seriesState.activeManga) chapterCache.set(seriesState.activeManga.id, { data: chapters, fetchedAt: Date.now() })
+      chapterCache.set(mangaId, { data: chapters, fetchedAt: Date.now() })
     }
     clearSelection()
   }
@@ -426,7 +419,7 @@
   async function deleteDownloaded(chapterId: number) {
     await deleteDownloadedChapters([chapterId]).catch(console.error)
     chapters = chapters.map(c => c.id === chapterId ? { ...c, downloaded: false } : c)
-    if (seriesState.activeManga) chapterCache.set(seriesState.activeManga.id, { data: chapters, fetchedAt: Date.now() })
+    chapterCache.set(mangaId, { data: chapters, fetchedAt: Date.now() })
   }
 
   async function deleteAllDownloads() {
@@ -435,16 +428,16 @@
     deletingAll = true
     await deleteDownloadedChapters(ids).catch(console.error)
     chapters = chapters.map(c => ({ ...c, downloaded: false }))
-    if (seriesState.activeManga) chapterCache.set(seriesState.activeManga.id, { data: chapters, fetchedAt: Date.now() })
+    chapterCache.set(mangaId, { data: chapters, fetchedAt: Date.now() })
     deletingAll = false
   }
 
   async function refreshChapters() {
-    if (!seriesState.activeManga || refreshing) return
+    if (refreshing) return
     refreshing = true
-    chapterCache.delete(seriesState.activeManga.id)
-    fetchChapters(seriesState.activeManga.id)
-      .then(() => reloadChapters(seriesState.activeManga!.id))
+    chapterCache.delete(mangaId)
+    fetchChapters(mangaId)
+      .then(() => reloadChapters(mangaId))
       .then(() => addToast({ kind: 'success', title: 'Chapters refreshed', body: `${chapters.length} chapter${chapters.length !== 1 ? 's' : ''} available` }))
       .catch(e => addToast({ kind: 'error', title: 'Refresh failed', body: e?.message }))
       .finally(() => refreshing = false)
@@ -464,7 +457,7 @@
       { label: 'Mark below as read',   icon: ArrowFatLinesDown, onClick: () => markBelowRead(idx),   disabled: idx === last || below.filter(c => !c.read).length === 0 },
       { label: 'Mark below as unread', icon: ArrowFatLineDown,  onClick: () => markBelowUnread(idx), disabled: idx === last || below.filter(c => c.read).length === 0 },
       { separator: true },
-      { label: ch.downloaded ? 'Delete download' : 'Download', icon: ch.downloaded ? Trash : Download, danger: ch.downloaded, onClick: () => ch.downloaded ? deleteDownloaded(ch.id) : enqueueDownload(ch.id) },
+      { label: ch.downloaded ? 'Delete download' : 'Download', icon: ch.downloaded ? Trash : Download, danger: ch.downloaded, onClick: () => ch.downloaded ? deleteDownloaded(ch.id) : downloadStore.enqueue(ch.id) },
       { separator: true },
       { label: 'Download next 5 from here', icon: DownloadSimple, onClick: () => enqueueMultiple(sortedChapters.slice(idx, idx + 5).filter(c => !c.downloaded).map(c => c.id)) },
       { label: 'Download all from here',    icon: DownloadSimple, onClick: () => enqueueMultiple(sortedChapters.slice(idx).filter(c => !c.downloaded).map(c => c.id)) },
@@ -493,9 +486,9 @@
       const existing = seriesState.bookmarks.find(b => b.chapterId === ch.id)
       if (!existing || existing.pageNumber < resumePage) {
         addBookmark({
-          mangaId:      seriesState.activeManga!.id,
-          mangaTitle:   seriesState.activeManga!.title,
-          thumbnailUrl: seriesState.activeManga!.thumbnailUrl,
+          mangaId,
+          mangaTitle:   manga!.title,
+          thumbnailUrl: manga!.thumbnailUrl,
           chapterId:    ch.id,
           chapterName:  ch.name,
           pageNumber:   resumePage,
@@ -520,9 +513,9 @@
       const existing = seriesState.bookmarks.find(b => b.chapterId === cc.chapter.id)
       if (!existing || existing.pageNumber < cc.resumePage) {
         addBookmark({
-          mangaId:      seriesState.activeManga!.id,
-          mangaTitle:   seriesState.activeManga!.title,
-          thumbnailUrl: seriesState.activeManga!.thumbnailUrl,
+          mangaId,
+          mangaTitle:   manga!.title,
+          thumbnailUrl: manga!.thumbnailUrl,
           chapterId:    cc.chapter.id,
           chapterName:  cc.chapter.name,
           pageNumber:   cc.resumePage,
@@ -553,12 +546,11 @@
   }
 
   async function toggleCategory(cat: Category) {
-    if (!seriesState.activeManga) return
     const inCat = mangaCategories.some(c => c.id === cat.id)
     try {
-      await updateMangaCategories(seriesState.activeManga.id, inCat ? [] : [cat.id], inCat ? [cat.id] : [])
+      await updateMangaCategories(mangaId, inCat ? [] : [cat.id], inCat ? [cat.id] : [])
       if (!inCat && !manga?.inLibrary) {
-        await updateManga(seriesState.activeManga.id, { inLibrary: true }).catch(console.error)
+        await updateManga(mangaId, { inLibrary: true }).catch(console.error)
         if (manga) manga = { ...manga, inLibrary: true }
       }
       mangaCategories = inCat ? mangaCategories.filter(c => c.id !== cat.id) : [...mangaCategories, cat]
@@ -566,12 +558,12 @@
   }
 
   async function createNewCategory(name: string) {
-    if (!name || !seriesState.activeManga) return
+    if (!name) return
     try {
       const cat = await createCategoryReq(name)
-      await updateMangaCategories(seriesState.activeManga.id, [cat.id], [])
+      await updateMangaCategories(mangaId, [cat.id], [])
       if (!manga?.inLibrary) {
-        await updateManga(seriesState.activeManga.id, { inLibrary: true }).catch(console.error)
+        await updateManga(mangaId, { inLibrary: true }).catch(console.error)
         if (manga) manga = { ...manga, inLibrary: true }
       }
       allCategories   = [...allCategories, cat]
@@ -580,7 +572,6 @@
   }
 </script>
 
-{#if seriesState.activeMangaId}
 <div class="root" role="presentation" oncontextmenu={(e) => e.preventDefault()}>
 
   <SeriesHeader
@@ -608,6 +599,7 @@
     onMarkersToggle={() => markersOpen = !markersOpen}
     onLinkPickerOpen={openLinkPicker}
     onCoverPickerOpen={openCoverPicker}
+    onGenreClick={(genre) => goto(`/browse?genre=${encodeURIComponent(genre)}`)}
   />
 
   <div class="list-wrap">
@@ -648,6 +640,7 @@
       onSetScanlatorFilter={(v) => set('scanlatorFilter', v)}
       onSetScanlatorBlacklist={(v) => set('scanlatorBlacklist', v)}
       onSetScanlatorForce={(v) => set('scanlatorForce', v)}
+      onOpenFolder={() => manga && openMangaFolder(manga)}
     />
 
     <ChapterList
@@ -711,55 +704,18 @@
     {manga}
     currentChapters={chapters}
     onClose={() => migrateOpen = false}
-    onMigrated={(newManga) => { setActiveManga(newManga); migrateOpen = false }}
+    onMigrated={(newManga) => { goto(`/series/${newManga.id}`); migrateOpen = false }}
   />
 {/if}
 
-{/if}
-
-<MangaPreview />
-
 <style>
-  .root {
-    display: flex; height: 100%; overflow: hidden;
-    animation: fadeIn 0.14s ease both;
-  }
-
+  .root { display: flex; height: 100%; overflow: hidden; animation: fadeIn 0.14s ease both; }
   .list-wrap { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-
-  .markers-panel-overlay,
-  .panel-overlay {
-    position: fixed; inset: 0; z-index: var(--z-settings);
-    display: flex; align-items: stretch; justify-content: flex-start;
-    animation: fadeIn 0.12s ease both;
-  }
-  .markers-panel-drawer,
-  .panel-drawer {
-    width: 280px; max-width: 90vw;
-    background: var(--bg-surface); border-right: 1px solid var(--border-base);
-    box-shadow: 4px 0 24px rgba(0,0,0,0.4);
-    display: flex; flex-direction: column;
-    animation: drawerIn 0.18s cubic-bezier(0.16,1,0.3,1) both;
-  }
-
+  .panel-overlay { position: fixed; inset: 0; z-index: var(--z-settings); display: flex; align-items: stretch; justify-content: flex-start; animation: fadeIn 0.12s ease both; }
+  .panel-drawer { width: 280px; max-width: 90vw; background: var(--bg-surface); border-right: 1px solid var(--border-base); box-shadow: 4px 0 24px rgba(0,0,0,0.4); display: flex; flex-direction: column; animation: drawerIn 0.18s cubic-bezier(0.16,1,0.3,1) both; }
   @keyframes fadeIn   { from { opacity: 0 }                               to { opacity: 1 } }
   @keyframes drawerIn { from { opacity: 0; transform: translateX(-12px) } to { opacity: 1; transform: translateX(0) } }
-
-  .modal-overlay {
-    position: fixed; inset: 0; z-index: var(--z-settings);
-    display: flex; align-items: center; justify-content: center;
-    background: rgba(0,0,0,0.5);
-    animation: fadeIn 0.12s ease both;
-  }
-  .modal-dialog {
-    width: 480px; max-width: 90vw; max-height: 80vh;
-    background: var(--bg-surface); border: 1px solid var(--border-base);
-    border-radius: var(--radius-lg);
-    box-shadow: 0 8px 48px rgba(0,0,0,0.5);
-    display: flex; flex-direction: column;
-    animation: modalIn 0.18s cubic-bezier(0.16,1,0.3,1) both;
-  }
+  .modal-overlay { position: fixed; inset: 0; z-index: var(--z-settings); display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.5); animation: fadeIn 0.12s ease both; }
+  .modal-dialog { width: 480px; max-width: 90vw; max-height: 80vh; background: var(--bg-surface); border: 1px solid var(--border-base); border-radius: var(--radius-lg); box-shadow: 0 8px 48px rgba(0,0,0,0.5); display: flex; flex-direction: column; animation: modalIn 0.18s cubic-bezier(0.16,1,0.3,1) both; }
   @keyframes modalIn { from { opacity: 0; transform: scale(0.96) translateY(8px) } to { opacity: 1; transform: scale(1) translateY(0) } }
-
-
 </style>

@@ -80,6 +80,7 @@ function mapDownloadState(state: string): DownloadItem['state'] {
 }
 
 export function mapCategory(raw: Record<string, unknown>): Category {
+  const mangaNodes = (raw.mangas as { nodes: Record<string, unknown>[] })?.nodes ?? []
   return {
     id:                raw.id as number,
     name:              raw.name as string,
@@ -87,6 +88,6 @@ export function mapCategory(raw: Record<string, unknown>): Category {
     default:           raw.default as boolean,
     includeInUpdate:   raw.includeInUpdate as boolean,
     includeInDownload: raw.includeInDownload as boolean,
-    mangas:            (raw.mangas as { nodes: Record<string, unknown>[] })?.nodes?.map(mapManga) ?? [],
+    mangas:            { nodes: mangaNodes.map(mapManga) },
   }
 }

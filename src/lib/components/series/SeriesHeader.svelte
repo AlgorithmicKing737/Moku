@@ -1,7 +1,7 @@
 <script lang="ts">
   import {
     ArrowLeft, BookmarkSimple, ArrowSquareOut, Play, CaretDown,
-    Eye, ArrowsClockwise, LinkSimpleHorizontalBreak, ChartLineUp,
+    ArrowsClockwise, LinkSimpleHorizontalBreak, ChartLineUp,
     MapPin, Gear, Trash, Image,
   } from 'phosphor-svelte'
   import { goto }          from '$app/navigation'
@@ -9,9 +9,9 @@
   import { get }           from 'svelte/store'
   import Thumbnail         from '$lib/components/shared/manga/Thumbnail.svelte'
   import { resolvedCover } from '$lib/core/cover/coverResolver'
-  import type { MangaPrefs }                                    from '$lib/state/series.svelte'
-  import { setGenreFilter, setNavPage }                         from '$lib/state/app.svelte'
-  import { seriesState, setActiveManga, setPreviewManga }       from '$lib/state/series.svelte'
+  import type { MangaPrefs }                                    from '$lib/types/settings'
+  import { seriesState }                                        from '$lib/state/series.svelte'
+  import { setPreviewManga }                                    from '$lib/state/series.svelte'
 
   interface ContinueChapter {
     chapter:    Chapter
@@ -44,6 +44,7 @@
     onMarkersToggle:  () => void
     onLinkPickerOpen: () => void
     onCoverPickerOpen:() => void
+    onGenreClick:     (genre: string) => void
   }
 
   let {
@@ -53,6 +54,7 @@
     mangaCategories, togglingLibrary,
     onRead, onToggleLibrary, onDeleteAll, onMigrateOpen,
     onTrackingOpen, onAutoOpen, onMarkersToggle, onLinkPickerOpen, onCoverPickerOpen,
+    onGenreClick,
   }: Props = $props()
 
   let manageOpen:     boolean = $state(false)
@@ -89,9 +91,11 @@
     <ArrowLeft size={13} weight="light" /> Back
   </button>
 
-  <button class="cover-wrap" onclick={() => setPreviewManga(manga)}>
-    <Thumbnail src={resolvedCover(seriesState.activeManga?.id ?? manga?.id ?? 0, seriesState.activeManga?.thumbnailUrl ?? manga?.thumbnailUrl ?? "")} alt={seriesState.activeManga?.title ?? manga?.title ?? ""} class="cover" />
-  </button>
+  <div class="cover-wrap">
+    <button class="cover-btn" onclick={() => manga && setPreviewManga(manga)} title="Quick preview" disabled={!manga}>
+      <Thumbnail src={resolvedCover(seriesState.activeManga?.id ?? manga?.id ?? 0, seriesState.activeManga?.thumbnailUrl ?? manga?.thumbnailUrl ?? "")} alt={seriesState.activeManga?.title ?? manga?.title ?? ""} class="cover" />
+    </button>
+  </div>
 
   {#if loadingManga}
     <div class="meta-skeleton">
@@ -132,7 +136,7 @@
       {#if manga?.genre?.length}
         <div class="genres">
           {#each (genresExpanded ? manga.genre : manga.genre.slice(0, 3)) as g}
-            <button class="genre" onclick={() => { setGenreFilter(g); setNavPage('search'); setActiveManga(null) }}>{g}</button>
+            <button class="genre" onclick={() => onGenreClick(g)}>{g}</button>
           {/each}
           {#if manga.genre.length > 3}
             <button class="genre-toggle" onclick={() => genresExpanded = !genresExpanded}>
@@ -145,7 +149,7 @@
       {#if manga?.description}
         <div class="desc-wrap">
           <p class="desc">{manga.description}</p>
-          <button class="expand-toggle" onclick={() => setPreviewManga(manga)}>Read more</button>
+          <button class="expand-toggle" onclick={() => genresExpanded = !genresExpanded}>Read more</button>
         </div>
       {/if}
     </div>
@@ -192,9 +196,6 @@
       {#if manageOpen}
         <div class="details-body">
           <div class="detail-actions">
-            <button class="detail-action-btn" onclick={() => setPreviewManga(manga)}>
-              <Eye size={12} weight="light" /> Preview
-            </button>
             <button class="detail-action-btn" onclick={onMigrateOpen}>
               <ArrowsClockwise size={12} weight="light" /> Switch Source
             </button>
@@ -251,10 +252,16 @@
     width: 100%; aspect-ratio: 2/3; border-radius: var(--radius-md);
     overflow: hidden; background: var(--bg-raised);
     border: 1px solid var(--border-dim); flex-shrink: 0;
-    cursor: pointer; transition: opacity var(--t-base); padding: 0;
     position: relative;
   }
-  .cover-wrap:hover { opacity: 0.88; }
+  .cover-btn {
+    display: block; position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    background: none; border: none; padding: 0; cursor: pointer;
+    transition: filter var(--t-base);
+  }
+  .cover-btn:hover:not(:disabled) { filter: brightness(0.85); }
+  .cover-btn:disabled { cursor: default; }
   :global(.cover) {
     display: block;
     position: absolute; inset: 0;

@@ -2,7 +2,7 @@
   import {
     Download, CheckCircle, Circle, SortAscending, SortDescending,
     CaretDown, ArrowsClockwise, List, SquaresFour, FolderSimplePlus,
-    Trash, DownloadSimple, X, MagnifyingGlass, Funnel, Check,
+    Trash, DownloadSimple, X, MagnifyingGlass, Funnel, Check, FolderOpen,
   } from 'phosphor-svelte'
   import type { Chapter, Category } from '$lib/types'
   import type { ChapterSortMode, ChapterSortDir } from './lib/chapterList'
@@ -51,6 +51,7 @@
     onSetScanlatorFilter:    (v: string[]) => void
     onSetScanlatorBlacklist: (v: string[]) => void
     onSetScanlatorForce:     (v: boolean) => void
+    onOpenFolder:            () => void
   }
 
   let {
@@ -63,6 +64,7 @@
     onMarkSelectedRead, onClearSelection, onEnqueueNext, onEnqueueMultiple,
     onDeleteAll, onRefresh, onToggleCategory, onCreateCategory,
     onSetScanlatorFilter, onSetScanlatorBlacklist, onSetScanlatorForce,
+    onOpenFolder,
   }: Props = $props()
 
   let sortMenuOpen:    boolean = $state(false)
@@ -103,7 +105,7 @@
     const from = parseFloat(rangeFrom), to = parseFloat(rangeTo)
     if (isNaN(from) || isNaN(to)) return
     const lo = Math.min(from, to), hi = Math.max(from, to)
-    onEnqueueMultiple(sortedChapters.filter(c => c.chapterNumber >= lo && c.chapterNumber <= hi && !c.isDownloaded).map(c => c.id))
+    onEnqueueMultiple(sortedChapters.filter(c => c.chapterNumber >= lo && c.chapterNumber <= hi && !c.downloaded).map(c => c.id))
   }
 
   function submitNewFolder() {
@@ -270,8 +272,12 @@
       </div>
     {/if}
 
-    <button class="icon-btn" onclick={onRefresh} disabled={refreshing}>
+    <button class="icon-btn" onclick={onRefresh} disabled={refreshing} title="Refresh chapters">
       <ArrowsClockwise size={14} weight="light" class={refreshing ? 'anim-spin' : ''} />
+    </button>
+
+    <button class="icon-btn" onclick={onOpenFolder} title="Open manga folder">
+      <FolderOpen size={14} weight="light" />
     </button>
 
     <div class="fp-wrap" bind:this={folderPickerRef}>
@@ -329,7 +335,7 @@
                 <p class="dl-section-label">From Ch.{continueChapter.chapter.chapterNumber}</p>
                 <div class="dl-next-row">
                   {#each [5, 10, 25] as n}
-                    {@const avail = sortedChapters.slice(contIdx, contIdx + n).filter(c => !c.isDownloaded).length}
+                    {@const avail = sortedChapters.slice(contIdx, contIdx + n).filter(c => !c.downloaded).length}
                     <button class="dl-next-btn" disabled={avail === 0} onclick={() => { onEnqueueNext(n); dlOpen = false }}>
                       <span>Next {n}</span><span class="dl-next-sub">{avail} new</span>
                     </button>
@@ -352,11 +358,11 @@
               </div>
             {/if}
             <div class="dl-divider"></div>
-            <button class="dl-item" onclick={() => { onEnqueueMultiple(sortedChapters.filter(c => !c.isRead && !c.isDownloaded).map(c => c.id)); dlOpen = false }}>
-              <span>Unread chapters</span><span class="dl-item-sub">{sortedChapters.filter(c => !c.isRead && !c.isDownloaded).length} remaining</span>
+            <button class="dl-item" onclick={() => { onEnqueueMultiple(sortedChapters.filter(c => !c.read && !c.downloaded).map(c => c.id)); dlOpen = false }}>
+              <span>Unread chapters</span><span class="dl-item-sub">{sortedChapters.filter(c => !c.read && !c.downloaded).length} remaining</span>
             </button>
-            <button class="dl-item" onclick={() => { onEnqueueMultiple(sortedChapters.filter(c => !c.isDownloaded).map(c => c.id)); dlOpen = false }}>
-              <span>Download all</span><span class="dl-item-sub">{sortedChapters.filter(c => !c.isDownloaded).length} not downloaded</span>
+            <button class="dl-item" onclick={() => { onEnqueueMultiple(sortedChapters.filter(c => !c.downloaded).map(c => c.id)); dlOpen = false }}>
+              <span>Download all</span><span class="dl-item-sub">{sortedChapters.filter(c => !c.downloaded).length} not downloaded</span>
             </button>
             {#if downloadedCount > 0}
               <div class="dl-divider"></div>

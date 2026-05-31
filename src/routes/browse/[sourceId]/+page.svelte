@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
-  import { loadSources } from '$lib/request-manager/extensions'
-  import { extensionsState } from '$lib/state/extensions.svelte'
+  import { page } from '$app/stores'
+  import Search   from '$lib/components/browse/Search.svelte'
+
+  const sourceId = $derived($page.params.sourceId)
 </script>
 
-<p>Browse — stub</p>
+<Search initialTab="source" preselectedSourceId={sourceId} />
