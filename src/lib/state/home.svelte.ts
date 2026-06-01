@@ -40,3 +40,7 @@ export function recordRead(entry: HistoryEntry) {
   homeState.dailyReadCounts[dateStr] = (homeState.dailyReadCounts[dateStr] ?? 0) + 1;
   homeState.stats.totalChaptersRead++;
 }
+
+export function clearHistory() {
+  homeState.history = [];
+}

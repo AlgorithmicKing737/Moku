@@ -1,9 +1,12 @@
 <script lang="ts">
+  import Thumbnail from '$lib/components/shared/manga/Thumbnail.svelte';
   import { settingsState, updateSettings } from "$lib/state/settings.svelte";
   import { toast } from "$lib/state/notifications.svelte";
   import { getAdapter } from "$lib/request-manager";
-  import { syncBackFromTracker } from "$lib/state/tracking.svelte";
+  import { syncBackFromTracker } from "$lib/components/tracking/lib/trackingSync";
+  import { trackingState } from "$lib/state/tracking.svelte";
   import type { Tracker, TrackRecord } from "$lib/types/index";
+  import type { ChapterDisplayPrefs } from "$lib/components/series/lib/chapterList";
 
   let trackers        = $state<Tracker[]>([]);
   let trackersLoading = $state(false);
@@ -19,6 +22,8 @@
   let credsError      = $state<string | null>(null);
   let loggingOut      = $state<number | null>(null);
   let syncing         = $state(false);
+
+  const settings = $derived(settingsState.settings);
 
   $effect(() => {
     if (trackers.length === 0 && !trackersLoading) loadTrackers();
@@ -41,7 +46,7 @@
 
   async function submitOAuth() {
     if (!oauthTrackerId || !oauthCallbackInput.trim()) return;
-    oauthSubmitting = true;
+    oauthSubmitting = true; oauthError = null;
     try {
       await getAdapter().loginTrackerOAuth(oauthTrackerId, oauthCallbackInput.trim());
       await loadTrackers();
@@ -57,7 +62,7 @@
 
   async function submitCredentials() {
     if (!credsTrackerId || !credsUsername.trim() || !credsPassword.trim()) return;
-    credsSubmitting = true;
+    credsSubmitting = true; credsError = null;
     try {
       await getAdapter().loginTrackerCredentials(credsTrackerId, credsUsername.trim(), credsPassword.trim());
       await loadTrackers();
@@ -84,20 +89,21 @@
   async function runSyncAll() {
     syncing = true;
     try {
-      const adapter     = getAdapter();
-      const allTrackers = await adapter.getTrackersWithRecords();
-      const loggedIn    = allTrackers.filter((t: any) => t.isLoggedIn);
-      const settings    = settingsState.settings;
-      let totalMarked   = 0;
+      const adapter = getAdapter();
+
+      if (trackingState.allTrackers.length === 0) await trackingState.loadAll();
+      const loggedIn = trackingState.allTrackers.filter((t) => t.isLoggedIn);
+
+      let totalMarked = 0;
 
       for (const tracker of loggedIn) {
         for (const record of tracker.trackRecords.nodes as TrackRecord[]) {
           if (!record.manga?.id) continue;
           const mangaId  = record.manga.id;
-          const chapters = await adapter.getChapters(mangaId);
-          const prefs    = settings.mangaPrefs?.[mangaId] ?? {};
+          const chapters = await adapter.getChapters(String(mangaId));
+          const prefs    = (settings.mangaPrefs?.[mangaId] ?? {}) as ChapterDisplayPrefs;
 
-          const marked = await syncBackFromTracker(
+          const markedIds = await syncBackFromTracker(
             [record],
             chapters,
             {
@@ -107,7 +113,7 @@
             },
             adapter.markChaptersRead.bind(adapter),
           );
-          totalMarked += marked.length;
+          totalMarked += markedIds.length;
         }
       }
 
@@ -132,7 +138,7 @@
         {#each trackers as tracker}
           <div class="s-tracker-row" class:expanded={oauthTrackerId === tracker.id || credsTrackerId === tracker.id}>
             <div class="s-tracker-identity">
-              <img src={tracker.icon} alt={tracker.name} class="s-tracker-logo" />
+              <Thumbnail src={tracker.icon} alt={tracker.name} class="s-tracker-logo" />
               <div class="s-row-info">
                 <span class="s-label">{tracker.name}</span>
                 <div class="s-tracker-status-row">

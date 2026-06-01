@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
+  import { page } from '$app/stores'
   import { appState, app } from '$lib/state/app.svelte'
   import { notifications } from '$lib/state/notifications.svelte'
   import { settingsState, updateSettings } from '$lib/state/settings.svelte'
@@ -42,7 +43,10 @@
     bypassed
   )
 
-  // Apply theme immediately on mount (before first paint if possible)
+  const isReaderRoute      = $derived($page.url.pathname.startsWith('/reader'))
+  const readerContainerized = $derived(settingsState.settings.readerContainerized ?? false)
+  const strippedLayout     = $derived(isReaderRoute && !readerContainerized)
+
   onMount(() => {
     polling = true
     pollLoop()
@@ -56,7 +60,6 @@
     document.documentElement.style.zoom = String(settingsState.settings.uiZoom ?? 1.0)
   })
 
-  // Reactive theme application — explicitly pass values so Svelte tracks them
   $effect(() => {
     const theme        = settingsState.settings.theme ?? 'dark'
     const customThemes = settingsState.settings.customThemes ?? []
@@ -96,19 +99,23 @@
 {/if}
 
 {#if showApp}
-  <div class="frame">
-    <div class="shell">
-      {#if isTauri}
-        <TitleBar onClose={() => import('@tauri-apps/api/window').then(m => m.getCurrentWindow().close())} />
-      {/if}
-      <div class="body">
-        <Sidebar />
-        <main class="main">
-          {@render children()}
-        </main>
+  {#if strippedLayout}
+    {@render children()}
+  {:else}
+    <div class="frame">
+      <div class="shell">
+        {#if isTauri}
+          <TitleBar onClose={() => import('@tauri-apps/api/window').then(m => m.getCurrentWindow().close())} />
+        {/if}
+        <div class="body">
+          <Sidebar />
+          <main class="main">
+            {@render children()}
+          </main>
+        </div>
       </div>
     </div>
-  </div>
+  {/if}
 {/if}
 
 {#if app.settingsOpen}

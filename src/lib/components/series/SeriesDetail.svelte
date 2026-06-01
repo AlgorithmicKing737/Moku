@@ -495,7 +495,7 @@
         })
       }
     }
-    openReader(ch, ascList)
+    openReader(ch, ascList, manga)
   }
 
   function handleContinue(cc: typeof continueChapter) {
@@ -522,7 +522,7 @@
         })
       }
     }
-    openReader(cc.chapter, ascList)
+    openReader(cc.chapter, ascList, manga)
   }
 
   async function openLinkPicker() {

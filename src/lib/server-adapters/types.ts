@@ -1,5 +1,5 @@
 import type { DownloadStatus } from '$lib/types/api'
-import type { Manga, Chapter, Extension, Source, Tracker, Category } from '$lib/types'
+import type { Manga, Chapter, Extension, Source, Tracker, TrackRecord, Category } from '$lib/types'
 
 export interface ServerConfig {
   baseUrl: string
@@ -104,12 +104,21 @@ export interface SetFlareSolverrInput {
   flareSolverrAsResponseFallback: boolean
 }
 
+export interface TrackRecordPatch {
+  status?:          number
+  score?:           number
+  lastChapterRead?: number
+  startDate?:       string
+  finishDate?:      string
+  private?:         boolean
+}
+
 export interface ServerAdapter {
   connect(config: ServerConfig): Promise<void>
   getStatus(): Promise<ServerStatus>
   getServerUrl(): string
 
-  getManga(id: string): Promise<Manga>
+  getManga(id: string, signal?: AbortSignal): Promise<Manga>
   getMangaList(filters: MangaFilters): Promise<PaginatedResult<Manga>>
   searchManga(query: string, sourceId?: string): Promise<Manga[]>
   fetchManga(id: string): Promise<Manga>
@@ -161,11 +170,13 @@ export interface ServerAdapter {
   updateCategoryManga(categoryId: number): Promise<void>
 
   getTrackers(): Promise<Tracker[]>
+  getAllTrackerRecords(): Promise<unknown[]>
   getMangaTrackRecords(mangaId: string): Promise<unknown[]>
   searchTracker(trackerId: string, query: string): Promise<unknown[]>
   linkTracker(mangaId: string, trackerId: string, remoteId: string): Promise<void>
   unlinkTracker(recordId: string): Promise<void>
-  fetchTrackRecord(recordId: string): Promise<void>
+  updateTrackRecord(recordId: string, patch: TrackRecordPatch): Promise<TrackRecord>
+  fetchTrackRecord(recordId: string): Promise<TrackRecord>
   syncTracking(mangaId: string): Promise<void>
 
   getServerSecurity(): Promise<ServerSecurity>

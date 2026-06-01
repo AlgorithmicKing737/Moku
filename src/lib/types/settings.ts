@@ -125,6 +125,7 @@ export interface Settings {
   automationEnabled?: boolean; automationEnforceGlobal?: boolean
   automationDefaults?: Partial<MangaPrefs>
   libraryShowAllInSaved?: boolean; libraryHideCompletedInSaved?: boolean
+  readerContainerized?: boolean
 }
 
 export const DEFAULT_SETTINGS: Settings = {

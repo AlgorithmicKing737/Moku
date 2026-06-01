@@ -1,0 +1,248 @@
+<script lang="ts">
+  import { onMount, onDestroy } from 'svelte'
+  import { getAdapter }         from '$lib/request-manager'
+  import { cache, CACHE_KEYS, CACHE_GROUPS } from '$lib/core/cache/queryCache'
+  import { homeState, clearHistory } from '$lib/state/home.svelte'
+  import { setActiveManga, openReader, setPreviewManga } from '$lib/state/series.svelte'
+  import { addToast }           from '$lib/state/notifications.svelte'
+  import { buildChapterList }   from '$lib/components/series/lib/chapterList'
+  import { buildSessions, groupByDay }         from './lib/recentHistory'
+  import { fetchedAtMs, parseServerTimestamp, groupUpdatesByDay } from './lib/recentUpdates'
+  import RecentToolbar  from './RecentToolbar.svelte'
+  import UpdatesTab     from './UpdatesTab.svelte'
+  import HistoryTab     from './HistoryTab.svelte'
+  import type { Manga } from '$lib/types'
+  import type { RecentUpdate, UpdateGroup } from './lib/recentUpdates'
+  import type { HistoryGroup }              from './lib/recentHistory'
+
+  const RECENT_UPDATES_TTL_MS = 60 * 1_000
+  const UPDATE_STATUS_POLL_MS = 2_000
+
+  let tab:                 'updates' | 'history' = $state('updates')
+  let historySearch:       string  = $state('')
+  let updatesSearch:       string  = $state('')
+  let historyConfirmClear: boolean = $state(false)
+
+  let updates:             RecentUpdate[] = $state([])
+  let updatesLoading:      boolean        = $state(true)
+  let updatesError:        string | null  = $state(null)
+  let openingId:           number | null  = $state(null)
+  let updaterRunning:      boolean        = $state(false)
+  let lastUpdatedTs:       number | null  = $state(null)
+  let updaterFinishedJobs: number | null  = $state(null)
+  let updaterTotalJobs:    number | null  = $state(null)
+
+  let libraryManga: Manga[] = $state([])
+
+  let ctrl:            AbortController | null         = null
+  let statusPollTimer: ReturnType<typeof setTimeout> | null = null
+
+  onMount(() => {
+    void loadUpdates()
+    cache.get(CACHE_KEYS.LIBRARY, () =>
+      getAdapter().getMangaList({ inLibrary: true }).then(r => r.items)
+    ).then(m => { libraryManga = m }).catch(() => {})
+  })
+
+  onDestroy(() => {
+    ctrl?.abort()
+    stopStatusPolling()
+  })
+
+  const updateGroups = $derived(groupUpdatesByDay(updates))
+
+  const lastUpdatedLabel = $derived(
+    lastUpdatedTs
+      ? new Date(lastUpdatedTs).toLocaleString('en-US', {
+          month: 'short', day: 'numeric', year: 'numeric',
+          hour: 'numeric', minute: '2-digit',
+        })
+      : null
+  )
+
+  const updaterProgressLabel = $derived(
+    typeof updaterFinishedJobs === 'number' &&
+    typeof updaterTotalJobs   === 'number' &&
+    updaterTotalJobs > 0
+      ? `${updaterFinishedJobs}/${updaterTotalJobs}`
+      : null
+  )
+
+  const filteredHistory = $derived(historySearch.trim()
+    ? homeState.history.filter(e =>
+        e.mangaTitle.toLowerCase().includes(historySearch.toLowerCase()) ||
+        e.chapterName.toLowerCase().includes(historySearch.toLowerCase())
+      )
+    : homeState.history)
+
+  const historyGroups = $derived(groupByDay(buildSessions(filteredHistory)))
+
+  function applyUpdateStatus(statusRes: { isRunning?: boolean; finishedJobs?: number; totalJobs?: number; lastUpdated?: unknown } | null) {
+    if (!statusRes) return
+    updaterRunning      = statusRes.isRunning    ?? false
+    updaterFinishedJobs = statusRes.finishedJobs ?? null
+    updaterTotalJobs    = statusRes.totalJobs    ?? null
+    lastUpdatedTs       = parseServerTimestamp(statusRes.lastUpdated ?? null)
+  }
+
+  function stopStatusPolling() {
+    if (!statusPollTimer) return
+    clearTimeout(statusPollTimer)
+    statusPollTimer = null
+  }
+
+  function scheduleStatusPoll() {
+    if (statusPollTimer) return
+    const tick = async () => {
+      statusPollTimer = null
+      try {
+        const statusRes  = await getAdapter().getLibraryUpdateStatus()
+        const wasRunning = updaterRunning
+        applyUpdateStatus(statusRes)
+        if (updaterRunning)      statusPollTimer = setTimeout(tick, UPDATE_STATUS_POLL_MS)
+        else if (wasRunning) void loadUpdates(true)
+      } catch {
+        if (updaterRunning) statusPollTimer = setTimeout(tick, UPDATE_STATUS_POLL_MS)
+      }
+    }
+    statusPollTimer = setTimeout(tick, UPDATE_STATUS_POLL_MS)
+  }
+
+  async function loadUpdates(force = false) {
+    ctrl?.abort()
+    const nextCtrl = new AbortController()
+    ctrl           = nextCtrl
+    updatesLoading = true
+    updatesError   = null
+
+    try {
+      const key = CACHE_KEYS.RECENT_UPDATES
+      if (force) cache.clear(key)
+
+      const [updatesRes, statusRes] = await Promise.all([
+        cache.get<RecentUpdate[]>(
+          key,
+          () => getAdapter().getRecentlyUpdated(nextCtrl.signal),
+          RECENT_UPDATES_TTL_MS,
+          CACHE_GROUPS.LIBRARY,
+        ),
+        getAdapter().getLibraryUpdateStatus().catch(() => null),
+      ])
+
+      applyUpdateStatus(statusRes)
+      if (updaterRunning) scheduleStatusPoll()
+      else stopStatusPolling()
+
+      if (nextCtrl.signal.aborted) return
+
+      updates = (updatesRes ?? [])
+        .filter(item => item.manga?.inLibrary)
+        .sort((a, b) => fetchedAtMs(b) - fetchedAtMs(a))
+    } catch (e: any) {
+      if (nextCtrl.signal.aborted) return
+      updatesError        = e?.message ?? 'Failed to load updates'
+      updates             = []
+      updaterRunning      = false
+      lastUpdatedTs       = null
+      updaterFinishedJobs = null
+      updaterTotalJobs    = null
+      stopStatusPolling()
+    } finally {
+      if (!nextCtrl.signal.aborted) updatesLoading = false
+    }
+  }
+
+  function mangaStub(item: RecentUpdate): Manga {
+    return {
+      id:           item.manga?.id ?? item.mangaId,
+      title:        item.manga?.title ?? 'Unknown series',
+      thumbnailUrl: item.manga?.thumbnailUrl ?? '',
+      inLibrary:    item.manga?.inLibrary ?? true,
+    } as Manga
+  }
+
+  async function openUpdate(item: RecentUpdate) {
+    if (openingId !== null) return
+    openingId = item.id
+    const manga = mangaStub(item)
+    try {
+      const chapters = await getAdapter().getChapters(String(item.mangaId))
+      const sorted   = [...chapters].sort((a, b) => a.sourceOrder - b.sourceOrder)
+      const list     = buildChapterList(sorted, {})
+      const target   = list.find(ch => ch.id === item.id)
+      if (target) { setActiveManga(manga); openReader(target, list) }
+      else          setActiveManga(manga)
+    } catch {
+      setActiveManga(manga)
+      addToast({ kind: 'error', title: "Couldn't open chapter", body: 'Opened the series instead.' })
+    } finally {
+      openingId = null
+    }
+  }
+
+  function thumbFor(mangaId: number, fallback: string): string {
+    return libraryManga.find(m => m.id === mangaId)?.thumbnailUrl ?? fallback ?? ''
+  }
+
+  function handleHistoryClear() {
+    if (!historyConfirmClear) {
+      historyConfirmClear = true
+      setTimeout(() => { historyConfirmClear = false }, 3_000)
+      return
+    }
+    clearHistory()
+    historyConfirmClear = false
+  }
+</script>
+
+<div class="root anim-fade-in">
+  <RecentToolbar
+    {tab}
+    {historySearch}
+    {updatesSearch}
+    {historyConfirmClear}
+    hasHistory={homeState.history.length > 0}
+    {updatesLoading}
+    onTabChange={(t) => tab = t}
+    onHistorySearchChange={(v) => historySearch = v}
+    onUpdatesSearchChange={(v) => updatesSearch = v}
+    onHistoryClear={handleHistoryClear}
+    onRefreshUpdates={() => loadUpdates(true)}
+  />
+
+  <div class="content">
+    {#if tab === 'updates'}
+      <UpdatesTab
+        loading={updatesLoading}
+        error={updatesError}
+        groups={updateGroups}
+        {updatesSearch}
+        totalCount={updates.length}
+        {openingId}
+        {updaterRunning}
+        {lastUpdatedLabel}
+        {updaterProgressLabel}
+        onOpenUpdate={openUpdate}
+        onOpenSeries={(item) => setActiveManga(mangaStub(item))}
+      />
+    {:else}
+      <HistoryTab
+        groups={historyGroups}
+        hasHistory={homeState.history.length > 0}
+        {historySearch}
+        stats={homeState.stats}
+        {thumbFor}
+        onOpenSeries={(session) => setPreviewManga({
+          id:           session.mangaId,
+          title:        session.mangaTitle,
+          thumbnailUrl: thumbFor(session.mangaId, session.thumbnailUrl),
+        } as any)}
+      />
+    {/if}
+  </div>
+</div>
+
+<style>
+  .root    { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+  .content { flex: 1; min-height: 0; overflow: hidden; }
+</style>

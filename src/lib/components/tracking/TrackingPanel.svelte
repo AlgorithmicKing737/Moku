@@ -5,7 +5,7 @@
   import { addToast }         from "$lib/state/notifications.svelte";
   import { settingsState }    from "$lib/state/settings.svelte";
   import { seriesState }      from "$lib/state/series.svelte";
-  import { syncBackFromTracker } from "$lib/state/tracking.svelte";
+  import { syncBackFromTracker } from "$lib/components/tracking/lib/trackingSync";
   import { getChapters }      from "$lib/request-manager/chapters";
   import { markManyRead }     from "$lib/request-manager/chapters";
   import type { Tracker, TrackRecord, TrackSearch } from "$lib/types";

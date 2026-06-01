@@ -6,13 +6,13 @@
     House, Books, MagnifyingGlass, ClockCounterClockwise,
     DownloadSimple, PuzzlePiece, GearSix, ChartLineUp,
   } from 'phosphor-svelte'
-  import logoUrl from '$lib/assets/moku-icon-wordmark.svg'
 
   const TABS: { path: string; label: string; icon: any }[] = [
     { path: '/',           label: 'Home',       icon: House           },
     { path: '/library',    label: 'Library',    icon: Books           },
     { path: '/browse',     label: 'Browse',     icon: MagnifyingGlass },
     { path: '/downloads',  label: 'Downloads',  icon: DownloadSimple  },
+    { path: '/recent',  label: 'Recent',  icon: ClockCounterClockwise  },
     { path: '/extensions', label: 'Extensions', icon: PuzzlePiece     },
     { path: '/tracking',   label: 'Tracking',   icon: ChartLineUp     },
   ]
@@ -32,7 +32,7 @@
 
 <aside class="root">
   <button class="logo" onclick={() => goto('/')} title="Home" aria-label="Go to Home">
-    <div class="logo-icon" style="mask-image: url({logoUrl}); -webkit-mask-image: url({logoUrl})"></div>
+    <div class="logo-icon"></div>
   </button>
 
   <nav class="nav">
@@ -71,34 +71,12 @@
     overflow: hidden;
   }
 
-  .logo {
-    width: 36px;
-    height: 36px;
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-bottom: var(--sp-4);
-    border-radius: var(--radius-lg);
-    transition: opacity var(--t-base), transform var(--t-base);
-  }
+  .logo { width: 56px; height: 56px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; margin-bottom: var(--sp-4); border-radius: var(--radius-lg); transition: opacity var(--t-base), transform var(--t-base); }
   .logo:hover            { opacity: 0.8; transform: scale(0.96); }
   .logo:active           { transform: scale(0.92); }
   .logo:focus-visible    { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-  .logo-icon {
-    width: 28px;
-    height: 28px;
-    background-color: var(--accent);
-    mask-repeat: no-repeat;
-    mask-position: center;
-    mask-size: contain;
-    -webkit-mask-repeat: no-repeat;
-    -webkit-mask-position: center;
-    -webkit-mask-size: contain;
-    filter: drop-shadow(0 0 8px rgba(107,143,107,0.35));
-    pointer-events: none;
-  }
+  .logo-icon { width: 52px; height: 52px; background-color: var(--accent); mask-image: url("/src/lib/assets/moku-icon-wordmark.svg"); mask-repeat: no-repeat; mask-position: center; mask-size: contain; -webkit-mask-image: url("/src/lib/assets/moku-icon-wordmark.svg"); -webkit-mask-repeat: no-repeat; -webkit-mask-position: center; -webkit-mask-size: contain; filter: drop-shadow(0 0 8px rgba(107,143,107,0.35)); pointer-events: none; }
 
   .nav {
     position: relative;

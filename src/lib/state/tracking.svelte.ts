@@ -1,27 +1,33 @@
-import { getAdapter }       from '$lib/request-manager'
-import { settingsState }    from '$lib/state/settings.svelte'
-import { buildChapterList } from '$lib/components/series/lib/chapterList'
-import type { Tracker, TrackRecord } from '$lib/types'
-import type { Chapter }              from '$lib/types'
-import type { ChapterDisplayPrefs }  from '$lib/components/series/lib/chapterList'
+import { getAdapter }        from '$lib/request-manager'
+import { settingsState }     from '$lib/state/settings.svelte'
+import { buildChapterList, type ChapterDisplayPrefs } from '$lib/components/series/lib/chapterList'
+import { syncBackFromTracker }                        from '$lib/components/tracking/lib/trackingSync'
+import type { Tracker, TrackRecord }  from '$lib/types'
+import type { Chapter }               from '$lib/types'
+import type { TrackerWithRecords }    from '$lib/components/tracking/lib/trackingSync'
 
-type RecordMap = Map<number, TrackRecord[]>
+const BOOT_SYNC_RATE_MS = 400
 
-class TrackingStore {
+type RecordMap   = Map<number, TrackRecord[]>
+type MangaBucket = { mangaId: number; records: TrackRecord[] }
+
+class TrackingState {
   private byManga: RecordMap = $state(new Map())
 
+  allTrackers: TrackerWithRecords[] = $state([])
+  loadingAll:  boolean              = $state(false)
+  loadingFor:  Set<number>          = $state(new Set())
+  error:       string | null        = $state(null)
+
+  // Legacy flat fields kept for request-manager/tracking.ts compatibility
   trackers:       Tracker[]     = $state([])
   loading:        boolean       = $state(false)
-  error:          string | null = $state(null)
   syncing:        boolean       = $state(false)
-
   recordsLoading: boolean       = $state(false)
   recordsError:   string | null = $state(null)
   searchResults:  unknown[]     = $state([])
   searchLoading:  boolean       = $state(false)
   searchError:    string | null = $state(null)
-
-  private loadingFor = new Set<number>()
 
   recordsFor(mangaId: number): TrackRecord[] {
     return this.byManga.get(mangaId) ?? []
@@ -33,70 +39,136 @@ class TrackingStore {
     this.byManga = next
   }
 
+  private patchFor(mangaId: number, updated: Partial<TrackRecord> & { id: number }) {
+    const records = this.recordsFor(mangaId).map((r) =>
+      r.id === updated.id ? { ...r, ...updated } : r
+    )
+    this.setFor(mangaId, records)
+
+    this.allTrackers = this.allTrackers.map((t) => ({
+      ...t,
+      trackRecords: {
+        nodes: t.trackRecords.nodes.map((r) =>
+          r.id === updated.id ? { ...r, ...updated } : r
+        ),
+      },
+    }))
+  }
+
+  // ── Per-manga load ──────────────────────────────────────────────────────────
+
   async loadForManga(mangaId: number) {
     if (this.loadingFor.has(mangaId)) return
     const existing = this.byManga.get(mangaId)
     if (existing && existing.length > 0) return
 
-    this.loadingFor.add(mangaId)
+    const next = new Set(this.loadingFor)
+    next.add(mangaId)
+    this.loadingFor = next
+
     try {
       const records = await getAdapter().getMangaTrackRecords(String(mangaId)) as TrackRecord[]
       this.setFor(mangaId, records)
-    } catch (e) {
-      // silently ignore — tracking is non-critical
+    } catch (e: unknown) {
+      this.error = e instanceof Error ? e.message : 'Failed to load tracking'
     } finally {
-      this.loadingFor.delete(mangaId)
+      const s = new Set(this.loadingFor)
+      s.delete(mangaId)
+      this.loadingFor = s
     }
   }
+
+  // ── Global load (tracking page) ─────────────────────────────────────────────
+
+  async loadAll() {
+    this.loadingAll = true
+    this.error      = null
+    try {
+      const trackers = await getAdapter().getAllTrackerRecords() as TrackerWithRecords[]
+      this.allTrackers = trackers
+      this.trackers    = trackers  // keep flat field in sync
+
+      for (const tracker of trackers.filter((t) => t.isLoggedIn)) {
+        for (const record of tracker.trackRecords.nodes) {
+          if (!record.manga?.id) continue
+          const mangaId  = record.manga.id
+          const existing = this.byManga.get(mangaId) ?? []
+          const merged   = [...existing.filter((r) => r.id !== record.id), record]
+          this.setFor(mangaId, merged)
+        }
+      }
+    } catch (e: unknown) {
+      this.error = e instanceof Error ? e.message : 'Failed to load tracking'
+    } finally {
+      this.loadingAll = false
+    }
+  }
+
+  // ── Field updates ───────────────────────────────────────────────────────────
+
+  async updateStatus(mangaId: number, record: TrackRecord, status: number): Promise<TrackRecord> {
+    const fresh = await getAdapter().updateTrackRecord(String(record.id), { status })
+    this.patchFor(mangaId, fresh)
+    return fresh
+  }
+
+  async updateScore(mangaId: number, record: TrackRecord, scoreString: string): Promise<TrackRecord> {
+    const score = parseFloat(scoreString)
+    const fresh = await getAdapter().updateTrackRecord(String(record.id), { score: isNaN(score) ? undefined : score })
+    this.patchFor(mangaId, fresh)
+    return fresh
+  }
+
+  async updateChapterProgress(mangaId: number, record: TrackRecord, lastChapterRead: number): Promise<TrackRecord> {
+    const fresh = await getAdapter().updateTrackRecord(String(record.id), { lastChapterRead })
+    this.patchFor(mangaId, fresh)
+    return fresh
+  }
+
+  async unbind(mangaId: number, record: TrackRecord) {
+    await getAdapter().unlinkTracker(String(record.id))
+    this.setFor(mangaId, this.recordsFor(mangaId).filter((r) => r.id !== record.id))
+    this.allTrackers = this.allTrackers.map((t) => ({
+      ...t,
+      trackRecords: { nodes: t.trackRecords.nodes.filter((r) => r.id !== record.id) },
+    }))
+  }
+
+  // ── Remote sync ─────────────────────────────────────────────────────────────
 
   async syncFromRemote(
     mangaId:  number,
     record:   TrackRecord,
     chapters: Chapter[],
     prefs:    ChapterDisplayPrefs,
-  ): Promise<{ markedIds: number[] }> {
-    if (!settingsState.settings.trackerSyncBack) return { markedIds: [] }
+  ): Promise<{ fresh: TrackRecord; markedIds: number[] }> {
+    const fresh = await getAdapter().fetchTrackRecord(String(record.id)) as TrackRecord
+    this.patchFor(mangaId, fresh)
 
-    try {
-      await getAdapter().syncTracking(String(mangaId))
-      const fresh = await getAdapter().getMangaTrackRecords(String(mangaId)) as TrackRecord[]
-      this.setFor(mangaId, fresh)
-
-      const freshRecord = fresh.find(r => r.id === record.id)
-      if (!freshRecord) return { markedIds: [] }
-
-      const markedIds = this._applyRemoteProgress(freshRecord, chapters, prefs)
-      return { markedIds }
-    } catch {
-      return { markedIds: [] }
-    }
+    const markedIds = await this._applyRemoteProgress(fresh, chapters, prefs)
+    return { fresh, markedIds }
   }
 
-  private _applyRemoteProgress(
+  private async _applyRemoteProgress(
     record:   TrackRecord,
     chapters: Chapter[],
     prefs:    ChapterDisplayPrefs,
-  ): number[] {
-    const lastRead = record.lastChapterRead ?? 0
-    if (lastRead <= 0) return []
+  ): Promise<number[]> {
+    if (!settingsState.settings.trackerSyncBack) return []
 
-    const threshold = settingsState.settings.trackerSyncBackThreshold ?? null
-    const respectScanlator = settingsState.settings.trackerRespectScanlatorFilter ?? true
-    const activeScanlators: string[] | null =
-      respectScanlator && (prefs as any).scanlatorFilter?.length
-        ? (prefs as any).scanlatorFilter
-        : null
-
-    return chapters
-      .filter(ch => {
-        if (ch.read) return false
-        if (activeScanlators && ch.scanlator && !activeScanlators.includes(ch.scanlator)) return false
-        return threshold !== null
-          ? ch.chapterNumber <= lastRead && ch.chapterNumber >= lastRead - threshold
-          : ch.chapterNumber <= lastRead
-      })
-      .map(ch => ch.id)
+    return syncBackFromTracker(
+      [record],
+      chapters,
+      {
+        threshold:              settingsState.settings.trackerSyncBackThreshold ?? null,
+        respectScanlatorFilter: settingsState.settings.trackerRespectScanlatorFilter ?? true,
+        chapterPrefs:           prefs,
+      },
+      (ids, read) => getAdapter().markChaptersRead(ids, read),
+    )
   }
+
+  // ── Read/unread sync ────────────────────────────────────────────────────────
 
   async updateFromRead(
     mangaId:     number,
@@ -104,13 +176,30 @@ class TrackingStore {
     chapterList: Chapter[],
     prefs:       ChapterDisplayPrefs,
   ) {
+    const filtered = buildChapterList(chapterList, { ...prefs, sortDir: 'asc' })
+    const idx      = filtered.findIndex((c) => c.id === chapter.id)
+    if (idx < 0) return
+    const position = idx + 1
+
     const records = this.recordsFor(mangaId)
-    if (!records.length) return
-    try {
-      await getAdapter().syncTracking(String(mangaId))
-      const fresh = await getAdapter().getMangaTrackRecords(String(mangaId)) as TrackRecord[]
-      this.setFor(mangaId, fresh)
-    } catch {}
+    for (const record of records) {
+      try {
+        const completedValue = this._completedStatusFor(record.trackerId)
+        const isCompleted    = completedValue !== null && record.status === completedValue
+        const readingValue   = this._readingStatusFor(record.trackerId)
+        const belowMax       = record.totalChapters > 0 && (record.lastChapterRead ?? 0) < record.totalChapters
+
+        if ((isCompleted || belowMax) && readingValue !== null && position > (record.lastChapterRead ?? 0)) {
+          const fresh = await getAdapter().updateTrackRecord(String(record.id), {
+            lastChapterRead: position,
+            status:          readingValue,
+          })
+          this.patchFor(mangaId, fresh)
+        } else if (!isCompleted && position > (record.lastChapterRead ?? 0)) {
+          await this.updateChapterProgress(mangaId, record, position)
+        }
+      } catch {}
+    }
   }
 
   async updateFromUnread(
@@ -118,13 +207,88 @@ class TrackingStore {
     chapterList: Chapter[],
     prefs:       ChapterDisplayPrefs,
   ) {
+    const filtered = buildChapterList(chapterList, { ...prefs, sortDir: 'asc' })
+    const lastRead = [...filtered].reverse().find((c) => c.read)
+    const position = lastRead ? filtered.findIndex((c) => c.id === lastRead.id) + 1 : 0
+
     const records = this.recordsFor(mangaId)
-    if (!records.length) return
-    try {
-      await getAdapter().syncTracking(String(mangaId))
-      const fresh = await getAdapter().getMangaTrackRecords(String(mangaId)) as TrackRecord[]
-      this.setFor(mangaId, fresh)
-    } catch {}
+    for (const record of records.filter((r) => (r.lastChapterRead ?? 0) > position)) {
+      try {
+        const completedValue = this._completedStatusFor(record.trackerId)
+        const isCompleted    = completedValue !== null && record.status === completedValue
+        const belowMax       = record.totalChapters > 0 && position < record.totalChapters
+        const readingValue   = this._readingStatusFor(record.trackerId)
+
+        if ((isCompleted || belowMax) && readingValue !== null) {
+          const fresh = await getAdapter().updateTrackRecord(String(record.id), {
+            lastChapterRead: position,
+            status:          readingValue,
+          })
+          this.patchFor(mangaId, fresh)
+        } else {
+          await this.updateChapterProgress(mangaId, record, position)
+        }
+      } catch {}
+    }
+  }
+
+  // ── Boot sync ───────────────────────────────────────────────────────────────
+
+  async bootSync() {
+    if (!settingsState.settings.trackerSyncBack) return
+    if (this.allTrackers.length === 0) await this.loadAll()
+
+    const buckets = new Map<number, MangaBucket>()
+
+    for (const tracker of this.allTrackers.filter((t) => t.isLoggedIn)) {
+      const completedValue = this._completedStatusFor(tracker.id)
+      for (const record of tracker.trackRecords.nodes) {
+        const mangaId = record.manga?.id
+        if (!mangaId) continue
+        if (completedValue !== null && record.status === completedValue) continue
+        const bucket = buckets.get(mangaId) ?? { mangaId, records: [] }
+        bucket.records.push(record)
+        buckets.set(mangaId, bucket)
+      }
+    }
+
+    const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
+
+    for (const { mangaId, records } of buckets.values()) {
+      const prefs = { ...(settingsState.settings.mangaPrefs?.[mangaId] ?? {}) } as ChapterDisplayPrefs
+
+      let chapters: Chapter[]
+      try {
+        chapters = await getAdapter().getChapters(String(mangaId))
+      } catch {
+        continue
+      }
+
+      const freshRecords: TrackRecord[] = []
+      for (const record of records) {
+        await delay(BOOT_SYNC_RATE_MS)
+        try {
+          const fresh = await getAdapter().fetchTrackRecord(String(record.id)) as TrackRecord
+          this.patchFor(mangaId, fresh)
+          freshRecords.push(fresh)
+        } catch {
+          freshRecords.push(record)
+        }
+      }
+
+      try {
+        await syncBackFromTracker(
+          freshRecords,
+          chapters,
+          {
+            threshold:              settingsState.settings.trackerSyncBackThreshold ?? null,
+            respectScanlatorFilter: settingsState.settings.trackerRespectScanlatorFilter ?? true,
+            chapterPrefs:           prefs,
+          },
+          (ids, read) => getAdapter().markChaptersRead(ids, read),
+        )
+      } catch {}
+    }
   }
 
   clear(mangaId: number) {
@@ -132,44 +296,22 @@ class TrackingStore {
     next.delete(mangaId)
     this.byManga = next
   }
-}
 
-export const trackingState = new TrackingStore()
+  // ── Status helpers ──────────────────────────────────────────────────────────
 
-// Standalone export for components that run their own sync loop (e.g. TrackingSettings)
-export async function syncBackFromTracker(
-  records:  TrackRecord[],
-  chapters: Chapter[],
-  opts: {
-    threshold:              number | null
-    respectScanlatorFilter: boolean
-    chapterPrefs:           Partial<any>
-  },
-  markChaptersRead: (ids: string[], read: boolean) => Promise<void>,
-): Promise<Chapter[]> {
-  const marked: Chapter[] = []
-
-  const activeScanlators: string[] | null =
-    opts.respectScanlatorFilter && opts.chapterPrefs.scanlatorFilter?.length
-      ? opts.chapterPrefs.scanlatorFilter
-      : null
-
-  for (const record of records) {
-    const lastRead = record.lastChapterRead ?? 0
-    if (lastRead <= 0) continue
-
-    const toMark = chapters.filter(ch => {
-      if (ch.read) return false
-      if (activeScanlators && ch.scanlator && !activeScanlators.includes(ch.scanlator)) return false
-      return opts.threshold !== null
-        ? ch.chapterNumber <= lastRead && ch.chapterNumber >= lastRead - opts.threshold
-        : ch.chapterNumber <= lastRead
-    })
-
-    if (!toMark.length) continue
-    await markChaptersRead(toMark.map(ch => String(ch.id)), true)
-    marked.push(...toMark)
+  private _statusesFor(trackerId: number): { value: number; name: string }[] {
+    return this.allTrackers.find((t) => t.id === trackerId)?.statuses ?? []
   }
 
-  return marked
+  private _completedStatusFor(trackerId: number): number | null {
+    const s = this._statusesFor(trackerId).find((s) => s.name.toLowerCase() === 'completed')
+    return s?.value ?? null
+  }
+
+  private _readingStatusFor(trackerId: number): number | null {
+    const s = this._statusesFor(trackerId).find((s) => s.name.toLowerCase() === 'reading')
+    return s?.value ?? null
+  }
 }
+
+export const trackingState = new TrackingState()

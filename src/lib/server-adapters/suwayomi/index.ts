@@ -13,9 +13,10 @@ import type {
   SetServerAuthInput,
   SetSocksProxyInput,
   SetFlareSolverrInput,
+  TrackRecordPatch,
 } from '$lib/server-adapters/types'
 import type { DownloadStatus } from '$lib/types/api'
-import type { Manga, Chapter, Extension, Source, Tracker, Category } from '$lib/types'
+import type { Manga, Chapter, Extension, Source, Tracker, TrackRecord, Category } from '$lib/types'
 import {
   GET_LIBRARY,
   GET_MANGA,
@@ -74,8 +75,10 @@ import {
 } from './extensions'
 import {
   GET_TRACKERS,
+  GET_ALL_TRACKER_RECORDS,
   GET_MANGA_TRACK_RECORDS,
   SEARCH_TRACKER,
+  FETCH_TRACK,
   BIND_TRACK,
   UNLINK_TRACK,
   TRACK_PROGRESS,
@@ -317,9 +320,6 @@ export class SuwayomiAdapter implements ServerAdapter {
     await this.gql(DELETE_CHAPTER_META, { chapterId: Number(chapterId), key })
   }
 
-  // ── Downloads ──────────────────────────────────────────────────────────────
-
-  /** @deprecated Use getDownloadStatus() — kept for any legacy callers. */
   async getDownloads(): Promise<DownloadItem[]> {
     const status = await this.getDownloadStatus()
     return status.queue.map(item => ({
@@ -391,8 +391,6 @@ export class SuwayomiAdapter implements ServerAdapter {
     } catch { return null }
   }
 
-  // ── Extensions & Sources ───────────────────────────────────────────────────
-
   async getExtensions(): Promise<Extension[]> {
     await this.gql(FETCH_EXTENSIONS)
     const data = await this.gql<{ extensions: { nodes: Record<string, unknown>[] } }>(GET_EXTENSIONS)
@@ -429,12 +427,10 @@ export class SuwayomiAdapter implements ServerAdapter {
       fetchSourceManga: { mangas: Record<string, unknown>[]; hasNextPage: boolean }
     }>(FETCH_SOURCE_MANGA, { source: sourceId, type: 'LATEST', page })
     return {
-      items: data.fetchSourceManga.mangas.map(mapManga),
+      items:       data.fetchSourceManga.mangas.map(mapManga),
       hasNextPage: data.fetchSourceManga.hasNextPage,
     }
   }
-
-  // ── Categories ─────────────────────────────────────────────────────────────
 
   async getCategories(): Promise<Category[]> {
     const data = await this.gql<{ categories: { nodes: Record<string, unknown>[] } }>(GET_CATEGORIES)
@@ -471,10 +467,13 @@ export class SuwayomiAdapter implements ServerAdapter {
     await this.gql(UPDATE_CATEGORY_MANGA, { categoryId })
   }
 
-  // ── Tracking ───────────────────────────────────────────────────────────────
-
   async getTrackers(): Promise<Tracker[]> {
     const data = await this.gql<{ trackers: { nodes: Tracker[] } }>(GET_TRACKERS)
+    return data.trackers.nodes
+  }
+
+  async getAllTrackerRecords(): Promise<unknown[]> {
+    const data = await this.gql<{ trackers: { nodes: unknown[] } }>(GET_ALL_TRACKER_RECORDS)
     return data.trackers.nodes
   }
 
@@ -493,26 +492,30 @@ export class SuwayomiAdapter implements ServerAdapter {
   }
 
   async linkTracker(mangaId: string, trackerId: string, remoteId: string): Promise<void> {
-    await this.gql(BIND_TRACK, {
-      mangaId: Number(mangaId),
-      trackerId: Number(trackerId),
-      remoteId,
-    })
+    await this.gql(BIND_TRACK, { mangaId: Number(mangaId), trackerId: Number(trackerId), remoteId })
   }
 
   async unlinkTracker(recordId: string): Promise<void> {
     await this.gql(UNLINK_TRACK, { trackRecordId: Number(recordId) })
   }
 
-  async fetchTrackRecord(recordId: string): Promise<void> {
-    await this.gql(UPDATE_TRACK, { recordId: Number(recordId) })
+  async updateTrackRecord(recordId: string, patch: TrackRecordPatch): Promise<TrackRecord> {
+    const data = await this.gql<{ updateTrack: { trackRecord: TrackRecord } }>(
+      UPDATE_TRACK, { recordId: Number(recordId), ...patch }
+    )
+    return data.updateTrack.trackRecord
+  }
+
+  async fetchTrackRecord(recordId: string): Promise<TrackRecord> {
+    const data = await this.gql<{ fetchTrack: { trackRecord: TrackRecord } }>(
+      FETCH_TRACK, { recordId: Number(recordId) }
+    )
+    return data.fetchTrack.trackRecord
   }
 
   async syncTracking(mangaId: string): Promise<void> {
     await this.gql(TRACK_PROGRESS, { mangaId: Number(mangaId) })
   }
-
-  // ── Security ───────────────────────────────────────────────────────────────
 
   async getServerSecurity(): Promise<ServerSecurity> {
     const data = await this.gql<{ settings: ServerSecurity }>(GET_SERVER_SECURITY)
@@ -521,7 +524,7 @@ export class SuwayomiAdapter implements ServerAdapter {
 
   async setServerAuth(input: SetServerAuthInput): Promise<void> {
     await this.gql(SET_SERVER_AUTH, {
-      authMode: input.authMode,
+      authMode:     input.authMode,
       authUsername: input.authUsername,
       authPassword: input.authPassword,
     })
@@ -535,8 +538,6 @@ export class SuwayomiAdapter implements ServerAdapter {
     await this.gql(SET_FLARE_SOLVERR, input)
   }
 
-  // ── Browse / Search ────────────────────────────────────────────────────────
- 
   async searchSource(
     sourceId: string,
     query:    string,
@@ -551,7 +552,7 @@ export class SuwayomiAdapter implements ServerAdapter {
       hasNextPage: data.fetchSourceManga.hasNextPage,
     }
   }
- 
+
   async getMangasByGenre(
     filter:  Record<string, unknown>,
     first:   number,
@@ -560,19 +561,17 @@ export class SuwayomiAdapter implements ServerAdapter {
   ): Promise<{ items: Manga[]; hasNextPage: boolean; totalCount: number }> {
     const data = await this.gql<{
       mangas: {
-        nodes:     Record<string, unknown>[];
-        pageInfo:  { hasNextPage: boolean };
-        totalCount: number;
+        nodes:      Record<string, unknown>[]
+        pageInfo:   { hasNextPage: boolean }
+        totalCount: number
       }
     }>(MANGAS_BY_GENRE, { filter, first, offset }, signal)
     return {
-      items:      data.mangas.nodes.map(mapManga),
+      items:       data.mangas.nodes.map(mapManga),
       hasNextPage: data.mangas.pageInfo.hasNextPage,
       totalCount:  data.mangas.totalCount,
     }
   }
-
-  // ── Library updates ────────────────────────────────────────────────────────
 
   async checkForUpdates(mangaIds?: string[]): Promise<UpdateResult[]> {
     if (mangaIds?.length) {
@@ -607,4 +606,3 @@ export class SuwayomiAdapter implements ServerAdapter {
     _clearPageCache(chapterId)
   }
 }
-

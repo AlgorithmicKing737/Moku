@@ -11,6 +11,26 @@ export const GET_TRACKERS = `
   }
 `
 
+export const GET_ALL_TRACKER_RECORDS = `
+  query GetAllTrackerRecords {
+    trackers {
+      nodes {
+        id name icon isLoggedIn isTokenExpired authUrl
+        supportsPrivateTracking supportsReadingDates supportsTrackDeletion
+        scores
+        statuses { value name }
+        trackRecords {
+          nodes {
+            id trackerId remoteId title status score displayScore
+            lastChapterRead totalChapters remoteUrl startDate finishDate private libraryId
+            manga { id title thumbnailUrl }
+          }
+        }
+      }
+    }
+  }
+`
+
 export const GET_MANGA_TRACK_RECORDS = `
   query GetMangaTrackRecords($mangaId: Int!) {
     manga(id: $mangaId) {
@@ -30,6 +50,17 @@ export const SEARCH_TRACKER = `
       trackSearches {
         id trackerId remoteId title coverUrl summary
         publishingStatus publishingType startDate totalChapters trackingUrl
+      }
+    }
+  }
+`
+
+export const FETCH_TRACK = `
+  mutation FetchTrack($recordId: Int!) {
+    fetchTrack(input: { recordId: $recordId }) {
+      trackRecord {
+        id trackerId remoteId title status score displayScore
+        lastChapterRead totalChapters remoteUrl startDate finishDate private libraryId
       }
     }
   }
@@ -62,7 +93,7 @@ export const UPDATE_TRACK = `
       finishDate: $finishDate
       private: $private
     }) {
-      trackRecord { id status score lastChapterRead }
+      trackRecord { id trackerId status score displayScore lastChapterRead totalChapters remoteUrl startDate finishDate private libraryId }
     }
   }
 `

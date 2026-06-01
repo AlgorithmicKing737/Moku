@@ -64,6 +64,10 @@
         <div class="s-row-info"><span class="s-label">Tap to toggle bar</span><span class="s-desc">Double-tap the center of the reader to show or hide the bars</span></div>
         <button role="switch" aria-checked={settingsState.settings.tapToToggleBar ?? false} aria-label="Tap to toggle bar" class="s-toggle" class:on={settingsState.settings.tapToToggleBar ?? false} onclick={() => updateSettings({ tapToToggleBar: !(settingsState.settings.tapToToggleBar ?? false) })}><span class="s-toggle-thumb"></span></button>
       </label>
+      <label class="s-row">
+        <div class="s-row-info"><span class="s-label">Containerized view</span><span class="s-desc">Shows the reader inside the app shell with the sidebar instead of filling the whole screen</span></div>
+        <button role="switch" aria-checked={settingsState.settings.readerContainerized ?? false} aria-label="Containerized reader view" class="s-toggle" class:on={settingsState.settings.readerContainerized ?? false} onclick={() => updateSettings({ readerContainerized: !(settingsState.settings.readerContainerized ?? false) })}><span class="s-toggle-thumb"></span></button>
+      </label>
     </div>
   </div>
 
