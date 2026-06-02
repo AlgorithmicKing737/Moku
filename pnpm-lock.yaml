@@ -50,6 +50,9 @@ importers:
       phosphor-svelte:
         specifier: ^3.1.0
         version: 3.1.0(svelte@5.55.5(@typescript-eslint/types@8.57.1))(vite@8.0.10)
+      tauri-plugin-discord-rpc-api:
+        specifier: github:Youwes09/tauri-plugin-discord-rpc
+        version: https://codeload.github.com/Youwes09/tauri-plugin-discord-rpc/tar.gz/d2fd312945d0573153e0e7e2d2dfb131acecc52c
     devDependencies:
       '@sveltejs/adapter-node':
         specifier: ^5.5.4
@@ -835,6 +838,10 @@ packages:
     resolution: {integrity: sha512-2uCs/LZ9us+AktdzYJM8OcxQ8qnPS1kpaO7syGT/MgO+6Qr1Ybl+TqPq+97u7PHqmmMlye5ZkoyXONy5mjjAbw==}
     engines: {node: '>=18'}
 
+  tauri-plugin-discord-rpc-api@https://codeload.github.com/Youwes09/tauri-plugin-discord-rpc/tar.gz/d2fd312945d0573153e0e7e2d2dfb131acecc52c:
+    resolution: {tarball: https://codeload.github.com/Youwes09/tauri-plugin-discord-rpc/tar.gz/d2fd312945d0573153e0e7e2d2dfb131acecc52c}
+    version: 0.1.0
+
   tinyglobby@0.2.16:
     resolution: {integrity: sha512-pn99VhoACYR8nFHhxqix+uvsbXineAasWm5ojXoN8xEwK5Kd3/TrhNn1wByuD52UxWRLy8pu+kRMniEi6Eq9Zg==}
     engines: {node: '>=12.0.0'}
@@ -1535,6 +1542,10 @@ snapshots:
       zimmerframe: 1.1.4
     transitivePeerDependencies:
       - '@typescript-eslint/types'
+
+  tauri-plugin-discord-rpc-api@https://codeload.github.com/Youwes09/tauri-plugin-discord-rpc/tar.gz/d2fd312945d0573153e0e7e2d2dfb131acecc52c:
+    dependencies:
+      '@tauri-apps/api': 2.11.0
 
   tinyglobby@0.2.16:
     dependencies:

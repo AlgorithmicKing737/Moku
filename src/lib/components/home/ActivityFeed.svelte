@@ -1,26 +1,26 @@
 <script lang="ts">
   import { Play, ArrowRight, BookOpen, Clock } from 'phosphor-svelte'
-  import { timeAgo } from '$lib/components/home/homeHelpers'
-  import type { Manga } from '$lib/types'
-  import type { HistoryEntry } from '$lib/state/home.svelte'
+  import { timeAgo } from '$lib/components/home/lib/homeHelpers'
+  import Thumbnail from '$lib/components/shared/manga/Thumbnail.svelte'
+  import { historyState } from '$lib/state/history.svelte'
+  import type { ReadSession } from '$lib/types/history'
 
   let {
-    entries,
-    libraryManga,
     onresume,
     onviewhistory,
     onopenlibrary,
   }: {
-    entries:      HistoryEntry[]
-    libraryManga: Manga[]
-    onresume:     (entry: HistoryEntry) => void
+    onresume:      (session: ReadSession) => void
     onviewhistory: () => void
     onopenlibrary: () => void
   } = $props()
 
-  function thumbFor(entry: HistoryEntry): string {
-    return libraryManga.find(m => m.id === entry.mangaId)?.thumbnailUrl ?? entry.thumbnailUrl ?? ''
-  }
+  // Deduplicate by manga — keep the most recent session per manga (sessions are newest-first)
+  const entries = $derived(
+    historyState.sessions
+      .filter((s, i, arr) => arr.findIndex(x => x.mangaId === s.mangaId) === i)
+      .slice(0, 10)
+  )
 </script>
 
 <div class="section">
@@ -35,16 +35,16 @@
 
   <div class="list">
     {#if entries.length > 0}
-      {#each entries as entry (entry.chapterId)}
+      {#each entries as entry (entry.id)}
         <button class="row" onclick={() => onresume(entry)}>
-          <img src={thumbFor(entry)} alt={entry.mangaTitle} class="row-thumb" />
+          <Thumbnail src={entry.thumbnailUrl} alt={entry.mangaTitle} class="row-thumb" />
           <div class="row-info">
             <span class="row-title">{entry.mangaTitle}</span>
             <span class="row-sub">
-              {entry.chapterName}{entry.pageNumber > 1 ? ` · p.${entry.pageNumber}` : ''}
+              {entry.endChapterName}{entry.endPage > 1 ? ` · p.${entry.endPage}` : ''}
             </span>
           </div>
-          <span class="row-time">{timeAgo(entry.readAt)}</span>
+          <span class="row-time" title={new Date(entry.endedAt).toLocaleString()}>{timeAgo(entry.endedAt)}</span>
           <span class="row-play"><Play size={10} weight="fill" /></span>
         </button>
       {/each}
@@ -103,7 +103,7 @@
   .row:hover { background: var(--bg-raised); border-color: var(--border-dim); }
   .row:hover .row-play { opacity: 1; }
 
-  .row-thumb {
+  :global(.row-thumb) {
     width: 33px; height: 48px; border-radius: var(--radius-sm);
     object-fit: cover; flex-shrink: 0; border: 1px solid var(--border-dim);
   }

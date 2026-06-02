@@ -5,7 +5,7 @@
   import { toast } from '$lib/state/notifications.svelte'
   import { settingsState, updateSettings } from '$lib/state/settings.svelte'
   import { exportAppData, importAppData } from '$lib/core/backup'
-  import { loadBackups, persistBackups, persistSettings, persistLibrary } from '$lib/core/persistence/persist'
+  import { loadBackups, saveBackups, saveSettings, saveLibrary } from '$lib/core/persistence/persist'
   import type { BackupEntry } from '$lib/core/persistence/persist'
   import { DEFAULT_SETTINGS } from '$lib/types/settings'
   import { DEFAULT_READING_STATS } from '$lib/types/history'
@@ -92,11 +92,11 @@
           await clearAllCaches()
           break
         case 'reading-history':
-          await persistLibrary({ history: [], bookmarks: [], markers: [], readLog: [], readingStats: DEFAULT_READING_STATS, dailyReadCounts: {} })
+          await saveLibrary({ sessions: [], bookmarks: [], markers: [], dailyReadCounts: {} })
           break
         case 'moku-settings':
           localStorage.clear()
-          await persistSettings({ settings: DEFAULT_SETTINGS, storeVersion: 1 })
+          await saveSettings({ settings: DEFAULT_SETTINGS, storeVersion: 2 })
           patchReset(key, { state: 'done' })
           await showExitCountdown()
           platformService.exitApp()
@@ -295,7 +295,7 @@
   }
 
   async function saveBackupList() {
-    await persistBackups(backupList.map(({ url, name }) => ({ url, name })))
+    await saveBackups(backupList.map(({ url, name }) => ({ url, name })))
   }
 
   async function createBackup() {

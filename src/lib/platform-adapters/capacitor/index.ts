@@ -14,6 +14,23 @@ export class CapacitorAdapter implements PlatformAdapter {
     return supported.includes(feature)
   }
 
+  async loadStore(key: string): Promise<unknown> {
+    try {
+      const { Preferences } = await import('@capacitor/preferences')
+      const { value } = await Preferences.get({ key: `moku:${key}` })
+      return value ? JSON.parse(value) : null
+    } catch {
+      return null
+    }
+  }
+
+  async saveStore(key: string, value: unknown): Promise<void> {
+    try {
+      const { Preferences } = await import('@capacitor/preferences')
+      await Preferences.set({ key: `moku:${key}`, value: JSON.stringify(value) })
+    } catch {}
+  }
+
   async launchServer(_config: ServerLaunchConfig) {}
   async stopServer() {}
   async getServerStatus(): Promise<'running' | 'stopped' | 'error'> { return 'stopped' }
@@ -84,4 +101,25 @@ export class CapacitorAdapter implements PlatformAdapter {
 
   async checkForAppUpdate(): Promise<AppUpdateInfo | null> { return null }
   async installAppUpdate(): Promise<void> {}
+  async restartApp(): Promise<void> {}
+
+  async getDefaultDownloadsPath(): Promise<string> { return '' }
+  async getStorageInfo(): Promise<{ manga_bytes: number; total_bytes: number; free_bytes: number; path: string }> {
+    return { manga_bytes: 0, total_bytes: 0, free_bytes: 0, path: '' }
+  }
+  async checkPathExists(_path: string): Promise<boolean> { return false }
+  async createDirectory(_path: string): Promise<void> {}
+  async openPath(_path: string): Promise<void> {}
+  async getAutoBackupDir(): Promise<string> { return '' }
+
+  async clearMokuCache(): Promise<void> {}
+  async clearSuwayomiCache(): Promise<void> {}
+  async resetSuwayomiData(): Promise<void> {}
+  async exitApp(): Promise<void> {}
+
+  async listReleases() { return [] }
+  async onUpdateProgress(_cb: (p: { downloaded: number; total: number | null }) => void): Promise<() => void> { return () => {} }
+  async onUpdateLaunching(_cb: () => void): Promise<() => void> { return () => {} }
+  async onMigrateProgress(_cb: (p: { done: number; total: number; current: string }) => void): Promise<() => void> { return () => {} }
+  async migrateDownloads(_src: string, _dst: string): Promise<void> {}
 }

@@ -2,7 +2,7 @@
   import { Books, ClockCounterClockwise, Clock, BookOpen, Fire, TrendUp } from 'phosphor-svelte'
   import Thumbnail from '$lib/components/shared/manga/Thumbnail.svelte'
   import { timeAgo, formatReadTime } from '$lib/core/util'
-  import type { HistorySession, HistoryGroup } from './lib/recentHistory'
+  import type { HistoryGroup, ReadSession } from './lib/recentHistory'
 
   interface Stats {
     currentStreakDays:  number
@@ -17,10 +17,19 @@
     historySearch: string
     stats:         Stats
     thumbFor:      (mangaId: number, fallback: string) => string
-    onOpenSeries:  (session: HistorySession) => void
+    onOpenSeries:  (session: ReadSession) => void
   }
 
   let { groups, hasHistory, historySearch, stats, thumbFor, onOpenSeries }: Props = $props()
+
+  function formatDuration(ms: number): string {
+    const totalMin = Math.round(ms / 60_000)
+    if (totalMin < 1)  return '< 1 min'
+    if (totalMin < 60) return `${totalMin} min`
+    const h = Math.floor(totalMin / 60)
+    const m = totalMin % 60
+    return m > 0 ? `${h}h ${m}m` : `${h}h`
+  }
 </script>
 
 <div class="root">
@@ -79,7 +88,7 @@
             <div class="day-rule"></div>
           </div>
           <div class="session-list">
-            {#each items as session (session.latestChapterId)}
+            {#each items as session (session.id)}
               <button class="session-row" onclick={() => onOpenSeries(session)}>
                 <div class="thumb-wrap">
                   <Thumbnail
@@ -87,24 +96,27 @@
                     alt={session.mangaTitle}
                     class="thumb"
                   />
-                  {#if session.chapterCount > 1}
-                    <span class="session-count">{session.chapterCount}</span>
+                  {#if session.chaptersSpanned > 1}
+                    <span class="session-count">{session.chaptersSpanned}</span>
                   {/if}
                 </div>
                 <div class="session-info">
                   <span class="session-title">{session.mangaTitle}</span>
                   <span class="session-chapter">
-                    {#if session.chapterCount > 1}
-                      {session.firstChapterName}<span class="ch-arrow">→</span>{session.latestChapterName}
+                    {#if session.chaptersSpanned > 1}
+                      {session.startChapterName}<span class="ch-arrow">→</span>{session.endChapterName}
                     {:else}
-                      {session.latestChapterName}
-                      {#if session.latestPageNumber > 1}
-                        <span class="ch-page">· p.{session.latestPageNumber}</span>
+                      {session.endChapterName}
+                      {#if session.endPage > 1}
+                        <span class="ch-page">· p.{session.endPage}</span>
                       {/if}
+                    {/if}
+                    {#if session.durationMs >= 60_000}
+                      <span class="ch-duration">· {formatDuration(session.durationMs)}</span>
                     {/if}
                   </span>
                 </div>
-                <span class="session-time">{timeAgo(session.readAt)}</span>
+                <span class="session-time">{timeAgo(session.endedAt)}</span>
               </button>
             {/each}
           </div>
@@ -176,8 +188,9 @@
     font-family: var(--font-ui); font-size: var(--text-xs); color: var(--text-muted);
     letter-spacing: var(--tracking-wide); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
   }
-  .ch-arrow { color: var(--text-faint); opacity: 0.35; flex-shrink: 0; }
-  .ch-page  { color: var(--text-faint); opacity: 0.5;  flex-shrink: 0; }
+  .ch-arrow    { color: var(--text-faint); opacity: 0.35; flex-shrink: 0; }
+  .ch-page     { color: var(--text-faint); opacity: 0.5;  flex-shrink: 0; }
+  .ch-duration { color: var(--text-faint); opacity: 0.5;  flex-shrink: 0; }
   .session-time {
     font-family: var(--font-ui); font-size: var(--text-2xs); color: var(--text-faint);
     letter-spacing: var(--tracking-wide); flex-shrink: 0; white-space: nowrap; opacity: 0.45;

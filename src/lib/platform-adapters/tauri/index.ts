@@ -1,10 +1,12 @@
-import { invoke }           from '@tauri-apps/api/core'
-import { getCurrentWindow } from '@tauri-apps/api/window'
-import { listen }           from '@tauri-apps/api/event'
-import { open }             from '@tauri-apps/plugin-dialog'
-import { readFile, writeFile } from '@tauri-apps/plugin-fs'
-import { open as openUrl }  from '@tauri-apps/plugin-shell'
-import { getVersion }       from '@tauri-apps/api/app'
+import { invoke }                                          from '@tauri-apps/api/core'
+import { getCurrentWindow }                                from '@tauri-apps/api/window'
+import { listen }                                          from '@tauri-apps/api/event'
+import { open }                                            from '@tauri-apps/plugin-dialog'
+import { readFile, writeFile }                             from '@tauri-apps/plugin-fs'
+import { open as openUrl }                                 from '@tauri-apps/plugin-shell'
+import { getVersion }                                      from '@tauri-apps/api/app'
+import { LazyStore }                                       from '@tauri-apps/plugin-store'
+import { connect, disconnect, setActivity, clearActivity } from 'tauri-plugin-discord-rpc-api'
 import type {
   PlatformAdapter,
   PlatformFeature,
@@ -17,9 +19,24 @@ import type {
   MigrateProgress,
 } from '$lib/platform-adapters/types'
 
+const APP_ID = '1487894643613106298'
+
+const storeCache = new Map<string, LazyStore>()
+
+function getStore(key: string): LazyStore {
+  if (!storeCache.has(key)) {
+    storeCache.set(key, new LazyStore(`${key}.json`, { autoSave: false }))
+  }
+  return storeCache.get(key)!
+}
+
 export class TauriAdapter implements PlatformAdapter {
   async init() {
-    await invoke('init_app')
+    await connect(APP_ID).catch(() => {})
+  }
+
+  async destroy() {
+    await disconnect().catch(() => {})
   }
 
   isSupported(feature: PlatformFeature): boolean {
@@ -34,16 +51,30 @@ export class TauriAdapter implements PlatformAdapter {
     return supported.includes(feature)
   }
 
+  async loadStore(key: string): Promise<unknown> {
+    return getStore(key).get<unknown>(key) ?? null
+  }
+
+  async saveStore(key: string, value: unknown): Promise<void> {
+    const store = getStore(key)
+    await store.set(key, value)
+    await store.save()
+  }
+
   async launchServer(config: ServerLaunchConfig) {
-    await invoke('launch_server', { config })
+    await invoke('spawn_server', {
+      binary:       config.binary      ?? '',
+      binaryArgs:   config.binaryArgs  ?? null,
+      webUiEnabled: config.webUiEnabled ?? false,
+    })
   }
 
   async stopServer() {
-    await invoke('stop_server')
+    await invoke('kill_server')
   }
 
   async getServerStatus(): Promise<'running' | 'stopped' | 'error'> {
-    return invoke('get_server_status')
+    return 'stopped'
   }
 
   async readFile(path: string): Promise<Uint8Array> {
@@ -59,16 +90,37 @@ export class TauriAdapter implements PlatformAdapter {
     return typeof result === 'string' ? result : null
   }
 
+  async checkPathExists(path: string): Promise<boolean> {
+    return invoke('check_path_exists', { path })
+  }
+
+  async createDirectory(path: string) {
+    await invoke('create_directory', { path })
+  }
+
+  async openPath(path: string) {
+    await invoke('open_path', { path })
+  }
+
+  async getDefaultDownloadsPath(): Promise<string> {
+    return invoke('get_default_downloads_path')
+  }
+
+  async getStorageInfo(downloadsPath: string): Promise<StorageInfo> {
+    return invoke('get_storage_info', { downloadsPath })
+  }
+
+  async migrateDownloads(src: string, dst: string) {
+    await invoke('migrate_downloads', { src, dst })
+  }
+
   async authenticateBiometric(): Promise<boolean> {
-    return invoke('authenticate_biometric')
-  }
-
-  async storeCredential(key: string, value: string) {
-    await invoke('store_credential', { key, value })
-  }
-
-  async getCredential(key: string): Promise<string | null> {
-    return invoke('get_credential', { key })
+    try {
+      await invoke('windows_hello_authenticate', { reason: 'Authenticate to access Moku' })
+      return true
+    } catch {
+      return false
+    }
   }
 
   async setTitle(title: string) {
@@ -94,11 +146,11 @@ export class TauriAdapter implements PlatformAdapter {
   }
 
   async setDiscordPresence(presence: DiscordPresence) {
-    await invoke('set_discord_presence', { presence })
+    await setActivity(presence).catch(() => {})
   }
 
   async clearDiscordPresence() {
-    await invoke('clear_discord_presence')
+    await clearActivity().catch(() => {})
   }
 
   async getVersion(): Promise<string> {
@@ -109,12 +161,20 @@ export class TauriAdapter implements PlatformAdapter {
     await openUrl(url)
   }
 
+  async restartApp() {
+    await invoke('restart_app')
+  }
+
+  async exitApp() {
+    await invoke('exit_app')
+  }
+
   async checkForAppUpdate(): Promise<AppUpdateInfo | null> {
     const releases = await invoke<Array<{ tag_name: string; html_url: string; body: string }>>('list_releases')
     const current  = await getVersion()
     const valid    = releases.filter(r => r.tag_name?.trim())
     if (!valid.length) return null
-    const parse = (v: string) => v.replace(/^v/, '').split('.').map(Number)
+    const parse  = (v: string) => v.replace(/^v/, '').split('.').map(Number)
     const latest = valid.map(r => r.tag_name).sort((a, b) => {
       const pa = parse(a), pb = parse(b)
       for (let i = 0; i < 3; i++) if ((pb[i] ?? 0) !== (pa[i] ?? 0)) return (pb[i] ?? 0) - (pa[i] ?? 0)
@@ -126,32 +186,21 @@ export class TauriAdapter implements PlatformAdapter {
     return { version: latest.replace(/^v/, ''), url: rel.html_url, notes: rel.body }
   }
 
+  async listReleases(): Promise<ReleaseInfo[]> {
+    const all = await invoke<ReleaseInfo[]>('list_releases')
+    return all.filter(r => typeof r.tag_name === 'string' && r.tag_name.trim())
+  }
+
   async installAppUpdate(tag: string) {
     await invoke('download_and_install_update', { tag })
   }
 
-  async restartApp() {
-    await invoke('restart_app')
+  async onUpdateProgress(cb: (p: UpdateProgress) => void): Promise<() => void> {
+    return listen<UpdateProgress>('update-progress', e => cb(e.payload))
   }
 
-  async getDefaultDownloadsPath(): Promise<string> {
-    return invoke('get_default_downloads_path')
-  }
-
-  async getStorageInfo(downloadsPath: string): Promise<StorageInfo> {
-    return invoke('get_storage_info', { downloadsPath })
-  }
-
-  async checkPathExists(path: string): Promise<boolean> {
-    return invoke('check_path_exists', { path })
-  }
-
-  async createDirectory(path: string) {
-    await invoke('create_directory', { path })
-  }
-
-  async openPath(path: string) {
-    await invoke('open_path', { path })
+  async onUpdateLaunching(cb: () => void): Promise<() => void> {
+    return listen('update-launching', cb)
   }
 
   async getAutoBackupDir(): Promise<string> {
@@ -170,28 +219,7 @@ export class TauriAdapter implements PlatformAdapter {
     await invoke('reset_suwayomi_data')
   }
 
-  async exitApp() {
-    await invoke('exit_app')
-  }
-
-  async listReleases(): Promise<ReleaseInfo[]> {
-    const all = await invoke<ReleaseInfo[]>('list_releases')
-    return all.filter(r => typeof r.tag_name === 'string' && r.tag_name.trim())
-  }
-
-  async onUpdateProgress(cb: (p: UpdateProgress) => void): Promise<() => void> {
-    return listen<UpdateProgress>('update-progress', e => cb(e.payload))
-  }
-
-  async onUpdateLaunching(cb: () => void): Promise<() => void> {
-    return listen('update-launching', cb)
-  }
-
   async onMigrateProgress(cb: (p: MigrateProgress) => void): Promise<() => void> {
     return listen<MigrateProgress>('migrate_progress', e => cb(e.payload))
-  }
-
-  async migrateDownloads(src: string, dst: string) {
-    await invoke('migrate_downloads', { src, dst })
   }
 }

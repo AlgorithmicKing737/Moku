@@ -13,17 +13,30 @@
     return 4
   }
 
-  let tip: { text: string; x: number; y: number } | null = $state(null)
+  let tipEl: HTMLDivElement | null = null
 
   function showTip(e: MouseEvent, cell: { dateStr: string; count: number }) {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
     const label = cell.count === 0
       ? `No chapters — ${fmtDate(cell.dateStr)}`
       : `${cell.count} chapter${cell.count !== 1 ? 's' : ''} — ${fmtDate(cell.dateStr)}`
-    tip = { text: label, x: rect.left + rect.width / 2, y: rect.top - 6 }
+    if (!tipEl) {
+      tipEl = document.createElement('div')
+      tipEl.className = 'moku-heatmap-tip'
+      document.body.appendChild(tipEl)
+    }
+    tipEl.textContent = label
+    const zoom = parseFloat(document.documentElement.style.zoom) || 1
+    tipEl.style.left = `${(rect.left + rect.width / 2) / zoom}px`
+    tipEl.style.top  = `${(rect.top - 6) / zoom}px`
+    tipEl.style.display = 'block'
   }
 
-  function hideTip() { tip = null }
+  function hideTip() {
+    if (tipEl) tipEl.style.display = 'none'
+  }
+
+  $effect(() => () => { tipEl?.remove(); tipEl = null })
 
   function fmtDate(d: string): string {
     return new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
@@ -141,9 +154,6 @@
   </div>
 </div>
 
-{#if tip}
-  <div class="heatmap-tip" style="left:{tip.x}px; top:{tip.y}px;">{tip.text}</div>
-{/if}
 
 <style>
   .heatmap-wrap {
@@ -196,12 +206,13 @@
   .legend-cell { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
   .legend-label { font-family: var(--font-ui); font-size: 9px; color: var(--text-faint); letter-spacing: var(--tracking-wide); }
 
-  .heatmap-tip {
+  :global(.moku-heatmap-tip) {
     position: fixed; transform: translate(-50%, -100%);
     background: var(--bg-overlay); border: 1px solid var(--border-base);
     border-radius: var(--radius-sm); padding: 4px 8px;
     font-family: var(--font-ui); font-size: var(--text-2xs); color: var(--text-secondary);
     letter-spacing: var(--tracking-wide); white-space: nowrap; pointer-events: none;
     z-index: 9999; box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    display: none;
   }
 </style>

@@ -11,16 +11,42 @@ export interface ServerLaunchConfig {
   [key: string]: unknown
 }
 
+export interface DiscordAssets {
+  largeImage?: string
+  largeText?:  string
+  smallImage?: string
+  smallText?:  string
+}
+
+export interface DiscordButton {
+  label: string
+  url:   string
+}
+
+export interface DiscordParty {
+  id?:          string
+  currentSize?: number
+  maxSize?:     number
+}
+
+export interface DiscordTimestamps {
+  start?: number
+  end?:   number
+}
+
 export interface DiscordPresence {
-  state?: string
-  details?: string
-  [key: string]: unknown
+  state?:      string
+  details?:    string
+  assets?:     DiscordAssets
+  buttons?:    DiscordButton[]
+  party?:      DiscordParty
+  timestamps?: DiscordTimestamps
 }
 
 export interface AppUpdateInfo {
   version: string
-  url: string
-  notes: string
+  url:     string
+  notes:   string
 }
 
 export interface StorageInfo {
@@ -41,60 +67,64 @@ export interface UpdateProgress {
   total:      number | null
 }
 
-export interface PlatformAdapter {
-  init(): Promise<void>
-  isSupported(feature: PlatformFeature): boolean
-
-  launchServer(config: ServerLaunchConfig): Promise<void>
-  stopServer(): Promise<void>
-  getServerStatus(): Promise<'running' | 'stopped' | 'error'>
-
-  readFile(path: string): Promise<Uint8Array>
-  writeFile(path: string, data: Uint8Array): Promise<void>
-  pickFolder(): Promise<string | null>
-
-  authenticateBiometric(): Promise<boolean>
-  storeCredential(key: string, value: string): Promise<void>
-  getCredential(key: string): Promise<string | null>
-
-  setTitle(title: string): Promise<void>
-  minimize(): Promise<void>
-  maximize(): Promise<void>
-  close(): Promise<void>
-  toggleFullscreen(): Promise<void>
-
-  setDiscordPresence(presence: DiscordPresence): Promise<void>
-  clearDiscordPresence(): Promise<void>
-
-  getVersion(): Promise<string>
-  openExternal(url: string): Promise<void>
-  checkForAppUpdate(): Promise<AppUpdateInfo | null>
-  installAppUpdate(tag: string): Promise<void>
-  restartApp(): Promise<void>
-
-  getDefaultDownloadsPath(): Promise<string>
-  getStorageInfo(downloadsPath: string): Promise<StorageInfo>
-  checkPathExists(path: string): Promise<boolean>
-  createDirectory(path: string): Promise<void>
-  openPath(path: string): Promise<void>
-  getAutoBackupDir(): Promise<string>
-
-  clearMokuCache(): Promise<void>
-  clearSuwayomiCache(): Promise<void>
-  resetSuwayomiData(): Promise<void>
-  exitApp(): Promise<void>
-
-  onUpdateProgress(cb: (p: UpdateProgress) => void): Promise<() => void>
-  onUpdateLaunching(cb: () => void): Promise<() => void>
-  listReleases(): Promise<ReleaseInfo[]>
-  onMigrateProgress(cb: (p: MigrateProgress) => void): Promise<() => void>
-  migrateDownloads(src: string, dst: string): Promise<void>
-}
-
 export interface ReleaseInfo {
   tag_name:     string
   name:         string
   body:         string
   published_at: string
   html_url:     string
+}
+
+export interface PlatformAdapter {
+  init():    Promise<void>
+  destroy(): Promise<void>
+  isSupported(feature: PlatformFeature): boolean
+
+  launchServer(config: ServerLaunchConfig): Promise<void>
+  stopServer():                             Promise<void>
+  getServerStatus():                        Promise<'running' | 'stopped' | 'error'>
+
+  readFile(path: string):                   Promise<Uint8Array>
+  writeFile(path: string, data: Uint8Array): Promise<void>
+  pickFolder():                             Promise<string | null>
+
+  authenticateBiometric():                  Promise<boolean>
+  storeCredential(key: string, value: string): Promise<void>
+  getCredential(key: string):               Promise<string | null>
+
+  loadStore(key: string):                   Promise<unknown>
+  saveStore(key: string, value: unknown):   Promise<void>
+
+  setTitle(title: string): Promise<void>
+  minimize():              Promise<void>
+  maximize():              Promise<void>
+  close():                 Promise<void>
+  toggleFullscreen():      Promise<void>
+
+  setDiscordPresence(presence: DiscordPresence): Promise<void>
+  clearDiscordPresence():                        Promise<void>
+
+  getVersion():                           Promise<string>
+  openExternal(url: string):              Promise<void>
+  checkForAppUpdate():                    Promise<AppUpdateInfo | null>
+  installAppUpdate(tag: string):          Promise<void>
+  restartApp():                           Promise<void>
+
+  getDefaultDownloadsPath():              Promise<string>
+  getStorageInfo(downloadsPath: string):  Promise<StorageInfo>
+  checkPathExists(path: string):          Promise<boolean>
+  createDirectory(path: string):          Promise<void>
+  openPath(path: string):                 Promise<void>
+  getAutoBackupDir():                     Promise<string>
+
+  clearMokuCache():      Promise<void>
+  clearSuwayomiCache():  Promise<void>
+  resetSuwayomiData():   Promise<void>
+  exitApp():             Promise<void>
+
+  onUpdateProgress(cb: (p: UpdateProgress) => void):   Promise<() => void>
+  onUpdateLaunching(cb: () => void):                   Promise<() => void>
+  listReleases():                                      Promise<ReleaseInfo[]>
+  onMigrateProgress(cb: (p: MigrateProgress) => void): Promise<() => void>
+  migrateDownloads(src: string, dst: string):          Promise<void>
 }

@@ -2,6 +2,7 @@
   import { onMount, untrack, tick }        from "svelte";
   import { readerState, PAGE_STYLES }      from "$lib/state/reader.svelte";
   import { settingsState, updateSettings } from "$lib/state/settings.svelte";
+  import { app }                           from "$lib/state/app.svelte";
   import { DEFAULT_KEYBINDS }              from "$lib/core/keybinds/defaultBinds";
   import { fetchPages, resolveUrl, preloadImage, measureAspect, buildPageGroups } from "$lib/components/reader/lib/pageLoader";
   import { setupScrollTracking, appendNextChapter }          from "$lib/components/reader/lib/scrollHandler";
@@ -10,6 +11,7 @@
   import { goForward, goBack, jumpToPage }                   from "$lib/components/reader/lib/navigation";
   import { clampZoom, captureZoomAnchor, restoreZoomAnchor } from "$lib/components/reader/lib/zoomHelpers";
   import { loadChapter, scheduleResumeDismiss }              from "$lib/components/reader/lib/chapterLoader";
+  import { historyState }                                    from "$lib/state/history.svelte";
   import type { ReaderSettings }                             from "$lib/state/reader.svelte";
   import ReaderControls                                      from "$lib/components/reader/ReaderControls.svelte";
   import PageView                                            from "$lib/components/reader/PageView.svelte";
@@ -54,7 +56,9 @@
   const isBookmarked = $derived(
     !!currentBookmark &&
     currentBookmark.chapterId === displayChapter?.id &&
-    currentBookmark.pageNumber === readerState.pageNumber
+    (style === "double"
+      ? currentGroup.includes(currentBookmark.pageNumber)
+      : currentBookmark.pageNumber === readerState.pageNumber)
   );
 
   const currentPageMarkers   = $derived(displayChapter ? readerState.getMarkersForPage(displayChapter.id, readerState.pageNumber) : []);
@@ -139,6 +143,7 @@
   let startAtLastPageRef = { current: false };
   let cleanupScroll: () => void = () => {};
   let stripChaptersRef   = readerState.stripChapters;
+  let tickTimer: ReturnType<typeof setTimeout> | null = null;
 
   $effect(() => { stripChaptersRef = readerState.stripChapters; });
 
@@ -219,7 +224,7 @@
     resetZoom:        () => { captureZoomAnchor(containerEl, style, zoomAnchor); applySettings({ readerZoom: 1.0 }); restoreZoomAnchor(containerEl, zoomAnchor); },
     cycleStyle:       () => { const idx = PAGE_STYLES.indexOf(style); applySettings({ pageStyle: PAGE_STYLES[(idx + 1) % PAGE_STYLES.length] }); },
     toggleDirection:  () => applySettings({ readingDirection: rtl ? "ltr" : "rtl" }),
-    openSettings:     () => { settingsState.settingsOpen = true; },
+    openSettings: () => { app.setSettingsOpen(true); },
     toggleBookmark:   () => toggleBookmark(displayChapter, readerState.pageNumber),
     toggleAutoScroll: () => { if (style === "longstrip") updateSettings({ autoScroll: !(settingsState.settings.autoScroll ?? false) }); },
     toggleMarker:     () => {
@@ -293,8 +298,39 @@
   }
 
   $effect(() => {
-    const ch = readerState.activeChapter;
-    if (ch) untrack(() => loadChapter(ch.id, useBlob, abortCtrl, startAtLastPageRef, markedRead, adjacent));
+    const ch    = readerState.activeChapter;
+    const manga = readerState.activeManga;
+    if (ch && manga) {
+      untrack(() => {
+        historyState.openSession(
+          manga.id, manga.title, manga.thumbnailUrl,
+          ch.id, ch.name, readerState.pageNumber,
+        );
+        loadChapter(ch.id, useBlob, abortCtrl, startAtLastPageRef, markedRead, adjacent);
+      });
+    }
+  });
+
+  $effect(() => {
+    const page   = readerState.pageNumber;
+    const chId   = style === "longstrip"
+      ? (readerState.visibleChapterId ?? readerState.activeChapter?.id)
+      : readerState.activeChapter?.id;
+    const chName = style === "longstrip"
+      ? (readerState.activeChapterList.find(c => c.id === chId)?.name ?? readerState.activeChapter?.name ?? "")
+      : (readerState.activeChapter?.name ?? "");
+
+    if (!chId || !readerState.activeManga) return;
+
+    if (tickTimer) clearTimeout(tickTimer);
+    tickTimer = setTimeout(() => {
+      historyState.tickSession(chId, chName, page);
+      tickTimer = null;
+    }, 2_000);
+
+    return () => {
+      if (tickTimer) { clearTimeout(tickTimer); tickTimer = null; }
+    };
   });
 
   $effect(() => {
@@ -518,6 +554,7 @@
     if (containerEl) ro.observe(containerEl);
 
     return () => {
+      historyState.closeSession();
       abortCtrl.current?.abort();
       if (hideTimer) clearTimeout(hideTimer);
       if (roTimer) clearTimeout(roTimer);
@@ -542,9 +579,14 @@
   role="presentation"
   onmousemove={(e) => {
     if (!tapToToggleBar) {
-      if (barPosition === "top" && (e.clientY < 60 || window.innerHeight - e.clientY < 60)) showUi();
-      if (barPosition === "left" && e.clientX < 60) showUi();
-      if (barPosition === "right" && window.innerWidth - e.clientX < 60) showUi();
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const w = rect.width;
+      const h = rect.height;
+      if (barPosition === "top" && (y < 60 || h - y < 60)) showUi();
+      if (barPosition === "left" && x < 60) showUi();
+      if (barPosition === "right" && w - x < 60) showUi();
     }
   }}
 >
@@ -564,8 +606,7 @@
     onDeleteMarker={deleteCurrentMarker}
     onClampZoom={clampZoom}
     onApplySettings={applySettings}
-    onDlOpen={() => readerState.dlOpen = true}
-    onSettingsOpen={() => { settingsState.settingsOpen = true; }}
+    onSettingsOpen={() => { app.setSettingsOpen(true); }}
     {perMangaEnabled}
   />
 

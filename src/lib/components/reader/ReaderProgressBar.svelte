@@ -34,21 +34,52 @@
 
   const hValue = $derived(rtl ? sliderMax - sliderPage + 1 : sliderPage);
   const hPct   = $derived(`--pct:${sliderPct}%`);
-  const vPct   = $derived(`--pct:${sliderPct}%`);
 
   function handleH(e: Event) {
     const raw = Number((e.target as HTMLInputElement).value);
     onJumpToPage(rtl ? sliderMax - raw + 1 : raw);
   }
 
-  function handleV(e: Event) {
-    onJumpToPage(Number((e.target as HTMLInputElement).value));
-  }
-
   function markerPct(pageNumber: number, forRtl = false): number {
     if (sliderMax <= 1) return 0;
     const ord = forRtl ? sliderMax - pageNumber + 1 : pageNumber;
     return ((ord - 1) / (sliderMax - 1)) * 100;
+  }
+
+  // Custom vertical slider
+  let trackEl = $state<HTMLDivElement | null>(null);
+  let dragging = $state(false);
+
+  function pctFromPointer(clientY: number): number {
+    if (!trackEl) return 0;
+    const rect = trackEl.getBoundingClientRect();
+    return Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
+  }
+
+  function pageFromPct(pct: number): number {
+    return Math.round(1 + pct * (sliderMax - 1));
+  }
+
+  function handleTrackPointerDown(e: PointerEvent) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    dragging = true;
+    readerState.sliderDragging = true;
+    const pct  = pctFromPointer(e.clientY);
+    onJumpToPage(pageFromPct(pct));
+  }
+
+  function handleTrackPointerMove(e: PointerEvent) {
+    if (!dragging) return;
+    const pct = pctFromPointer(e.clientY);
+    onJumpToPage(pageFromPct(pct));
+  }
+
+  function handleTrackPointerUp(e: PointerEvent) {
+    if (!dragging) return;
+    dragging = false;
+    readerState.sliderDragging = false;
   }
 </script>
 
@@ -103,43 +134,52 @@
       <ArrowRight size={13} weight="light" />
     </button>
   </div>
+
 {:else}
-  <div class="vbar-progress" class:hidden={!uiVisible} class:vbar-right={barPosition === "right"}>
+  <div class="vbar-progress" class:hidden={!uiVisible}>
     {#if sliderMax > 1}
       <div
         class="vslider-wrap"
+        bind:this={trackEl}
+        role="slider"
+        aria-valuenow={sliderPage}
+        aria-valuemin={1}
+        aria-valuemax={sliderMax}
+        tabindex="0"
         onmouseenter={() => readerState.sliderHover = true}
-        onmouseleave={() => readerState.sliderHover = false}
+        onmouseleave={() => { if (!dragging) readerState.sliderHover = false; }}
+        onpointerdown={handleTrackPointerDown}
+        onpointermove={handleTrackPointerMove}
+        onpointerup={handleTrackPointerUp}
+        onpointercancel={handleTrackPointerUp}
       >
-        <input
-          type="range"
-          class="v-range"
-          style={vPct}
-          min={1}
-          max={sliderMax}
-          value={sliderPage}
-          oninput={handleV}
-          onmousedown={() => readerState.sliderDragging = true}
-          onmouseup={() => readerState.sliderDragging = false}
-        />
+        <div class="vtrack">
+          <div class="vtrack-fill" style="height:{sliderPct}%"></div>
+        </div>
+
         <div class="vslider-markers" aria-hidden="true">
           {#if currentBookmark && currentBookmark.chapterId === displayChapter?.id}
-            {@const bPct = sliderMax > 1 ? ((currentBookmark.pageNumber - 1) / (sliderMax - 1)) * 100 : 0}
             <div class="vslider-checkpoint bookmark-checkpoint"
-              style="top:{bPct}%"
+              style="top:{markerPct(currentBookmark.pageNumber)}%"
               title="Bookmark: Page {currentBookmark.pageNumber}">
             </div>
           {/if}
           {#each activeChapterMarkers as m (m.id)}
-            {@const mPct = sliderMax > 1 ? ((m.pageNumber - 1) / (sliderMax - 1)) * 100 : 0}
             <div class="vslider-checkpoint marker-checkpoint"
-              style="top:{mPct}%;background:{MARKER_COLOR_HEX[m.color]}"
+              style="top:{markerPct(m.pageNumber)}%;background:{MARKER_COLOR_HEX[m.color]}"
               title="{m.note ? m.note : 'Marker'} · Page {m.pageNumber}">
             </div>
           {/each}
         </div>
+
+        <div class="vthumb" style="top:{sliderPct}%" class:dragging></div>
+
         {#if readerState.sliderHover || readerState.sliderDragging}
-          <div class="vslider-tooltip" style="top:{sliderPct}%" class:tooltip-right={barPosition === "right"}>
+          <div
+            class="vslider-tooltip"
+            class:tooltip-right={barPosition === "right"}
+            style="top:{sliderPct}%"
+          >
             {sliderPage} / {sliderMax}
           </div>
         {/if}
@@ -179,21 +219,95 @@
   .marker-checkpoint { opacity: 0.85; }
   .slider-tooltip { position: absolute; bottom: calc(100% + 2px); transform: translateX(-50%); background: var(--bg-raised); border: 1px solid var(--border-base); border-radius: var(--radius-sm); padding: 2px 6px; font-family: var(--font-ui); font-size: var(--text-2xs); color: var(--text-secondary); white-space: nowrap; pointer-events: none; z-index: 10; letter-spacing: var(--tracking-wide); }
 
-  .vbar-progress { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; width: 100%; padding: var(--sp-2) 0; transition: opacity 0.25s ease; pointer-events: none; }
+
+  .vbar-progress {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 1;
+    width: 100%;
+    min-height: 0;
+    padding: var(--sp-2) 0;
+    transition: opacity 0.25s ease;
+    pointer-events: none;
+  }
   .vbar-progress.hidden { opacity: 0; }
 
-  .vslider-wrap { flex: 1; position: relative; display: flex; flex-direction: column; align-items: center; width: 36px; pointer-events: all; margin: var(--sp-1) 0; }
+  .vslider-wrap {
+    flex: 1;
+    width: 100%;
+    min-height: 0;
+    position: relative;
+    display: flex;
+    justify-content: center;
+    pointer-events: all;
+    cursor: pointer;
+    touch-action: none;
+  }
+  .vslider-wrap:focus { outline: none; }
 
-  .v-range { -webkit-appearance: slider-vertical; appearance: slider-vertical; writing-mode: vertical-lr; direction: rtl; width: 34px; height: 100%; background: transparent; cursor: pointer; position: relative; z-index: 2; margin: 0; padding: 0; }
-  .v-range::-webkit-slider-runnable-track { width: 5px; background: linear-gradient(to bottom, var(--accent-fg) var(--pct, 0%), var(--border-strong) var(--pct, 0%)); border-radius: 3px; transition: width 0.15s ease, background 0.05s linear; }
-  .v-range:hover::-webkit-slider-runnable-track,
-  .v-range:active::-webkit-slider-runnable-track { width: 7px; }
-  .v-range::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--accent-fg); box-shadow: 0 0 0 2px rgba(0,0,0,0.5); margin-left: -4.5px; transition: transform var(--t-fast); }
-  .v-range:hover::-webkit-slider-thumb,
-  .v-range:active::-webkit-slider-thumb { transform: scale(1.3); }
+  .vtrack {
+    width: 4px;
+    height: 100%;
+    border-radius: 2px;
+    background: var(--border-strong);
+    position: relative;
+    overflow: hidden;
+    flex-shrink: 0;
+    transition: width 0.15s ease;
+  }
+  .vslider-wrap:hover .vtrack { width: 6px; }
+
+  .vtrack-fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    border-radius: 2px;
+    background: var(--accent-fg);
+    transition: height 0.05s linear;
+  }
+
+  .vthumb {
+    position: absolute;
+    left: 50%;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--accent-fg);
+    box-shadow: 0 0 0 2px rgba(0,0,0,0.5);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    transition: transform var(--t-fast);
+  }
+  .vslider-wrap:hover .vthumb,
+  .vthumb.dragging { transform: translate(-50%, -50%) scale(1.3); }
 
   .vslider-markers { position: absolute; inset: 0; pointer-events: none; }
-  .vslider-checkpoint { position: absolute; left: 50%; transform: translate(-50%, -50%); width: 12px; height: 5px; border-radius: 2px; }
-  .vslider-tooltip { position: absolute; left: calc(100% + 6px); transform: translateY(-50%); background: var(--bg-raised); border: 1px solid var(--border-base); border-radius: var(--radius-sm); padding: 2px 6px; font-family: var(--font-ui); font-size: var(--text-2xs); color: var(--text-secondary); white-space: nowrap; pointer-events: none; z-index: 10; letter-spacing: var(--tracking-wide); }
-  .vslider-tooltip.tooltip-right { left: auto; right: calc(100% + 6px); }
+  .vslider-checkpoint {
+    position: absolute;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 10px;
+    height: 4px;
+    border-radius: 2px;
+  }
+
+  .vslider-tooltip {
+    position: absolute;
+    left: calc(100% + 8px);
+    transform: translateY(-50%);
+    background: var(--bg-raised);
+    border: 1px solid var(--border-base);
+    border-radius: var(--radius-sm);
+    padding: 2px 6px;
+    font-family: var(--font-ui);
+    font-size: var(--text-2xs);
+    color: var(--text-secondary);
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 10;
+    letter-spacing: var(--tracking-wide);
+  }
+  .vslider-tooltip.tooltip-right { left: auto; right: calc(100% + 8px); }
 </style>

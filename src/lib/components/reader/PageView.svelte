@@ -144,7 +144,6 @@
     };
   }
 
-  // Reset virtual load window when chapter changes
   let lastChapterId = 0;
   $effect(() => {
     const chapterId = readerState.activeChapter?.id ?? 0;
@@ -362,6 +361,8 @@
     readerState.inspectPanY  = clampedY;
   }
 
+  let tapTimer: ReturnType<typeof setTimeout> | null = null;
+
   function handleTap(e: MouseEvent) {
     if (style === "longstrip") {
       if (stripDragMoved) { stripDragMoved = false; return; }
@@ -369,7 +370,19 @@
     }
     if (inspectDragMoved) { inspectDragMoved = false; return; }
     if (stripDragMoved)   { stripDragMoved   = false; return; }
-    onTap(e);
+    if (tapToToggleBar) {
+      if (tapTimer) { clearTimeout(tapTimer); tapTimer = null; return; }
+      tapTimer = setTimeout(() => { tapTimer = null; onTap(e); }, 220);
+    } else {
+      onTap(e);
+    }
+  }
+
+  function handleDblClick() {
+    if (tapToToggleBar) {
+      if (tapTimer) { clearTimeout(tapTimer); tapTimer = null; }
+      onToggleUi();
+    }
   }
 
   function setContainer(el: HTMLDivElement) {
@@ -399,7 +412,7 @@
   tabindex="-1"
   onclick={handleTap}
   onauxclick={(e) => { if (e.button === 1 && style === "longstrip") e.preventDefault(); }}
-  ondblclick={() => { if (tapToToggleBar) onToggleUi(); }}
+  ondblclick={handleDblClick}
   onmousedown={onInspectMouseDown}
   onpointerdown={pinchZoomEnabled ? onPointerDown : undefined}
   onwheel={(e) => { if (e.ctrlKey || style !== "longstrip") e.preventDefault(); }}

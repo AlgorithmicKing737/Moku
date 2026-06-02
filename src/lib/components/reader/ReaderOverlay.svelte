@@ -1,17 +1,19 @@
 <script lang="ts">
-  import { readerState }   from "$lib/state/reader.svelte";
-  import { getAdapter }    from "$lib/request-manager";
-  import type { Chapter }  from "$lib/types";
+  import { readerState }                    from "$lib/state/reader.svelte";
+  import { settingsState }                  from "$lib/state/settings.svelte";
+  import { getAdapter }                     from "$lib/request-manager";
+  import type { Chapter }                   from "$lib/types";
 
   interface Props {
     showResumeBanner: boolean;
     resumePage:       number;
     resumeFading:     boolean;
-    adjacent:         { remaining: Chapter[] };
+    adjacent:         { prev: Chapter | null; next: Chapter | null; remaining: Chapter[] };
     onDismissResume:  () => void;
+    barPosition:      "top" | "left" | "right";
   }
 
-  const { showResumeBanner, resumePage, resumeFading, adjacent, onDismissResume }: Props = $props();
+  const { showResumeBanner, resumePage, resumeFading, adjacent, onDismissResume, barPosition }: Props = $props();
 
   async function gqlMutation(query: string, variables: Record<string, unknown>): Promise<void> {
     const base    = settingsState.settings.serverUrl ?? "http://localhost:4567";
@@ -53,7 +55,7 @@
 
 {#if readerState.dlOpen && readerState.activeChapter}
   {@const chapter = readerState.activeChapter}
-  <div class="dl-backdrop" role="presentation" onclick={() => readerState.dlOpen = false}>
+  <div class="dl-backdrop dl-backdrop-{barPosition}" role="presentation" onclick={() => readerState.dlOpen = false}>
     <div class="dl-modal" role="presentation" onclick={(e) => e.stopPropagation()}>
       <p class="dl-title">Download</p>
 
@@ -91,8 +93,14 @@
   @keyframes bannerIn  { from { opacity: 0; translate: -50% -6px; scale: 0.97; } to { opacity: 1; translate: -50% 0; scale: 1; } }
   @keyframes bannerOut { from { opacity: 1; translate: -50% 0;  scale: 1;    } to { opacity: 0; translate: -50% -4px; scale: 0.97; } }
 
-  .dl-backdrop { position: fixed; inset: 0; z-index: calc(var(--z-reader) + 10); display: flex; align-items: flex-start; justify-content: flex-end; padding: 48px var(--sp-4) 0; }
-  .dl-modal    { background: var(--bg-raised); border: 1px solid var(--border-base); border-radius: var(--radius-xl); padding: var(--sp-3); min-width: 210px; display: flex; flex-direction: column; gap: var(--sp-1); box-shadow: 0 8px 32px rgba(0,0,0,0.6); animation: scaleIn 0.12s ease both; transform-origin: top right; }
+  .dl-backdrop { position: fixed; inset: 0; z-index: calc(var(--z-reader) + 10); display: flex; padding: var(--sp-4); }
+  .dl-backdrop-top   { align-items: flex-start; justify-content: flex-end; padding-top: 52px; padding-right: var(--sp-4); }
+  .dl-backdrop-left  { align-items: flex-end;   justify-content: flex-start; padding-bottom: var(--sp-4); padding-left: 52px; }
+  .dl-backdrop-right { align-items: flex-end;   justify-content: flex-end;   padding-bottom: var(--sp-4); padding-right: 52px; }
+  .dl-modal    { background: var(--bg-raised); border: 1px solid var(--border-base); border-radius: var(--radius-xl); padding: var(--sp-3); min-width: 210px; display: flex; flex-direction: column; gap: var(--sp-1); box-shadow: 0 8px 32px rgba(0,0,0,0.6); animation: scaleIn 0.12s ease both; }
+  .dl-backdrop-top   .dl-modal { transform-origin: top right; }
+  .dl-backdrop-left  .dl-modal { transform-origin: bottom left; }
+  .dl-backdrop-right .dl-modal { transform-origin: bottom right; }
   .dl-title    { font-family: var(--font-ui); font-size: var(--text-2xs); color: var(--text-faint); letter-spacing: var(--tracking-wider); text-transform: uppercase; padding: 2px var(--sp-2) var(--sp-2); border-bottom: 1px solid var(--border-dim); margin-bottom: var(--sp-1); }
   .dl-option   { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; padding: 7px var(--sp-3); border-radius: var(--radius-md); font-size: var(--text-sm); color: var(--text-secondary); background: none; border: none; cursor: pointer; text-align: left; transition: background var(--t-fast), color var(--t-fast); }
   .dl-option:hover:not(:disabled) { background: var(--bg-overlay); color: var(--text-primary); }

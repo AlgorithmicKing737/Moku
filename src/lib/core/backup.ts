@@ -1,8 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import {
-  persistSettings,
-  persistLibrary,
-  persistUpdates,
+  saveSettings,
+  saveLibrary,
+  saveUpdates,
 } from "$lib/core/persistence/persist";
 
 const STORE_FILES = ["settings.json", "library.json", "updates.json"] as const;
@@ -37,19 +37,17 @@ export async function importAppData(): Promise<void> {
   const u = decode("updates.json");
 
   await Promise.all([
-    persistSettings({
+    saveSettings({
+      storeVersion: s.storeVersion ?? 2,
       settings:     s.settings     ?? null,
-      storeVersion: s.storeVersion ?? 1,
     }),
-    persistLibrary({
-      history:         l.history         ?? [],
+    saveLibrary({
+      sessions:        l.sessions        ?? [],
       bookmarks:       l.bookmarks       ?? [],
       markers:         l.markers         ?? [],
-      readLog:         l.readLog         ?? [],
-      readingStats:    l.readingStats    ?? null,
       dailyReadCounts: l.dailyReadCounts ?? {},
     }),
-    persistUpdates({
+    saveUpdates({
       libraryUpdates:        u.libraryUpdates        ?? [],
       lastLibraryRefresh:    u.lastLibraryRefresh    ?? 0,
       acknowledgedUpdateIds: u.acknowledgedUpdateIds ?? [],
@@ -58,6 +56,23 @@ export async function importAppData(): Promise<void> {
 
   await showExitModal();
   invoke("exit_app");
+}
+
+export async function autoBackupAppData(): Promise<void> {
+  try {
+    const entries: [string, string][] = await invoke("read_store_files", {
+      names: [...STORE_FILES],
+    });
+    const zip = buildZip(
+      entries.map(([name, content]) => ({
+        name,
+        bytes: new TextEncoder().encode(content),
+      }))
+    );
+    await invoke("auto_backup_app_data", { bytes: Array.from(zip) });
+  } catch (e) {
+    console.warn("[moku] auto-backup failed:", e);
+  }
 }
 
 function showExitModal(): Promise<void> {
@@ -121,23 +136,6 @@ function showExitModal(): Promise<void> {
 
     btn.addEventListener("click", () => { clearInterval(tick); backdrop.remove(); resolve(); });
   });
-}
-
-export async function autoBackupAppData(): Promise<void> {
-  try {
-    const entries: [string, string][] = await invoke("read_store_files", {
-      names: [...STORE_FILES],
-    });
-    const zip = buildZip(
-      entries.map(([name, content]) => ({
-        name,
-        bytes: new TextEncoder().encode(content),
-      }))
-    );
-    await invoke("auto_backup_app_data", { bytes: Array.from(zip) });
-  } catch (e) {
-    console.warn("[moku] auto-backup failed:", e);
-  }
 }
 
 function crc32(data: Uint8Array): number {

@@ -3,10 +3,11 @@
   import { getAdapter }         from '$lib/request-manager'
   import { cache, CACHE_KEYS, CACHE_GROUPS } from '$lib/core/cache/queryCache'
   import { homeState, clearHistory } from '$lib/state/home.svelte'
+  import { historyState }            from '$lib/state/history.svelte'
   import { setActiveManga, openReader, setPreviewManga } from '$lib/state/series.svelte'
   import { addToast }           from '$lib/state/notifications.svelte'
   import { buildChapterList }   from '$lib/components/series/lib/chapterList'
-  import { buildSessions, groupByDay }         from './lib/recentHistory'
+  import { groupByDay }                                from './lib/recentHistory'
   import { fetchedAtMs, parseServerTimestamp, groupUpdatesByDay } from './lib/recentUpdates'
   import RecentToolbar  from './RecentToolbar.svelte'
   import UpdatesTab     from './UpdatesTab.svelte'
@@ -69,13 +70,13 @@
   )
 
   const filteredHistory = $derived(historySearch.trim()
-    ? homeState.history.filter(e =>
-        e.mangaTitle.toLowerCase().includes(historySearch.toLowerCase()) ||
-        e.chapterName.toLowerCase().includes(historySearch.toLowerCase())
+    ? historyState.sessions.filter(s =>
+        s.mangaTitle.toLowerCase().includes(historySearch.toLowerCase()) ||
+        s.endChapterName.toLowerCase().includes(historySearch.toLowerCase())
       )
-    : homeState.history)
+    : historyState.sessions)
 
-  const historyGroups = $derived(groupByDay(buildSessions(filteredHistory)))
+  const historyGroups = $derived(groupByDay(filteredHistory))
 
   function applyUpdateStatus(statusRes: { isRunning?: boolean; finishedJobs?: number; totalJobs?: number; lastUpdated?: unknown } | null) {
     if (!statusRes) return
@@ -201,7 +202,7 @@
     {historySearch}
     {updatesSearch}
     {historyConfirmClear}
-    hasHistory={homeState.history.length > 0}
+    hasHistory={historyState.sessions.length > 0}
     {updatesLoading}
     onTabChange={(t) => tab = t}
     onHistorySearchChange={(v) => historySearch = v}
@@ -228,9 +229,9 @@
     {:else}
       <HistoryTab
         groups={historyGroups}
-        hasHistory={homeState.history.length > 0}
+        hasHistory={historyState.sessions.length > 0}
         {historySearch}
-        stats={homeState.stats}
+        stats={historyState.stats}
         {thumbFor}
         onOpenSeries={(session) => setPreviewManga({
           id:           session.mangaId,

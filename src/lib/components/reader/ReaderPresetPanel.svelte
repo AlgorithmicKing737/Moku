@@ -402,7 +402,7 @@
     position: fixed;
     inset: 0;
     z-index: calc(var(--z-reader) + 20);
-    background: rgba(0, 0, 0, 0.35);
+    background: rgba(0, 0, 0, 0.18);
   }
 
   .panel {
@@ -412,11 +412,11 @@
     bottom: 0;
     width: 320px;
     z-index: calc(var(--z-reader) + 21);
-    background: var(--bg-surface);
-    border-left: 1px solid var(--border-base);
+    background: var(--bg-void);
+    border-left: 1px solid var(--border-dim);
     display: flex;
     flex-direction: column;
-    box-shadow: -12px 0 40px rgba(0, 0, 0, 0.5);
+    box-shadow: -8px 0 32px rgba(0, 0, 0, 0.35);
   }
 
   .panel-header {
@@ -432,8 +432,8 @@
   .panel-title {
     font-family: var(--font-ui);
     font-size: var(--text-sm);
-    font-weight: var(--weight-medium);
-    color: var(--text-primary);
+    font-weight: var(--weight-regular);
+    color: var(--text-secondary);
     letter-spacing: var(--tracking-tight);
   }
 
@@ -505,12 +505,12 @@
     padding: var(--sp-2) var(--sp-1);
     border-radius: var(--radius-md);
     border: 1px solid var(--border-dim);
-    background: var(--bg-overlay);
-    color: var(--text-muted);
+    background: transparent;
+    color: var(--text-faint);
     cursor: pointer;
     transition: color var(--t-fast), background var(--t-fast), border-color var(--t-fast);
   }
-  .option-tile:hover { color: var(--text-primary); background: var(--bg-raised); border-color: var(--border-strong); }
+  .option-tile:hover { color: var(--text-secondary); background: var(--bg-overlay); border-color: var(--border-base); }
   .option-tile.active { color: var(--accent-fg); background: var(--accent-muted); border-color: var(--accent-dim); }
 
   .tile-icon { display: flex; align-items: center; justify-content: center; }
@@ -530,12 +530,12 @@
     padding: var(--sp-2) var(--sp-1);
     border-radius: var(--radius-md);
     border: 1px solid var(--border-dim);
-    background: var(--bg-overlay);
-    color: var(--text-muted);
+    background: transparent;
+    color: var(--text-faint);
     cursor: pointer;
     transition: color var(--t-fast), background var(--t-fast), border-color var(--t-fast);
   }
-  .bar-tile:hover { color: var(--text-primary); background: var(--bg-raised); border-color: var(--border-strong); }
+  .bar-tile:hover { color: var(--text-secondary); background: var(--bg-overlay); border-color: var(--border-base); }
   .bar-tile.active { color: var(--accent-fg); background: var(--accent-muted); border-color: var(--accent-dim); }
 
   .bar-tile-preview {
@@ -577,7 +577,7 @@
 
   .toggle-label {
     font-size: var(--text-xs);
-    color: var(--text-secondary);
+    color: var(--text-muted);
   }
 
   .toggle-badge {
@@ -629,19 +629,19 @@
     padding: var(--sp-2) var(--sp-3);
     border-radius: var(--radius-md);
     border: 1px solid var(--border-dim);
-    background: var(--bg-overlay);
-    color: var(--text-muted);
+    background: transparent;
+    color: var(--text-faint);
     font-size: var(--text-xs);
     cursor: pointer;
     transition: color var(--t-fast), background var(--t-fast), border-color var(--t-fast);
   }
-  .dir-btn:hover { color: var(--text-primary); background: var(--bg-raised); border-color: var(--border-strong); }
+  .dir-btn:hover { color: var(--text-secondary); background: var(--bg-overlay); border-color: var(--border-base); }
   .dir-btn.active { color: var(--accent-fg); background: var(--accent-muted); border-color: var(--accent-dim); }
 
   .zoom-readout {
     font-family: var(--font-ui);
     font-size: var(--text-xs);
-    color: var(--text-secondary);
+    color: var(--text-faint);
     letter-spacing: var(--tracking-wide);
   }
 
@@ -659,14 +659,14 @@
     height: 28px;
     border-radius: var(--radius-sm);
     border: 1px solid var(--border-dim);
-    background: var(--bg-overlay);
-    color: var(--text-muted);
+    background: transparent;
+    color: var(--text-faint);
     font-size: var(--text-base);
     line-height: 1;
     flex-shrink: 0;
     transition: color var(--t-fast), background var(--t-fast);
   }
-  .zoom-step:hover:not(:disabled) { color: var(--text-primary); background: var(--bg-raised); }
+  .zoom-step:hover:not(:disabled) { color: var(--text-secondary); background: var(--bg-overlay); }
   .zoom-step:disabled { opacity: 0.25; cursor: default; }
 
   .zoom-slider {
@@ -742,8 +742,8 @@
 
   .preset-name {
     font-size: var(--text-xs);
-    color: var(--text-secondary);
-    font-weight: var(--weight-medium);
+    color: var(--text-muted);
+    font-weight: var(--weight-regular);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;

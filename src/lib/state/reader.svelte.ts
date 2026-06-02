@@ -52,6 +52,7 @@ class ReaderState {
   zoomOpen         = $state(false);
   winOpen          = $state(false);
   presetOpen       = $state(false);
+  actionsOpen      = $state(false);
   nextN            = $state(5);
   dlBusy           = $state(false);
 
@@ -116,11 +117,12 @@ class ReaderState {
   }
 
   closeAllPopovers(): boolean {
-    if (this.markerOpen) { this.markerOpen = false; return true; }
-    if (this.zoomOpen)   { this.zoomOpen   = false; return true; }
-    if (this.dlOpen)     { this.dlOpen     = false; return true; }
-    if (this.winOpen)    { this.winOpen    = false; return true; }
-    if (this.presetOpen) { this.presetOpen = false; return true; }
+    if (this.markerOpen)  { this.markerOpen  = false; return true; }
+    if (this.zoomOpen)    { this.zoomOpen    = false; return true; }
+    if (this.dlOpen)      { this.dlOpen      = false; return true; }
+    if (this.winOpen)     { this.winOpen     = false; return true; }
+    if (this.presetOpen)  { this.presetOpen  = false; return true; }
+    if (this.actionsOpen) { this.actionsOpen = false; return true; }
     return false;
   }
 

@@ -1,38 +1,28 @@
-import type { Settings }    from "$lib/types/settings";
-import { DEFAULT_SETTINGS } from "$lib/types/settings";
+import type { Settings }    from '$lib/types/settings'
+import { DEFAULT_SETTINGS } from '$lib/types/settings'
+import { saveSettings }     from '$lib/core/persistence/persist'
 
-const KEY = "moku_settings";
+export const settingsState = $state({ settings: { ...DEFAULT_SETTINGS } as Settings })
 
-function load(): Settings {
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (raw) return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
-  } catch {}
-  return { ...DEFAULT_SETTINGS };
-}
-
-function save(s: Settings) {
-  try { localStorage.setItem(KEY, JSON.stringify(s)); } catch {}
-}
-
-export const settingsState = $state({ settings: load() });
-
-if (typeof document !== "undefined") {
-  document.documentElement.style.zoom = String(settingsState.settings.uiZoom ?? 1.0);
+export async function loadSettingsIntoState(raw: unknown) {
+  if (raw && typeof raw === 'object') {
+    Object.assign(settingsState.settings, raw)
+  }
+  if (typeof document !== 'undefined') {
+    document.documentElement.style.zoom = String(settingsState.settings.uiZoom ?? 1.0)
+  }
 }
 
 export function updateSettings(patch: Partial<Settings>) {
-  Object.assign(settingsState.settings, patch);
-  save(settingsState.settings);
+  Object.assign(settingsState.settings, patch)
+  void saveSettings({ storeVersion: 2, settings: settingsState.settings })
 
-  if (typeof document !== "undefined") {
-    if (patch.uiZoom !== undefined) {
-      document.documentElement.style.zoom = String(patch.uiZoom);
-    }
+  if (typeof document !== 'undefined' && patch.uiZoom !== undefined) {
+    document.documentElement.style.zoom = String(patch.uiZoom)
   }
 }
 
 export function resetSettings() {
-  settingsState.settings = { ...DEFAULT_SETTINGS };
-  save(settingsState.settings);
+  settingsState.settings = { ...DEFAULT_SETTINGS }
+  void saveSettings({ storeVersion: 2, settings: settingsState.settings })
 }

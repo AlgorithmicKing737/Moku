@@ -1,10 +1,14 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
-  import { page } from '$app/stores'
-  import { appState, app } from '$lib/state/app.svelte'
-  import { notifications } from '$lib/state/notifications.svelte'
-  import { settingsState, updateSettings } from '$lib/state/settings.svelte'
-  import { applyTheme, mountSystemThemeSync } from '$lib/core/theme'
+  import { onMount }                              from 'svelte'
+  import { page }                                 from '$app/stores'
+  import { appState, app }                        from '$lib/state/app.svelte'
+  import { notifications }                        from '$lib/state/notifications.svelte'
+  import { settingsState, loadSettingsIntoState, updateSettings } from '$lib/state/settings.svelte'
+  import { loadSettings }                         from '$lib/core/persistence/persist'
+  import { applyTheme, mountSystemThemeSync }     from '$lib/core/theme'
+  import { initPlatformService, platformService } from '$lib/platform-service'
+  import { startProbe }                           from '$lib/state/boot.svelte'
+  import * as discord                             from '$lib/core/discord'
   import SplashScreen from '$lib/components/chrome/SplashScreen.svelte'
   import AuthGate     from '$lib/components/chrome/AuthGate.svelte'
   import Sidebar      from '$lib/components/chrome/Sidebar.svelte'
@@ -13,8 +17,8 @@
   import Settings     from '$lib/components/settings/Settings.svelte'
   import ThemeEditor  from '$lib/components/settings/ThemeEditor.svelte'
   import { downloadStore } from '$lib/state/downloads.svelte'
-  import { seriesState }  from '$lib/state/series.svelte'
-  import MangaPreview     from '$lib/components/shared/manga/MangaPreview.svelte'
+  import { seriesState }   from '$lib/state/series.svelte'
+  import MangaPreview      from '$lib/components/shared/manga/MangaPreview.svelte'
   import '../app.css'
 
   let { children } = $props()
@@ -29,8 +33,8 @@
     if (polling) pollTimer = setTimeout(pollLoop, POLL_MS)
   }
 
-  const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
-  const ringFull = $derived(appState.status !== 'booting')
+  const isTauri  = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
+  const ringFull = $derived(appState.status === 'ready' || appState.status === 'auth')
 
   let splashVisible   = $state(true)
   let bypassed        = $state(false)
@@ -43,17 +47,60 @@
     bypassed
   )
 
-  const isReaderRoute      = $derived($page.url.pathname.startsWith('/reader'))
+  const isReaderRoute       = $derived($page.url.pathname.startsWith('/reader'))
   const readerContainerized = $derived(settingsState.settings.readerContainerized ?? false)
-  const strippedLayout     = $derived(isReaderRoute && !readerContainerized)
+  const strippedLayout      = $derived(isReaderRoute && !readerContainerized)
 
-  onMount(() => {
+  onMount(async () => {
+    if (isTauri) {
+      const { TauriAdapter } = await import('$lib/platform-adapters/tauri')
+      initPlatformService(new TauriAdapter())
+    } else {
+      const { WebAdapter } = await import('$lib/platform-adapters/web')
+      initPlatformService(new WebAdapter())
+    }
+
+    await platformService.init()
+
+    const persisted = await loadSettings()
+    await loadSettingsIntoState(persisted.settings)
+
+    appState.platform = isTauri ? 'tauri' : 'web'
+    appState.version  = await platformService.getVersion().catch(() => '')
+
+    if (isTauri && settingsState.settings.autoStartServer) {
+      platformService.launchServer({
+        binary:         settingsState.settings.serverBinary,
+        binary_args:    settingsState.settings.serverBinaryArgs,
+        web_ui_enabled: settingsState.settings.suwayomiWebUI,
+      }).catch(() => {})
+    }
+
+    if (settingsState.settings.discordRpc) {
+      await discord.initRpc()
+      await discord.setIdle()
+    }
+
+    startProbe(
+      settingsState.settings.serverAuthMode,
+      settingsState.settings.serverAuthUser,
+      settingsState.settings.serverAuthPass,
+    )
+
     polling = true
     pollLoop()
+
     applyTheme(
       settingsState.settings.theme ?? 'dark',
       settingsState.settings.customThemes ?? []
     )
+
+    return () => {
+      polling = false
+      if (pollTimer !== null) { clearTimeout(pollTimer); pollTimer = null }
+      discord.destroyRpc()
+      platformService.destroy()
+    }
   })
 
   $effect(() => {
@@ -71,11 +118,6 @@
     const darkTheme  = settingsState.settings.systemThemeDark  ?? 'dark'
     const lightTheme = settingsState.settings.systemThemeLight ?? 'light'
     mountSystemThemeSync(enabled, darkTheme, lightTheme, (id) => updateSettings({ theme: id }))
-  })
-
-  $effect(() => () => {
-    polling = false
-    if (pollTimer !== null) { clearTimeout(pollTimer); pollTimer = null }
   })
 
   function onSplashReady()  { splashVisible = false }
@@ -103,15 +145,17 @@
     {@render children()}
   {:else}
     <div class="frame">
-      <div class="shell">
-        {#if isTauri}
-          <TitleBar onClose={() => import('@tauri-apps/api/window').then(m => m.getCurrentWindow().close())} />
-        {/if}
-        <div class="body">
-          <Sidebar />
-          <main class="main">
-            {@render children()}
-          </main>
+      {#if isTauri}
+        <TitleBar onClose={() => platformService.close()} />
+      {/if}
+      <div class="padding" class:padding-web={!isTauri}>
+        <div class="shell">
+          <div class="body">
+            <Sidebar />
+            <main class="main">
+              {@render children()}
+            </main>
+          </div>
         </div>
       </div>
     </div>
@@ -141,11 +185,22 @@
 <style>
   .frame {
     display: flex;
-    padding: 6px 15px 15px;
+    flex-direction: column;
     width: 100%;
     height: 100%;
     box-sizing: border-box;
     overflow: hidden;
+  }
+
+  .padding {
+    display: flex;
+    flex: 1;
+    padding: 0 15px 15px;
+    min-height: 0;
+  }
+
+  .padding-web {
+    padding-top: 15px;
   }
 
   .shell {

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { MagnifyingGlass, X as XIcon } from 'phosphor-svelte'
+  import Thumbnail from '$lib/components/shared/manga/Thumbnail.svelte'
   import type { Manga } from '$lib/types'
 
   let {
@@ -50,7 +51,7 @@
       {:else}
         {#each results as m (m.id)}
           <button class="list-row" onclick={() => onpin(m)}>
-            <img src={m.thumbnailUrl} alt={m.title} class="row-thumb" />
+            <Thumbnail src={m.thumbnailUrl} alt={m.title} class="row-thumb" />
             <div class="row-info">
               <span class="row-title">{m.title}</span>
               {#if m.source?.displayName}<span class="row-source">{m.source.displayName}</span>{/if}
@@ -115,7 +116,7 @@
     transition: background var(--t-fast);
   }
   .list-row:hover { background: var(--bg-raised); }
-  .row-thumb {
+  :global(.row-thumb) {
     height: 50px; width: 35px; aspect-ratio: 1/1.42;
     border-radius: var(--radius-sm); object-fit: cover; flex-shrink: 0;
     border: 1px solid var(--border-dim); background: var(--bg-raised); display: block;

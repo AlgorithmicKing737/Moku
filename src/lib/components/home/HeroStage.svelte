@@ -1,14 +1,15 @@
 <script lang="ts">
   import { Play, ArrowRight, ArrowLeft, BookOpen, Clock, ListBullets, PushPin, X as XIcon } from 'phosphor-svelte'
   import { goto } from '$app/navigation'
-  import { timeAgo } from '$lib/components/home/homeHelpers'
+  import { timeAgo } from '$lib/components/home/lib/homeHelpers'
+  import Thumbnail from '$lib/components/shared/manga/Thumbnail.svelte'
   import type { Manga } from '$lib/types'
   import type { Chapter } from '$lib/types'
-  import type { HistoryEntry } from '$lib/state/home.svelte'
+  import type { ReadSession } from '$lib/types/history'
 
   interface HeroSlot {
     kind: 'continue' | 'pinned' | 'empty'
-    entry?: HistoryEntry
+    entry?: ReadSession
     manga?: Manga
     slotIndex: number
   }
@@ -39,7 +40,7 @@
     heroThumb:           string
     heroTitle:           string
     heroManga:           Manga | null | undefined
-    heroEntry:           HistoryEntry | null
+    heroEntry:           ReadSession | null
     heroMangaId:         number | null
     heroChapters:        Chapter[]
     heroNewChapter:      Chapter | null
@@ -76,7 +77,7 @@
     aria-label={heroTitle ? `Resume ${heroTitle}` : 'No manga selected'}
   >
     {#if heroThumb}
-      <img src={heroThumb} alt={heroTitle} class="hero-cover" loading="eager" decoding="async" />
+      <Thumbnail src={heroThumb} alt={heroTitle} class="hero-cover" />
       {#if activeSlot?.kind === 'continue'}
         <div class="cover-resume-hint"><Play size={20} weight="fill" /></div>
       {/if}
@@ -122,9 +123,9 @@
       {#if heroEntry}
         <p class="hero-progress">
           <Clock size={10} weight="light" />
-          {heroEntry.chapterName}
-          {#if heroEntry.pageNumber > 1}<span class="hero-prog-page"> · p.{heroEntry.pageNumber}</span>{/if}
-          <span class="hero-prog-time">{timeAgo(heroEntry.readAt)}</span>
+          {heroEntry.endChapterName}
+          {#if heroEntry.endPage > 1}<span class="hero-prog-page"> · p.{heroEntry.endPage}</span>{/if}
+          <span class="hero-prog-time">{timeAgo(heroEntry.endedAt)}</span>
         </p>
       {/if}
 
@@ -277,9 +278,9 @@
     border: none;
     border-right: 1px solid rgba(255,255,255,0.07);
   }
-  .hero-cover-col:hover .hero-cover { filter: brightness(1.1) saturate(1.05); }
+  .hero-cover-col:hover :global(.hero-cover) { filter: brightness(1.1) saturate(1.05); }
   .hero-cover-col:hover .cover-resume-hint { opacity: 1; }
-  .hero-cover { width: 100%; height: 100%; object-fit: cover; display: block; transition: filter 0.22s ease; }
+  :global(.hero-cover) { width: 100%; height: 100%; object-fit: cover; display: block; transition: filter 0.22s ease; }
   .hero-cover-empty {
     width: 100%; height: 100%;
     display: flex; align-items: center; justify-content: center;

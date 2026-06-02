@@ -17,6 +17,21 @@ export class WebAdapter implements PlatformAdapter {
     return false
   }
 
+  async loadStore(key: string): Promise<unknown> {
+    try {
+      const raw = localStorage.getItem(`moku:${key}`)
+      return raw ? JSON.parse(raw) : null
+    } catch {
+      return null
+    }
+  }
+
+  async saveStore(key: string, value: unknown): Promise<void> {
+    try {
+      localStorage.setItem(`moku:${key}`, JSON.stringify(value))
+    } catch {}
+  }
+
   async launchServer(_config: ServerLaunchConfig) {}
   async stopServer() {}
   async getServerStatus(): Promise<'running' | 'stopped' | 'error'> { return 'stopped' }

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Fire, BookOpen, Clock, TrendUp, Bell, CalendarBlank } from 'phosphor-svelte'
-  import { formatReadTime } from '$lib/components/home/homeHelpers'
-  import type { ReadingStats } from '$lib/state/home.svelte'
+  import { formatReadTime } from '$lib/components/home/lib/homeHelpers'
+  import type { ReadingStats } from '$lib/types/history'
 
   let {
     stats,

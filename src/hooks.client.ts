@@ -1,7 +1,11 @@
-import { initRequestManager } from '$lib/request-manager'
-import { initPlatformService } from '$lib/platform-service'
-import { appState } from '$lib/state/app.svelte'
+import { initRequestManager }    from '$lib/request-manager'
+import { initPlatformService }   from '$lib/platform-service'
+import { appState }              from '$lib/state/app.svelte'
 import { configureAuth, probeServer } from '$lib/core/auth'
+import { loadSettings, loadLibrary, loadUpdates } from '$lib/core/persistence/persist'
+import { loadSettingsIntoState } from '$lib/state/settings.svelte'
+import { historyState }          from '$lib/state/history.svelte'
+import { readerState }           from '$lib/state/reader.svelte'
 
 const KEY_URL  = 'moku_server_url'
 const KEY_AUTH = 'moku_auth_config'
@@ -51,6 +55,18 @@ async function boot() {
 
     appState.platform = detectPlatform()
     appState.version  = await platformAdapter.getVersion()
+
+    const [settingsData, libraryData, _updatesData] = await Promise.all([
+      loadSettings(),
+      loadLibrary(),
+      loadUpdates(),
+    ])
+
+    await loadSettingsIntoState(settingsData.settings)
+
+    readerState.bookmarks = libraryData.bookmarks
+    readerState.markers   = libraryData.markers
+    historyState.load(libraryData.sessions, libraryData.dailyReadCounts)
 
     const savedUrl     = (await platformAdapter.getCredential(KEY_URL)) ?? 'http://127.0.0.1:4567'
     const savedAuthRaw = await platformAdapter.getCredential(KEY_AUTH)

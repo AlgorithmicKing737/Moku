@@ -1,166 +1,156 @@
-import { LazyStore } from "@tauri-apps/plugin-store";
+import { platformService } from '$lib/platform-service'
+import type { ReadSession }   from '$lib/types/history'
+import type { BookmarkEntry, MarkerEntry } from '$lib/types/history'
 
-const settingsStore = new LazyStore("settings.json", { autoSave: false });
-const libraryStore  = new LazyStore("library.json",  { autoSave: false });
-const updatesStore  = new LazyStore("updates.json",  { autoSave: false });
-const backupsStore  = new LazyStore("backups.json",  { autoSave: false });
+const STORE_VERSION = 2
 
-export interface PersistedData {
-  settings:             any;
-  storeVersion:         number | null;
-  history:              any[];
-  bookmarks:            any[];
-  markers:              any[];
-  readLog:              any[];
-  readingStats:         any | null;
-  dailyReadCounts:      Record<string, number>;
-  libraryUpdates:       any[];
-  lastLibraryRefresh:   number;
-  acknowledgedUpdateIds: number[];
+export interface PersistedSettings {
+  storeVersion: number
+  settings:     unknown
 }
 
-export async function loadAllStores(): Promise<PersistedData> {
-  const migrated = await migrateFromLocalStorage();
-  if (migrated) return migrated;
-
-  const [sv, s, hist, bk, mk, rl, rs, dc, lu, llr, au] = await Promise.all([
-    settingsStore.get<number>("storeVersion"),
-    settingsStore.get<any>("settings"),
-    libraryStore.get<any[]>("history"),
-    libraryStore.get<any[]>("bookmarks"),
-    libraryStore.get<any[]>("markers"),
-    libraryStore.get<any[]>("readLog"),
-    libraryStore.get<any>("readingStats"),
-    libraryStore.get<Record<string, number>>("dailyReadCounts"),
-    updatesStore.get<any[]>("libraryUpdates"),
-    updatesStore.get<number>("lastLibraryRefresh"),
-    updatesStore.get<number[]>("acknowledgedUpdateIds"),
-  ]);
-
-  return {
-    storeVersion:          sv   ?? null,
-    settings:              s    ?? null,
-    history:               hist ?? [],
-    bookmarks:             bk   ?? [],
-    markers:               mk   ?? [],
-    readLog:               rl   ?? [],
-    readingStats:          rs   ?? null,
-    dailyReadCounts:       dc   ?? {},
-    libraryUpdates:        lu   ?? [],
-    lastLibraryRefresh:    llr  ?? 0,
-    acknowledgedUpdateIds: au   ?? [],
-  };
+export interface PersistedLibrary {
+  sessions:        ReadSession[]
+  bookmarks:       BookmarkEntry[]
+  markers:         MarkerEntry[]
+  dailyReadCounts: Record<string, number>
 }
 
-async function migrateFromLocalStorage(): Promise<PersistedData | null> {
-  try {
-    const raw = localStorage.getItem("moku-store");
-    if (!raw) return null;
-    const data = JSON.parse(raw);
+export interface PersistedUpdates {
+  libraryUpdates:        unknown[]
+  lastLibraryRefresh:    number
+  acknowledgedUpdateIds: number[]
+}
 
-    await Promise.all([
-      persistSettings({ settings: data.settings ?? null, storeVersion: data.storeVersion ?? 1 }),
-      persistLibrary({
-        history:         data.history         ?? [],
-        bookmarks:       data.bookmarks       ?? [],
-        markers:         data.markers         ?? [],
-        readLog:         data.readLog         ?? [],
-        readingStats:    data.readingStats    ?? null,
-        dailyReadCounts: data.dailyReadCounts ?? {},
-      }),
-      persistUpdates({
-        libraryUpdates:        data.libraryUpdates        ?? [],
-        lastLibraryRefresh:    data.lastLibraryRefresh    ?? 0,
-        acknowledgedUpdateIds: data.acknowledgedUpdateIds ?? [],
-      }),
-    ]);
+export interface PersistedBackups {
+  backupList: { url: string; name: string }[]
+}
 
-    localStorage.removeItem("moku-store");
+function migrateLibrary(raw: unknown, fromVersion: number): PersistedLibrary {
+  const data = (raw ?? {}) as Record<string, unknown>
+
+  if (fromVersion < 2) {
+    const oldHistory = (data.history ?? []) as Array<{
+      mangaId: number; mangaTitle: string; thumbnailUrl: string
+      chapterId: number; chapterName: string; chapterNumber?: number
+      pageNumber?: number; readAt: number
+    }>
+
+    const sessions: ReadSession[] = oldHistory.map(e => ({
+      id:               crypto.randomUUID(),
+      mangaId:          e.mangaId,
+      mangaTitle:       e.mangaTitle,
+      thumbnailUrl:     e.thumbnailUrl,
+      startChapterId:   e.chapterId,
+      startChapterName: e.chapterName,
+      endChapterId:     e.chapterId,
+      endChapterName:   e.chapterName,
+      startPage:        1,
+      endPage:          e.pageNumber ?? 1,
+      startedAt:        e.readAt,
+      endedAt:          e.readAt,
+      durationMs:       0,
+      chaptersSpanned:  1,
+    }))
 
     return {
-      storeVersion:          data.storeVersion          ?? null,
-      settings:              data.settings              ?? null,
-      history:               data.history               ?? [],
-      bookmarks:             data.bookmarks             ?? [],
-      markers:               data.markers               ?? [],
-      readLog:               data.readLog               ?? [],
-      readingStats:          data.readingStats          ?? null,
-      dailyReadCounts:       data.dailyReadCounts       ?? {},
-      libraryUpdates:        data.libraryUpdates        ?? [],
-      lastLibraryRefresh:    data.lastLibraryRefresh    ?? 0,
-      acknowledgedUpdateIds: data.acknowledgedUpdateIds ?? [],
-    };
-  } catch {
-    return null;
+      sessions,
+      bookmarks:       (data.bookmarks ?? []) as BookmarkEntry[],
+      markers:         (data.markers   ?? []) as MarkerEntry[],
+      dailyReadCounts: (data.dailyReadCounts ?? {}) as Record<string, number>,
+    }
+  }
+
+  return {
+    sessions:        (data.sessions        ?? []) as ReadSession[],
+    bookmarks:       (data.bookmarks       ?? []) as BookmarkEntry[],
+    markers:         (data.markers         ?? []) as MarkerEntry[],
+    dailyReadCounts: (data.dailyReadCounts ?? {}) as Record<string, number>,
   }
 }
 
-export async function persistSettings(data: { settings: any; storeVersion: number }) {
-  await Promise.all([
-    settingsStore.set("settings",     data.settings),
-    settingsStore.set("storeVersion", data.storeVersion),
-  ]);
-  await settingsStore.save();
+export async function loadSettings(): Promise<PersistedSettings> {
+  const raw = await platformService.loadStore('settings')
+  const data = (raw ?? {}) as Record<string, unknown>
+
+  const legacyRaw = typeof window !== 'undefined' ? localStorage.getItem('moku_settings') : null
+  if (legacyRaw && !data.settings) {
+    try {
+      const legacySettings = JSON.parse(legacyRaw)
+      localStorage.removeItem('moku_settings')
+      const result: PersistedSettings = { storeVersion: STORE_VERSION, settings: legacySettings }
+      await saveSettings(result)
+      return result
+    } catch {}
+  }
+
+  return {
+    storeVersion: (data.storeVersion as number) ?? STORE_VERSION,
+    settings:     data.settings ?? null,
+  }
 }
 
-export async function persistLibrary(data: {
-  history:         any[];
-  bookmarks:       any[];
-  markers:         any[];
-  readLog:         any[];
-  readingStats:    any;
-  dailyReadCounts: Record<string, number>;
-}) {
-  await Promise.all([
-    libraryStore.set("history",         data.history),
-    libraryStore.set("bookmarks",       data.bookmarks),
-    libraryStore.set("markers",         data.markers),
-    libraryStore.set("readLog",         data.readLog),
-    libraryStore.set("readingStats",    data.readingStats),
-    libraryStore.set("dailyReadCounts", data.dailyReadCounts),
-  ]);
-  await libraryStore.save();
+export async function saveSettings(data: PersistedSettings): Promise<void> {
+  await platformService.saveStore('settings', data)
 }
 
-export async function persistUpdates(data: {
-  libraryUpdates:        any[];
-  lastLibraryRefresh:    number;
-  acknowledgedUpdateIds: number[];
-}) {
-  await Promise.all([
-    updatesStore.set("libraryUpdates",        data.libraryUpdates),
-    updatesStore.set("lastLibraryRefresh",     data.lastLibraryRefresh),
-    updatesStore.set("acknowledgedUpdateIds",  data.acknowledgedUpdateIds),
-  ]);
-  await updatesStore.save();
+export async function loadLibrary(): Promise<PersistedLibrary> {
+  const raw     = await platformService.loadStore('library')
+  const data    = (raw ?? {}) as Record<string, unknown>
+  const version = (data.storeVersion as number) ?? 1
+
+  const legacyRaw = typeof window !== 'undefined' ? localStorage.getItem('moku-store') : null
+  if (legacyRaw && !(data.sessions || data.history)) {
+    try {
+      const legacy = JSON.parse(legacyRaw)
+      const migrated = migrateLibrary(legacy, 1)
+      localStorage.removeItem('moku-store')
+      await saveLibrary(migrated)
+      return migrated
+    } catch {}
+  }
+
+  return migrateLibrary(raw, version)
 }
 
-export interface BackupEntry { url: string; name: string; }
-
-export async function loadBackups(): Promise<BackupEntry[]> {
-  const fromStore = await backupsStore.get<BackupEntry[]>("backupList");
-  if (fromStore) return fromStore;
-  try {
-    const raw = localStorage.getItem("moku_backups");
-    if (!raw) return [];
-    const migrated: BackupEntry[] = JSON.parse(raw);
-    await persistBackups(migrated);
-    localStorage.removeItem("moku_backups");
-    return migrated;
-  } catch { return []; }
+export async function saveLibrary(data: PersistedLibrary): Promise<void> {
+  await platformService.saveStore('library', { ...data, storeVersion: STORE_VERSION })
 }
 
-export async function persistBackups(list: BackupEntry[]): Promise<void> {
-  await backupsStore.set("backupList", list);
-  await backupsStore.save();
+export async function loadUpdates(): Promise<PersistedUpdates> {
+  const raw  = await platformService.loadStore('updates')
+  const data = (raw ?? {}) as Record<string, unknown>
+  return {
+    libraryUpdates:        (data.libraryUpdates        ?? []) as unknown[],
+    lastLibraryRefresh:    (data.lastLibraryRefresh     ?? 0)  as number,
+    acknowledgedUpdateIds: (data.acknowledgedUpdateIds  ?? []) as number[],
+  }
 }
 
-export async function resetAuthSettings(): Promise<void> {
-  const current = await settingsStore.get<any>("settings") ?? {};
-  current.serverAuthMode = "NONE";
-  current.serverAuthUser = "";
-  current.serverAuthPass = "";
-  await settingsStore.set("settings", current);
-  await settingsStore.save();
-  localStorage.removeItem("moku-credential-vault");
+export async function saveUpdates(data: PersistedUpdates): Promise<void> {
+  await platformService.saveStore('updates', data)
+}
+
+export async function loadBackups(): Promise<{ url: string; name: string }[]> {
+  const raw  = await platformService.loadStore('backups')
+  const data = (raw ?? {}) as Record<string, unknown>
+
+  if (!data.backupList) {
+    try {
+      const legacyRaw = typeof window !== 'undefined' ? localStorage.getItem('moku_backups') : null
+      if (legacyRaw) {
+        const list = JSON.parse(legacyRaw) as { url: string; name: string }[]
+        localStorage.removeItem('moku_backups')
+        await saveBackups(list)
+        return list
+      }
+    } catch {}
+    return []
+  }
+
+  return data.backupList as { url: string; name: string }[]
+}
+
+export async function saveBackups(list: { url: string; name: string }[]): Promise<void> {
+  await platformService.saveStore('backups', { backupList: list })
 }

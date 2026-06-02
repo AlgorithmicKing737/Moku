@@ -14,14 +14,16 @@ export const boot = $state({
   loginPass:      '',
   sessionExpired: false,
   skipped:        false,
+  serverProbeOk:  false,
 })
 
 let probeGeneration = 0
 
 function handleProbeSuccess(gen: number) {
   if (gen !== probeGeneration) return
-  boot.failed       = false
-  boot.skipped      = false
+  boot.failed        = false
+  boot.skipped       = false
+  boot.serverProbeOk = true
   appState.authenticated = true
   appState.status        = 'ready'
 }
@@ -56,6 +58,7 @@ export function startProbe(
   boot.failed        = false
   boot.loginRequired = false
   boot.skipped       = false
+  boot.serverProbeOk = false
   appState.status    = 'booting'
   let tries          = 0
 
@@ -121,6 +124,7 @@ export async function submitLogin(): Promise<void> {
     boot.skipped        = false
     boot.loginPass      = ''
     boot.loginError     = null
+    boot.serverProbeOk  = true
     appState.authenticated = true
     appState.status        = 'ready'
   } catch (e: unknown) {
