@@ -6,9 +6,12 @@ export type PlatformFeature =
   | 'app-updates'
   | 'discord-rpc'
 
+export type Platform = 'tauri' | 'capacitor' | 'web'
+
 export interface ServerLaunchConfig {
-  port?: number
-  [key: string]: unknown
+  binary?:       string
+  binaryArgs?:   string
+  webUiEnabled?: boolean
 }
 
 export interface DiscordAssets {
@@ -23,24 +26,12 @@ export interface DiscordButton {
   url:   string
 }
 
-export interface DiscordParty {
-  id?:          string
-  currentSize?: number
-  maxSize?:     number
-}
-
-export interface DiscordTimestamps {
-  start?: number
-  end?:   number
-}
-
 export interface DiscordPresence {
   state?:      string
   details?:    string
   assets?:     DiscordAssets
   buttons?:    DiscordButton[]
-  party?:      DiscordParty
-  timestamps?: DiscordTimestamps
+  timestamps?: { start?: number; end?: number }
 }
 
 export interface AppUpdateInfo {
@@ -76,24 +67,35 @@ export interface ReleaseInfo {
 }
 
 export interface PlatformAdapter {
+  readonly platform: Platform
+
   init():    Promise<void>
   destroy(): Promise<void>
   isSupported(feature: PlatformFeature): boolean
 
+  getAppDir(): Promise<string>
+
+  loadStore(key: string):                  Promise<unknown>
+  saveStore(key: string, value: unknown):  Promise<void>
+
+  storeCredential(key: string, value: string): Promise<void>
+  getCredential(key: string):                  Promise<string | null>
+  authenticateBiometric():                     Promise<boolean>
+
+  readFile(path: string):                  Promise<Uint8Array>
+  writeFile(path: string, data: Uint8Array): Promise<void>
+  pickFolder():                            Promise<string | null>
+  checkPathExists(path: string):           Promise<boolean>
+  createDirectory(path: string):           Promise<void>
+  openPath(path: string):                  Promise<void>
+  getDefaultDownloadsPath():               Promise<string>
+  getStorageInfo(downloadsPath: string):   Promise<StorageInfo>
+  migrateDownloads(src: string, dst: string): Promise<void>
+  getAutoBackupDir():                      Promise<string>
+
   launchServer(config: ServerLaunchConfig): Promise<void>
   stopServer():                             Promise<void>
   getServerStatus():                        Promise<'running' | 'stopped' | 'error'>
-
-  readFile(path: string):                   Promise<Uint8Array>
-  writeFile(path: string, data: Uint8Array): Promise<void>
-  pickFolder():                             Promise<string | null>
-
-  authenticateBiometric():                  Promise<boolean>
-  storeCredential(key: string, value: string): Promise<void>
-  getCredential(key: string):               Promise<string | null>
-
-  loadStore(key: string):                   Promise<unknown>
-  saveStore(key: string, value: unknown):   Promise<void>
 
   setTitle(title: string): Promise<void>
   minimize():              Promise<void>
@@ -104,27 +106,19 @@ export interface PlatformAdapter {
   setDiscordPresence(presence: DiscordPresence): Promise<void>
   clearDiscordPresence():                        Promise<void>
 
-  getVersion():                           Promise<string>
-  openExternal(url: string):              Promise<void>
-  checkForAppUpdate():                    Promise<AppUpdateInfo | null>
-  installAppUpdate(tag: string):          Promise<void>
-  restartApp():                           Promise<void>
+  getVersion():                  Promise<string>
+  openExternal(url: string):     Promise<void>
+  checkForAppUpdate():           Promise<AppUpdateInfo | null>
+  installAppUpdate(tag: string): Promise<void>
+  restartApp():                  Promise<void>
+  exitApp():                     Promise<void>
+  listReleases():                Promise<ReleaseInfo[]>
 
-  getDefaultDownloadsPath():              Promise<string>
-  getStorageInfo(downloadsPath: string):  Promise<StorageInfo>
-  checkPathExists(path: string):          Promise<boolean>
-  createDirectory(path: string):          Promise<void>
-  openPath(path: string):                 Promise<void>
-  getAutoBackupDir():                     Promise<string>
-
-  clearMokuCache():      Promise<void>
-  clearSuwayomiCache():  Promise<void>
-  resetSuwayomiData():   Promise<void>
-  exitApp():             Promise<void>
+  clearMokuCache():     Promise<void>
+  clearSuwayomiCache(): Promise<void>
+  resetSuwayomiData():  Promise<void>
 
   onUpdateProgress(cb: (p: UpdateProgress) => void):   Promise<() => void>
   onUpdateLaunching(cb: () => void):                   Promise<() => void>
-  listReleases():                                      Promise<ReleaseInfo[]>
   onMigrateProgress(cb: (p: MigrateProgress) => void): Promise<() => void>
-  migrateDownloads(src: string, dst: string):          Promise<void>
 }

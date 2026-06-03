@@ -1,5 +1,8 @@
+import { detectAdapter }      from '$lib/platform-adapters'
+import { initPlatformService } from '$lib/platform-service'
+import { platformService }     from '$lib/platform-service'
 import { probeServer, loginBasic, loginUI } from '$lib/core/auth'
-import { appState }                          from '$lib/state/app.svelte'
+import { appState }            from '$lib/state/app.svelte'
 
 const MAX_ATTEMPTS    = 15
 const BG_MAX_ATTEMPTS = 60
@@ -19,6 +22,15 @@ export const boot = $state({
 
 let probeGeneration = 0
 
+export async function initPlatform(): Promise<void> {
+  const adapter = detectAdapter()
+  initPlatformService(adapter)
+  await adapter.init()
+  appState.platform = adapter.platform
+  appState.version  = await platformService.getVersion()
+  appState.appDir   = await platformService.getAppDir()
+}
+
 function handleProbeSuccess(gen: number) {
   if (gen !== probeGeneration) return
   boot.failed        = false
@@ -28,7 +40,12 @@ function handleProbeSuccess(gen: number) {
   appState.status        = 'ready'
 }
 
-function handleAuthRequired(gen: number, authMode: 'NONE' | 'BASIC_AUTH' | 'UI_LOGIN', user: string, pass: string) {
+function handleAuthRequired(
+  gen:      number,
+  authMode: 'NONE' | 'BASIC_AUTH' | 'UI_LOGIN',
+  user:     string,
+  pass:     string,
+) {
   if (gen !== probeGeneration) return
   boot.failed = false
 
@@ -79,10 +96,10 @@ export function startProbe(
 }
 
 function startBackgroundProbe(
-  gen: number,
+  gen:      number,
   authMode: 'NONE' | 'BASIC_AUTH' | 'UI_LOGIN',
-  user: string,
-  pass: string,
+  user:     string,
+  pass:     string,
 ) {
   let bgTries = 0
 

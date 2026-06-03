@@ -1,14 +1,12 @@
 <script lang="ts">
-  import { onMount }                              from 'svelte'
-  import { page }                                 from '$app/stores'
-  import { appState, app }                        from '$lib/state/app.svelte'
-  import { notifications }                        from '$lib/state/notifications.svelte'
+  import { onMount }                                        from 'svelte'
+  import { page }                                           from '$app/stores'
+  import { appState, app }                                  from '$lib/state/app.svelte'
+  import { notifications }                                  from '$lib/state/notifications.svelte'
   import { settingsState, loadSettingsIntoState, updateSettings } from '$lib/state/settings.svelte'
-  import { loadSettings }                         from '$lib/core/persistence/persist'
-  import { applyTheme, mountSystemThemeSync }     from '$lib/core/theme'
-  import { initPlatformService, platformService } from '$lib/platform-service'
-  import { startProbe }                           from '$lib/state/boot.svelte'
-  import * as discord                             from '$lib/core/discord'
+  import { applyTheme, mountSystemThemeSync }               from '$lib/core/theme'
+  import { platformService }                                from '$lib/platform-service'
+  import * as discord                                       from '$lib/core/discord'
   import SplashScreen from '$lib/components/chrome/SplashScreen.svelte'
   import AuthGate     from '$lib/components/chrome/AuthGate.svelte'
   import Sidebar      from '$lib/components/chrome/Sidebar.svelte'
@@ -52,27 +50,14 @@
   const strippedLayout      = $derived(isReaderRoute && !readerContainerized)
 
   onMount(async () => {
-    if (isTauri) {
-      const { TauriAdapter } = await import('$lib/platform-adapters/tauri')
-      initPlatformService(new TauriAdapter())
-    } else {
-      const { WebAdapter } = await import('$lib/platform-adapters/web')
-      initPlatformService(new WebAdapter())
-    }
-
-    await platformService.init()
-
-    const persisted = await loadSettings()
-    await loadSettingsIntoState(persisted.settings)
-
-    appState.platform = isTauri ? 'tauri' : 'web'
-    appState.version  = await platformService.getVersion().catch(() => '')
+    // hooks.client.ts already ran detectAdapter(), initPlatformService(),
+    // loadSettingsIntoState(), and startProbe() — nothing to re-initialize here.
 
     if (isTauri && settingsState.settings.autoStartServer) {
       platformService.launchServer({
-        binary:         settingsState.settings.serverBinary,
-        binary_args:    settingsState.settings.serverBinaryArgs,
-        web_ui_enabled: settingsState.settings.suwayomiWebUI,
+        binary:        settingsState.settings.serverBinary,
+        binaryArgs:    settingsState.settings.serverBinaryArgs,
+        webUiEnabled:  settingsState.settings.suwayomiWebUI,
       }).catch(() => {})
     }
 
@@ -80,12 +65,6 @@
       await discord.initRpc()
       await discord.setIdle()
     }
-
-    startProbe(
-      settingsState.settings.serverAuthMode,
-      settingsState.settings.serverAuthUser,
-      settingsState.settings.serverAuthPass,
-    )
 
     polling = true
     pollLoop()

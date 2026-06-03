@@ -38,25 +38,19 @@
 
   let allRecs: RecommendedManga[] = $state([])
   let loading = $state(false)
-  let _ctrl: AbortController | null = null
 
   $effect(() => {
-    const _history = history
-    const _library = libraryManga
-    if (!_history.length || !_library.length) { allRecs = []; return }
-    _ctrl?.abort()
+    if (!history.length || !libraryManga.length) { allRecs = []; return }
     const ctrl = new AbortController()
-    _ctrl = ctrl
     loading = true
-    fetchRecommendations(_history, _library, ctrl.signal)
+    fetchRecommendations(history, libraryManga, ctrl.signal)
       .then(r => { if (!ctrl.signal.aborted) { allRecs = r; loading = false } })
       .catch(() => { if (!ctrl.signal.aborted) loading = false })
+    return () => ctrl.abort()
   })
 
-  const genres = $derived(topGenres(history, libraryManga))
-
-  let genreIdx = $state(0)
-
+  const genres      = $derived(topGenres(history, libraryManga))
+  let genreIdx      = $state(0)
   const activeGenre = $derived(genres[genreIdx] ?? null)
 
   const visibleRecs = $derived(
@@ -233,7 +227,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
-
   .empty-msg {
     font-family: var(--font-ui);
     font-size: var(--text-sm);

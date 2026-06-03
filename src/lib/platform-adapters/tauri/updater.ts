@@ -6,32 +6,36 @@ function parse(tag: string): number[] {
   return tag.replace(/^v/, '').split('.').map(Number)
 }
 
-function compare(a: number[], b: number[]): number {
+function isNewer(candidate: number[], current: number[]): boolean {
   for (let i = 0; i < 3; i++) {
-    if ((a[i] ?? 0) !== (b[i] ?? 0)) return (b[i] ?? 0) - (a[i] ?? 0)
+    if ((candidate[i] ?? 0) > (current[i] ?? 0)) return true
+    if ((candidate[i] ?? 0) < (current[i] ?? 0)) return false
   }
-  return 0
+  return false
 }
 
 export async function checkForUpdateSilently(): Promise<void> {
   try {
     const [currentVersion, releases] = await Promise.all([
       getVersion(),
-      invoke<Array<{ tag_name: string; html_url: string }>>('list_releases'),
+      invoke<Array<{ tag_name: string }>>('list_releases'),
     ])
 
-    const valid = releases.filter(r => typeof r.tag_name === 'string' && r.tag_name.trim())
+    const valid = releases.filter(r => r.tag_name?.trim())
     if (!valid.length) return
 
-    const latestTag = valid
+    const latest = valid
       .map(r => r.tag_name)
-      .sort((a, b) => compare(parse(a), parse(b)))[0]
-      .replace(/^v/, '')
+      .sort((a, b) => {
+        const pa = parse(a), pb = parse(b)
+        for (let i = 0; i < 3; i++) if ((pb[i] ?? 0) !== (pa[i] ?? 0)) return (pb[i] ?? 0) - (pa[i] ?? 0)
+        return 0
+      })[0]
 
-    if (compare(parse(latestTag), parse(currentVersion)) < 0) {
+    if (isNewer(parse(latest), parse(currentVersion))) {
       toast({
         kind:    'info',
-        message: `Update available — v${latestTag}`,
+        message: `Update available — ${latest}`,
         detail:  'Open Settings → About to install.',
       })
     }

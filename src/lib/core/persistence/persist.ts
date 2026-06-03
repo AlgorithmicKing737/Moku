@@ -1,6 +1,6 @@
 import { platformService } from '$lib/platform-service'
-import type { ReadSession }   from '$lib/types/history'
-import type { BookmarkEntry, MarkerEntry } from '$lib/types/history'
+import type { ReadSession }                   from '$lib/types/history'
+import type { BookmarkEntry, MarkerEntry }    from '$lib/types/history'
 
 const STORE_VERSION = 2
 
@@ -22,10 +22,6 @@ export interface PersistedUpdates {
   acknowledgedUpdateIds: number[]
 }
 
-export interface PersistedBackups {
-  backupList: { url: string; name: string }[]
-}
-
 function migrateLibrary(raw: unknown, fromVersion: number): PersistedLibrary {
   const data = (raw ?? {}) as Record<string, unknown>
 
@@ -36,27 +32,25 @@ function migrateLibrary(raw: unknown, fromVersion: number): PersistedLibrary {
       pageNumber?: number; readAt: number
     }>
 
-    const sessions: ReadSession[] = oldHistory.map(e => ({
-      id:               crypto.randomUUID(),
-      mangaId:          e.mangaId,
-      mangaTitle:       e.mangaTitle,
-      thumbnailUrl:     e.thumbnailUrl,
-      startChapterId:   e.chapterId,
-      startChapterName: e.chapterName,
-      endChapterId:     e.chapterId,
-      endChapterName:   e.chapterName,
-      startPage:        1,
-      endPage:          e.pageNumber ?? 1,
-      startedAt:        e.readAt,
-      endedAt:          e.readAt,
-      durationMs:       0,
-      chaptersSpanned:  1,
-    }))
-
     return {
-      sessions,
-      bookmarks:       (data.bookmarks ?? []) as BookmarkEntry[],
-      markers:         (data.markers   ?? []) as MarkerEntry[],
+      sessions: oldHistory.map(e => ({
+        id:               crypto.randomUUID(),
+        mangaId:          e.mangaId,
+        mangaTitle:       e.mangaTitle,
+        thumbnailUrl:     e.thumbnailUrl,
+        startChapterId:   e.chapterId,
+        startChapterName: e.chapterName,
+        endChapterId:     e.chapterId,
+        endChapterName:   e.chapterName,
+        startPage:        1,
+        endPage:          e.pageNumber ?? 1,
+        startedAt:        e.readAt,
+        endedAt:          e.readAt,
+        durationMs:       0,
+        chaptersSpanned:  1,
+      })),
+      bookmarks:       (data.bookmarks       ?? []) as BookmarkEntry[],
+      markers:         (data.markers         ?? []) as MarkerEntry[],
       dailyReadCounts: (data.dailyReadCounts ?? {}) as Record<string, number>,
     }
   }
@@ -69,19 +63,30 @@ function migrateLibrary(raw: unknown, fromVersion: number): PersistedLibrary {
   }
 }
 
+function evacuateLocalStorage(key: string): unknown | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = localStorage.getItem(key)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    localStorage.removeItem(key)
+    return parsed
+  } catch {
+    return null
+  }
+}
+
 export async function loadSettings(): Promise<PersistedSettings> {
-  const raw = await platformService.loadStore('settings')
+  const raw  = await platformService.loadStore('settings')
   const data = (raw ?? {}) as Record<string, unknown>
 
-  const legacyRaw = typeof window !== 'undefined' ? localStorage.getItem('moku_settings') : null
-  if (legacyRaw && !data.settings) {
-    try {
-      const legacySettings = JSON.parse(legacyRaw)
-      localStorage.removeItem('moku_settings')
-      const result: PersistedSettings = { storeVersion: STORE_VERSION, settings: legacySettings }
+  if (!data.settings) {
+    const legacy = evacuateLocalStorage('moku_settings')
+    if (legacy) {
+      const result: PersistedSettings = { storeVersion: STORE_VERSION, settings: legacy }
       await saveSettings(result)
       return result
-    } catch {}
+    }
   }
 
   return {
@@ -99,15 +104,13 @@ export async function loadLibrary(): Promise<PersistedLibrary> {
   const data    = (raw ?? {}) as Record<string, unknown>
   const version = (data.storeVersion as number) ?? 1
 
-  const legacyRaw = typeof window !== 'undefined' ? localStorage.getItem('moku-store') : null
-  if (legacyRaw && !(data.sessions || data.history)) {
-    try {
-      const legacy = JSON.parse(legacyRaw)
+  if (!data.sessions && !data.history) {
+    const legacy = evacuateLocalStorage('moku-store')
+    if (legacy) {
       const migrated = migrateLibrary(legacy, 1)
-      localStorage.removeItem('moku-store')
       await saveLibrary(migrated)
       return migrated
-    } catch {}
+    }
   }
 
   return migrateLibrary(raw, version)
@@ -136,15 +139,12 @@ export async function loadBackups(): Promise<{ url: string; name: string }[]> {
   const data = (raw ?? {}) as Record<string, unknown>
 
   if (!data.backupList) {
-    try {
-      const legacyRaw = typeof window !== 'undefined' ? localStorage.getItem('moku_backups') : null
-      if (legacyRaw) {
-        const list = JSON.parse(legacyRaw) as { url: string; name: string }[]
-        localStorage.removeItem('moku_backups')
-        await saveBackups(list)
-        return list
-      }
-    } catch {}
+    const legacy = evacuateLocalStorage('moku_backups')
+    if (legacy) {
+      const list = legacy as { url: string; name: string }[]
+      await saveBackups(list)
+      return list
+    }
     return []
   }
 

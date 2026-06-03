@@ -13,6 +13,7 @@ const TARGET_PER_GENRE = 20
 export function topGenres(history: ReadSession[], libraryManga: Manga[]): string[] {
   const byId  = new Map(libraryManga.map(m => [m.id, m]))
   const tally = new Map<string, { count: number; original: string }>()
+
   for (const session of history) {
     const manga = byId.get(session.mangaId)
     if (!manga?.genre?.length) continue
@@ -23,6 +24,7 @@ export function topGenres(history: ReadSession[], libraryManga: Manga[]): string
       else tally.set(key, { count: 1, original: g })
     }
   }
+
   return [...tally.values()]
     .sort((a, b) => b.count - a.count)
     .slice(0, TOP_GENRES)
@@ -35,25 +37,32 @@ export async function fetchRecommendations(
   signal?:      AbortSignal,
 ): Promise<RecommendedManga[]> {
   if (!history.length || !libraryManga.length) return []
+
   const genres = topGenres(history, libraryManga)
   if (!genres.length) return []
 
   const adapter    = getAdapter()
   const globalSeen = new Set<number>(libraryManga.map(m => m.id))
-  const merged: Manga[] = []
 
-  for (const genre of genres) {
-    if (signal?.aborted) break
-    try {
-      const results = await adapter.getMangaByGenre(genre, { excludeInLibrary: true }, signal)
-      for (const m of results) {
-        if (globalSeen.has(m.id)) continue
-        globalSeen.add(m.id)
-        merged.push(m)
-        if (merged.length >= genres.length * TARGET_PER_GENRE) break
+  const perGenre = await Promise.all(
+    genres.map(async genre => {
+      if (signal?.aborted) return []
+      try {
+        const { items } = await adapter.getMangaList({ tags: [genre], inLibrary: false })
+        return items
+      } catch {
+        return []
       }
-    } catch {
-      continue
+    })
+  )
+
+  const merged: Manga[] = []
+  for (const items of perGenre) {
+    for (const m of items) {
+      if (globalSeen.has(m.id)) continue
+      globalSeen.add(m.id)
+      merged.push(m)
+      if (merged.length >= genres.length * TARGET_PER_GENRE) break
     }
   }
 

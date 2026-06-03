@@ -1,11 +1,12 @@
-import { initRequestManager }    from '$lib/request-manager'
-import { initPlatformService }   from '$lib/platform-service'
-import { appState }              from '$lib/state/app.svelte'
-import { configureAuth, probeServer } from '$lib/core/auth'
-import { loadSettings, loadLibrary, loadUpdates } from '$lib/core/persistence/persist'
-import { loadSettingsIntoState } from '$lib/state/settings.svelte'
-import { historyState }          from '$lib/state/history.svelte'
-import { readerState }           from '$lib/state/reader.svelte'
+import { detectAdapter }                              from '$lib/platform-adapters'
+import { initPlatformService }                        from '$lib/platform-service'
+import { initRequestManager }                         from '$lib/request-manager'
+import { appState }                                   from '$lib/state/app.svelte'
+import { configureAuth, probeServer }                 from '$lib/core/auth'
+import { loadSettings, loadLibrary, loadUpdates }     from '$lib/core/persistence/persist'
+import { loadSettingsIntoState }                      from '$lib/state/settings.svelte'
+import { historyState }                               from '$lib/state/history.svelte'
+import { readerState }                                from '$lib/state/reader.svelte'
 
 const KEY_URL  = 'moku_server_url'
 const KEY_AUTH = 'moku_auth_config'
@@ -16,28 +17,6 @@ interface SavedAuth {
   pass?: string
 }
 
-function isTauri():     boolean { return '__TAURI_INTERNALS__' in window }
-function isCapacitor(): boolean { return 'Capacitor' in window }
-
-function detectPlatform(): 'tauri' | 'capacitor' | 'web' {
-  if (isTauri())     return 'tauri'
-  if (isCapacitor()) return 'capacitor'
-  return 'web'
-}
-
-async function resolvePlatformAdapter() {
-  if (isTauri()) {
-    const { TauriAdapter } = await import('$lib/platform-adapters/tauri')
-    return new TauriAdapter()
-  }
-  if (isCapacitor()) {
-    const { CapacitorAdapter } = await import('$lib/platform-adapters/capacitor')
-    return new CapacitorAdapter()
-  }
-  const { WebAdapter } = await import('$lib/platform-adapters/web')
-  return new WebAdapter()
-}
-
 async function resolveServerAdapter() {
   const { SuwayomiAdapter } = await import('$lib/server-adapters/suwayomi')
   return new SuwayomiAdapter()
@@ -45,18 +24,18 @@ async function resolveServerAdapter() {
 
 async function boot() {
   try {
-    const [serverAdapter, platformAdapter] = await Promise.all([
-      resolveServerAdapter(),
-      resolvePlatformAdapter(),
-    ])
+    const platformAdapter = detectAdapter()
+    await platformAdapter.init()
 
-    initRequestManager(serverAdapter)
+    const serverAdapter = await resolveServerAdapter()
+
     initPlatformService(platformAdapter)
+    initRequestManager(serverAdapter)
 
-    appState.platform = detectPlatform()
+    appState.platform = platformAdapter.platform
     appState.version  = await platformAdapter.getVersion()
 
-    const [settingsData, libraryData, _updatesData] = await Promise.all([
+    const [settingsData, libraryData] = await Promise.all([
       loadSettings(),
       loadLibrary(),
       loadUpdates(),
@@ -87,8 +66,8 @@ async function boot() {
 
     const probe = await probeServer()
 
-    if (probe === 'auth_required') { appState.status = 'auth';  return }
-    if (probe === 'unreachable')   {
+    if (probe === 'auth_required') { appState.status = 'auth'; return }
+    if (probe === 'unreachable') {
       appState.error  = `Could not reach server at ${savedUrl}`
       appState.status = 'error'
       return
