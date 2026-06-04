@@ -25,11 +25,11 @@ async function resolveServerAdapter() {
 async function boot() {
   try {
     const platformAdapter = detectAdapter()
+    initPlatformService(platformAdapter)
+
     await platformAdapter.init()
 
     const serverAdapter = await resolveServerAdapter()
-
-    initPlatformService(platformAdapter)
     initRequestManager(serverAdapter)
 
     appState.platform = platformAdapter.platform
@@ -53,6 +53,8 @@ async function boot() {
 
     appState.serverUrl = savedUrl
     appState.authMode  = savedAuth.mode
+    appState.authUser  = savedAuth.user ?? ''
+    appState.authPass  = savedAuth.pass ?? ''
 
     configureAuth(savedUrl, savedAuth.mode, savedAuth.user, savedAuth.pass)
 
@@ -63,6 +65,14 @@ async function boot() {
           ? { username: savedAuth.user, password: savedAuth.pass }
           : undefined,
     })
+
+    const isTauri         = platformAdapter.platform === 'tauri'
+    const autoStartServer = settingsData.settings.autoStartServer ?? false
+
+    if (isTauri && autoStartServer) {
+      appState.status = 'booting'
+      return
+    }
 
     const probe = await probeServer()
 

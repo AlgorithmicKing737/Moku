@@ -4,6 +4,7 @@ import * as chapters   from "./chapters";
 import * as downloads  from "./downloads";
 import * as manga      from "./manga";
 import * as tracking   from "./tracking";
+import * as meta       from "./meta";
 
 let adapter: ServerAdapter;
 
@@ -21,6 +22,7 @@ export function clearPageCache(chapterId?: number): void {
 }
 
 export const requestManager = {
+  meta,
   extensions,
   chapters,
   downloads,

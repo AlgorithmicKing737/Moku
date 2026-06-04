@@ -11,7 +11,6 @@
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "build:static": "MOKU_TARGET=static vite build",
     "build:node": "MOKU_TARGET=node vite build",
-    "build:tauri": "MOKU_TARGET=static vite build",
     "build:android": "MOKU_TARGET=static vite build",
     "tauri:dev": "tauri dev --config src-tauri/tauri.dev.conf.json",
     "tauri:build": "tauri build"

@@ -43,6 +43,21 @@ export interface Page {
   imageData?: string
 }
 
+export interface AboutServer {
+  name:      string
+  version:   string
+  buildType: string
+  buildTime: number
+  github:    string
+  discord:   string
+}
+
+export interface AboutWebUI {
+  channel:         string
+  tag:             string
+  updateTimestamp: number
+}
+
 export interface DownloadItem {
   chapterId: string
   mangaId: string
@@ -139,6 +154,9 @@ export interface ServerAdapter {
   deleteDownloadedChapters(ids: string[]): Promise<void>
   setChapterMeta(chapterId: string, key: string, value: string): Promise<void>
   deleteChapterMeta(chapterId: string, key: string): Promise<void>
+
+  getAboutServer(): Promise<AboutServer>
+  getAboutWebUI():  Promise<AboutWebUI>
 
   getDownloads(): Promise<DownloadItem[]>
   getDownloadStatus(): Promise<DownloadStatus>

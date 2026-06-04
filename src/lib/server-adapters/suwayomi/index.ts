@@ -14,6 +14,8 @@ import type {
   SetSocksProxyInput,
   SetFlareSolverrInput,
   TrackRecordPatch,
+  AboutServer,
+  AboutWebUI,
 } from '$lib/server-adapters/types'
 import type { DownloadStatus } from '$lib/types/api'
 import type { Manga, Chapter, Extension, Source, Tracker, TrackRecord, Category } from '$lib/types'
@@ -84,6 +86,10 @@ import {
   TRACK_PROGRESS,
   UPDATE_TRACK,
 } from './tracking'
+import {
+  GET_ABOUT_SERVER,
+  GET_ABOUT_WEBUI,
+} from './meta'
 import {
   type GQLResponse,
   mapManga,
@@ -203,6 +209,16 @@ export class SuwayomiAdapter implements ServerAdapter {
     const json: GQLResponse<T> = await res.json()
     if (json.errors?.length) throw new Error(json.errors[0].message)
     return json.data
+  }
+
+  async getAboutServer(): Promise<AboutServer> {
+    const data = await this.gql<{ aboutServer: AboutServer }>(GET_ABOUT_SERVER)
+    return data.aboutServer
+  }
+
+  async getAboutWebUI(): Promise<AboutWebUI> {
+    const data = await this.gql<{ aboutWebUI: AboutWebUI }>(GET_ABOUT_WEBUI)
+    return data.aboutWebUI
   }
 
   async getManga(id: string): Promise<Manga> {

@@ -1,38 +1,61 @@
 {
   lib,
-  craneLib,
   pkgs,
+  rustToolchain,
   runtimeLibs,
-  frontend,
   suwayomiServer,
   version,
-  cargoSrc,
+  versions,
+  src,
   appIcon,
 }:
 
-let
-  commonArgs = {
-    src = cargoSrc;
+pkgs.stdenv.mkDerivation {
+  pname = "moku";
+  inherit version src;
+
+  nativeBuildInputs = with pkgs; [
+    rustToolchain
+    nodejs_22
+    pnpm
+    pnpmConfigHook
+    pkg-config
+    wrapGAppsHook3
+    rustPlatform.cargoSetupHook
+  ];
+
+  buildInputs = runtimeLibs;
+
+  pnpmDeps = pkgs.fetchPnpmDeps {
     pname = "moku";
-    inherit version;
-    strictDeps = true;
-    buildInputs = runtimeLibs;
-    nativeBuildInputs = with pkgs; [ pkg-config wrapGAppsHook3 ];
-    preBuild = ''
-      cp -r ${frontend} ../dist
-    '';
+    inherit version src;
+    fetcherVersion = 1;
+    hash = versions.frontend.pnpmHash;
   };
 
-  cargoArtifacts = craneLib.buildDepsOnly commonArgs;
-in
-craneLib.buildPackage (commonArgs // {
-  inherit cargoArtifacts;
+  cargoDeps = pkgs.rustPlatform.importCargoLock {
+    lockFile = ../src-tauri/Cargo.lock;
+    outputHashes = {
+      "tauri-plugin-discord-rpc-0.1.0" = versions.gitDeps.tauri-plugin-discord-rpc;
+    };
+  };
 
-  meta.mainProgram = "moku";
+  env = {
+    PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
+    TAURI_SKIP_DEVSERVER_CHECK = "true";
+    cargoRoot = "src-tauri";
+  };
 
-  postInstall = ''
+  buildPhase = ''
+    export HOME=$(mktemp -d)
+    pnpm tauri:build
+  '';
+
+  installPhase = ''
+    install -Dm755 src-tauri/target/release/moku $out/bin/moku
+
     mkdir -p "$out/share/applications"
-    cat > "$out/share/applications/moku.desktop" << EOF
+    cat > "$out/share/applications/moku.desktop" << EOF2
 [Desktop Entry]
 Version=1.0
 Type=Application
@@ -44,17 +67,17 @@ Terminal=false
 Categories=Graphics;Viewer;
 Keywords=manga;comic;reader;suwayomi;
 StartupWMClass=moku
-EOF
+EOF2
 
     for size in 32x32 128x128 256x256 512x512; do
-      src="icons/$size.png"
-      [ -f "$src" ] && install -Dm644 "$src" \
+      f="src-tauri/icons/$size.png"
+      [ -f "$f" ] && install -Dm644 "$f" \
         "$out/share/icons/hicolor/$size/apps/moku.png"
     done
 
     for size in 128x128 256x256; do
-      src="icons/''${size}@2x.png"
-      [ -f "$src" ] && install -Dm644 "$src" \
+      f="src-tauri/icons/''${size}@2x.png"
+      [ -f "$f" ] && install -Dm644 "$f" \
         "$out/share/icons/hicolor/''${size}@2/apps/moku.png"
     done
 
@@ -71,4 +94,6 @@ EOF
       --set GDK_BACKEND wayland \
       --set WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS 1
   '';
-})
+
+  meta.mainProgram = "moku";
+}

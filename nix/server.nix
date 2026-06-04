@@ -4,17 +4,19 @@
   fetchurl,
   makeWrapper,
   jdk21_headless,
+  versions,
 }:
 let
   jdk = jdk21_headless;
+  ver = versions.suwayomi;
 in
-stdenvNoCC.mkDerivation (finalAttrs: {
+stdenvNoCC.mkDerivation {
   pname = "suwayomi-server";
-  version = "2.1.2087";
+  version = ver.version;
 
   src = fetchurl {
-    url = "https://github.com/Suwayomi/Suwayomi-Server-preview/releases/download/v${finalAttrs.version}/Suwayomi-Server-v${finalAttrs.version}.jar";
-    hash = "sha256-9YmkImdCUjlME7KJqci+aRkFv1g++39NXxUBrl6R5rM=";
+    url = "https://github.com/Suwayomi/Suwayomi-Server-preview/releases/download/v${ver.version}/Suwayomi-Server-v${ver.version}.jar";
+    hash = ver.hash;
   };
 
   nativeBuildInputs = [ makeWrapper ];
@@ -37,10 +39,10 @@ stdenvNoCC.mkDerivation (finalAttrs: {
     description = "Free and open source manga reader server that runs extensions built for Mihon (Tachiyomi)";
     homepage = "https://github.com/Suwayomi/Suwayomi-Server";
     downloadPage = "https://github.com/Suwayomi/Suwayomi-Server-preview/releases";
-    changelog = "https://github.com/Suwayomi/Suwayomi-Server-preview/releases/tag/v${finalAttrs.version}";
+    changelog = "https://github.com/Suwayomi/Suwayomi-Server-preview/releases/tag/v${ver.version}";
     license = lib.licenses.mpl20;
     platforms = jdk.meta.platforms;
     sourceProvenance = [ lib.sourceTypes.binaryBytecode ];
     mainProgram = "suwayomi-server";
   };
-})
+}

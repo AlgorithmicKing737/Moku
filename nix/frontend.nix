@@ -1,4 +1,4 @@
-{ lib, stdenv, nodejs_22, pnpm, pnpmConfigHook, fetchPnpmDeps, version, src }:
+{ lib, stdenv, nodejs_22, pnpm, pnpmConfigHook, fetchPnpmDeps, version, src, versions }:
 
 stdenv.mkDerivation {
   pname = "moku-frontend";
@@ -10,9 +10,13 @@ stdenv.mkDerivation {
     pname = "moku-frontend";
     inherit version src;
     fetcherVersion = 1;
-    hash = "sha256-vM//1/qe9nKDwwlmFbqvBFqF8cCjIIdNKEtktyzBFB8=";
+    hash = versions.frontend.pnpmHash;
   };
 
-  buildPhase = "pnpm build";
+  buildPhase = ''
+    export HOME=$(mktemp -d)
+    pnpm build:static
+  '';
+
   installPhase = "cp -r dist $out";
 }

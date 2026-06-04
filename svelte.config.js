@@ -5,15 +5,17 @@ const target = process.env.MOKU_TARGET ?? 'static';
 
 const adapter = target === 'node'
   ? adapterNode()
-  : adapterStatic({ fallback: 'index.html' });
+  : adapterStatic({ fallback: 'index.html', pages: 'dist', assets: 'dist' })
 
-/** @type {import('@sveltejs/kit').Config} */
 const config = {
   compilerOptions: {
     runes: ({ filename }) => (filename.split(/[/\\]/).includes('node_modules') ? undefined : true),
   },
   kit: {
     adapter,
+    paths: {
+      relative: true,
+    },
     files: {
       assets: 'static',
     },

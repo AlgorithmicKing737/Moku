@@ -155,6 +155,9 @@
           </button>
         {/if}
       </div>
+      <div class="s-row">
+        <div class="s-row-info"><span class="s-label">Platform</span><span class="s-desc">{platformService.platform}</span></div>
+      </div>
       {#if onLatestVersion}
         <div class="s-row">
           <span class="s-desc" style="color:var(--accent-fg)">✓ You're on the latest version.</span>

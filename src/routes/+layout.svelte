@@ -50,15 +50,21 @@
   const strippedLayout      = $derived(isReaderRoute && !readerContainerized)
 
   onMount(async () => {
-    // hooks.client.ts already ran detectAdapter(), initPlatformService(),
-    // loadSettingsIntoState(), and startProbe() — nothing to re-initialize here.
-
     if (isTauri && settingsState.settings.autoStartServer) {
+      const { startProbe } = await import('$lib/state/boot.svelte')
+
       platformService.launchServer({
-        binary:        settingsState.settings.serverBinary,
-        binaryArgs:    settingsState.settings.serverBinaryArgs,
-        webUiEnabled:  settingsState.settings.suwayomiWebUI,
+        binary:       settingsState.settings.serverBinary,
+        binaryArgs:   settingsState.settings.serverBinaryArgs,
+        webUiEnabled: settingsState.settings.suwayomiWebUI,
       }).catch(() => {})
+
+      startProbe(
+        appState.authMode  ?? 'NONE',
+        appState.authUser  ?? '',
+        appState.authPass  ?? '',
+        2000,
+      )
     }
 
     if (settingsState.settings.discordRpc) {
@@ -209,4 +215,4 @@
     contain: layout style;
     min-width: 0;
   }
-</style>
+</style>x

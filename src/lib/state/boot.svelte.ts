@@ -4,8 +4,8 @@ import { platformService }     from '$lib/platform-service'
 import { probeServer, loginBasic, loginUI } from '$lib/core/auth'
 import { appState }            from '$lib/state/app.svelte'
 
-const MAX_ATTEMPTS    = 15
-const BG_MAX_ATTEMPTS = 60
+const MAX_ATTEMPTS    = 40
+const BG_MAX_ATTEMPTS = 120
 
 export const boot = $state({
   failed:         false,
@@ -70,6 +70,7 @@ export function startProbe(
   authMode: 'NONE' | 'BASIC_AUTH' | 'UI_LOGIN' = 'NONE',
   user = '',
   pass = '',
+  initialDelay = 100,
 ) {
   const gen = ++probeGeneration
   boot.failed        = false
@@ -89,10 +90,10 @@ export function startProbe(
     if (result === 'auth_required') { handleAuthRequired(gen, authMode, user, pass); return }
     if (tries >= MAX_ATTEMPTS)      { boot.failed = true; appState.status = 'error'; startBackgroundProbe(gen, authMode, user, pass); return }
 
-    setTimeout(probe, Math.min(300 + tries * 150, 1500))
+    setTimeout(probe, Math.min(500 + tries * 200, 2000))
   }
 
-  setTimeout(probe, 100)
+  setTimeout(probe, initialDelay)
 }
 
 function startBackgroundProbe(

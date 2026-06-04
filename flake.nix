@@ -4,7 +4,6 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-parts.url = "github:hercules-ci/flake-parts";
-    crane.url = "github:ipetkov/crane";
     rust-overlay = {
       url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -12,7 +11,7 @@
   };
 
   outputs =
-    inputs@{ flake-parts, crane, rust-overlay, ... }:
+    inputs@{ flake-parts, rust-overlay, ... }:
     flake-parts.lib.mkFlake { inherit inputs; } {
       systems = [
         "x86_64-linux"
@@ -22,7 +21,8 @@
       perSystem =
         { system, lib, ... }:
         let
-          version = "0.9.4";
+          versions = import ./nix/versions.nix;
+          version = versions.moku;
 
           pkgs = import inputs.nixpkgs {
             inherit system;
@@ -35,8 +35,6 @@
               "rust-analyzer"
             ];
           };
-
-          craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
 
           runtimeLibs = with pkgs; [
             webkitgtk_4_1
@@ -53,7 +51,7 @@
             gsettings-desktop-schemas
           ];
 
-          frontendSrc = lib.cleanSourceWith {
+          src = lib.cleanSourceWith {
             src = ./.;
             filter =
               path: type:
@@ -61,51 +59,46 @@
                 base = builtins.baseNameOf path;
               in
               (lib.hasInfix "/src" path)
+              || (lib.hasInfix "/src-tauri/src" path)
+              || (lib.hasInfix "/src-tauri/icons" path)
+              || (lib.hasInfix "/src-tauri/capabilities" path)
+              || (lib.hasInfix "/static" path)
               || base == "index.html"
               || base == "package.json"
               || base == "pnpm-lock.yaml"
+              || base == "pnpm-workspace.yaml"
               || base == "tsconfig.json"
-              || base == "vite.config.ts";
+              || base == "vite.config.ts"
+              || base == "svelte.config.js"
+              || base == "Cargo.toml"
+              || base == "Cargo.lock"
+              || base == "build.rs"
+              || base == "tauri.conf.json";
           };
 
-          cargoSrc = lib.cleanSourceWith {
-            src = ./src-tauri;
-            filter =
-              path: type:
-              (craneLib.filterCargoSources path type)
-              || (lib.hasInfix "/icons/" path)
-              || (lib.hasInfix "/capabilities/" path)
-              || (builtins.baseNameOf path == "tauri.conf.json");
+          suwayomiServer = pkgs.callPackage ./nix/server.nix { inherit versions; };
+
+          moku = pkgs.callPackage ./nix/moku.nix {
+            inherit lib pkgs rustToolchain runtimeLibs suwayomiServer version src versions;
+            appIcon = ./src/lib/assets/moku-icon.svg;
           };
 
-          suwayomiServer = pkgs.callPackage ./nix/server.nix { };
-
-          frontend = pkgs.callPackage ./nix/frontend.nix {
-            inherit version;
-            src = frontendSrc;
-          };
-
-          moku = import ./nix/moku.nix {
-            inherit lib craneLib pkgs runtimeLibs frontend suwayomiServer version cargoSrc;
-            appIcon = ./src/assets/moku-icon.svg;
-          };
-
-          scripts = import ./nix/scripts.nix { inherit pkgs rustToolchain version; };
+          scripts = import ./nix/scripts.nix { inherit pkgs rustToolchain version versions; };
 
         in
         {
           packages = {
-            inherit moku frontend suwayomiServer;
+            inherit moku suwayomiServer;
             default = moku;
           };
 
           apps = {
             default = { type = "app"; program = "${moku}/bin/moku"; };
-            moku = { type = "app"; program = "${moku}/bin/moku"; };
-            bump = { type = "app"; program = "${scripts.bump}/bin/moku-bump"; };
-            post-tag-bump = { type = "app"; program = "${scripts.postTagBump}/bin/moku-post-tag-bump"; };
+            moku    = { type = "app"; program = "${moku}/bin/moku"; };
+            bump    = { type = "app"; program = "${scripts.bump}/bin/moku-bump"; };
+            update  = { type = "app"; program = "${scripts.update}/bin/moku-update"; };
             flatpak = { type = "app"; program = "${scripts.flatpak}/bin/moku-flatpak"; };
-            tunnel = { type = "app"; program = "${scripts.tunnel}/bin/moku-tunnel"; };
+            tunnel  = { type = "app"; program = "${scripts.tunnel}/bin/moku-tunnel"; };
           };
 
           devShells.default = pkgs.mkShell {
@@ -132,11 +125,11 @@
 
               echo "Moku dev shell — pnpm install && pnpm tauri:dev"
               echo ""
-              echo "  nix run .#bump          -- <ver>"
+              echo "  nix run .#bump   -- <ver>   bump version + rebuild frontend"
               echo "  git commit && git tag && git push"
-              echo "  nix run .#post-tag-bump -- <ver>"
-              echo "  nix run .#flatpak       -- <ver>"
-              echo "  nix run .#tunnel        -- [port]"
+              echo "  nix run .#update -- <ver>   fetch hashes + patch all configs"
+              echo "  nix run .#flatpak           build flatpak bundle"
+              echo "  nix run .#tunnel -- [port]  expose local server via cloudflare"
             '';
           };
 
