@@ -7,7 +7,7 @@
   };
 
   frontend = {
-    pnpmHash = "sha256-8bkwONUrr+U2OXYXvcsGytKhcImnehu+2bI/hmoFjJ4=";
+    pnpmHash = "sha256-HuHWy2M+vqSKYYspezUc4Ihce5YXqvuB5RId27UOVFg=";
     distHash = "7db288b4b54277aa82b6ec5b21fc31a1e71f8246c50a74777500083b806c1fa5";
     distHashSri = "sha256-fbiiu0tCd6qCtu+SIfw+aR8Yj2bFCnR3dQAIO4BvwfM=";
   };

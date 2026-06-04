@@ -29,7 +29,7 @@ pkgs.stdenv.mkDerivation {
   pnpmDeps = pkgs.fetchPnpmDeps {
     pname = "moku";
     inherit version src;
-    fetcherVersion = 1;
+    fetcherVersion = 3;
     hash = versions.frontend.pnpmHash;
   };
 
