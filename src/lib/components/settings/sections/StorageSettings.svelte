@@ -168,11 +168,11 @@
     if (!supportsFilesystem) return
     storageLoading = true; storageError = null
     try {
-      const pathData = await gql<{ downloadsPath: string | null; localSourcePath: string | null }>(
-        `{ downloadsPath localSourcePath }`
+      const pathData = await gql<{ settings: { downloadsPath: string | null; localSourcePath: string | null } }>(
+        `{ settings { downloadsPath localSourcePath } }`
       )
-      const dl  = pathData.downloadsPath  ?? ''
-      const loc = pathData.localSourcePath ?? ''
+      const dl  = pathData.settings.downloadsPath  ?? ''
+      const loc = pathData.settings.localSourcePath ?? ''
       downloadsPathInput = dl; localSourcePathInput = loc
       confirmedDownloadsPath = dl; confirmedLocalSourcePath = loc
       updateSettings({ serverDownloadsPath: dl, serverLocalSourcePath: loc })
@@ -218,8 +218,8 @@
     if (dlErr || locErr) { pathsFieldError = { ...(dlErr ? { dl: dlErr } : {}), ...(locErr ? { loc: locErr } : {}) }; return }
     pathsSaving = true
     try {
-      await gql(`mutation($path: String!) { setDownloadsPath(input: { location: $path }) { location } }`, { path: dl })
-      if (loc) await gql(`mutation($path: String!) { setLocalSourcePath(input: { location: $path }) { location } }`, { path: loc })
+      await gql(`mutation($path: String!) { setSettings(input: { settings: { downloadsPath: $path } }) { settings { downloadsPath } } }`, { path: dl })
+      if (loc) await gql(`mutation($path: String!) { setSettings(input: { settings: { localSourcePath: $path } }) { settings { localSourcePath } } }`, { path: loc })
       updateSettings({ serverDownloadsPath: dl, serverLocalSourcePath: loc })
       if (supportsFilesystem && !isExternalServer) {
         const oldDl = confirmedDownloadsPath || defaultDownloadsPath

@@ -6,7 +6,6 @@
   import { addToast }           from '$lib/state/notifications.svelte'
   import { updateSettings, settingsState } from '$lib/state/settings.svelte'
   import { goto }               from '$app/navigation'
-  import { invoke }             from '@tauri-apps/api/core'
   import LibraryToolbar  from '$lib/components/library/LibraryToolbar.svelte'
   import LibraryGrid     from '$lib/components/library/LibraryGrid.svelte'
   import ContextMenu     from '$lib/components/shared/ui/ContextMenu.svelte'
@@ -16,6 +15,7 @@
     Books, Folder, FolderSimple, FolderSimplePlus,
     Trash, CheckSquare, ArrowSquareOut, ArrowsClockwise,
   } from 'phosphor-svelte'
+  import { openMangaFolder, openDownloadsFolder } from '$lib/core/filesystem'
 
   const SIDEBAR_W      = 52
   const TITLEBAR_H     = 36
@@ -115,26 +115,6 @@
     } catch (e) { console.error(e) }
   }
 
-  async function openMangaFolder(m: Manga) {
-    let base: string | undefined
-    try { base = await invoke<string>('get_default_downloads_path') } catch {}
-    if (!base) { addToast({ kind: 'error', title: 'No downloads path set', body: 'Configure it in Settings → Storage' }); return }
-    const sanitize = (s: string) => s.replace(/[\/\\?%*:|"<>]/g, '_')
-    const source   = (m as any).source?.displayName ?? (m as any).source?.name ?? ''
-    const path     = source
-      ? `${base}/mangas/${sanitize(source)}/${sanitize(m.title)}`
-      : `${base}/mangas/${sanitize(m.title)}`
-    try { await invoke('open_path', { path }) }
-    catch (e: any) { addToast({ kind: 'error', title: 'Could not open folder', body: e?.toString?.() ?? path }) }
-  }
-
-  async function openDownloadsFolder() {
-    let path: string | undefined
-    try { path = await invoke<string>('get_default_downloads_path') } catch {}
-    if (!path) { addToast({ kind: 'error', title: 'No downloads path set', body: 'Configure it in Settings → Storage' }); return }
-    try { await invoke('open_path', { path }) }
-    catch (e: any) { addToast({ kind: 'error', title: 'Could not open folder', body: e?.toString?.() ?? path }) }
-  }
 
   async function refreshSingleManga(m: Manga) {
     if (libraryState.refreshingMangaId !== null) return

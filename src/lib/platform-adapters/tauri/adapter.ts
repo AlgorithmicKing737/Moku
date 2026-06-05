@@ -40,7 +40,11 @@ export class TauriAdapter implements PlatformAdapter {
 
   async loadStore(key: string): Promise<unknown> {
     try {
-      return await invoke<unknown>('load_store', { key })
+      const raw = await invoke<unknown>('load_store', { key })
+      if (typeof raw === 'string') {
+        try { return JSON.parse(raw) } catch { return null }
+      }
+      return raw
     } catch {
       return null
     }

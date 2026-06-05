@@ -17,20 +17,16 @@ interface SavedAuth {
   pass?: string
 }
 
-async function resolveServerAdapter() {
-  const { SuwayomiAdapter } = await import('$lib/server-adapters/suwayomi')
-  return new SuwayomiAdapter()
-}
-
 async function boot() {
   try {
     const platformAdapter = detectAdapter()
     initPlatformService(platformAdapter)
 
-    await platformAdapter.init()
-
-    const serverAdapter = await resolveServerAdapter()
+    const { SuwayomiAdapter } = await import('$lib/server-adapters/suwayomi')
+    const serverAdapter = new SuwayomiAdapter()
     initRequestManager(serverAdapter)
+
+    await platformAdapter.init()
 
     appState.platform = platformAdapter.platform
     appState.version  = await platformAdapter.getVersion()

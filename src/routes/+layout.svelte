@@ -1,22 +1,22 @@
 <script lang="ts">
-  import { onMount }                                        from 'svelte'
-  import { page }                                           from '$app/stores'
-  import { appState, app }                                  from '$lib/state/app.svelte'
-  import { notifications }                                  from '$lib/state/notifications.svelte'
-  import { settingsState, loadSettingsIntoState, updateSettings } from '$lib/state/settings.svelte'
-  import { applyTheme, mountSystemThemeSync }               from '$lib/core/theme'
-  import { platformService }                                from '$lib/platform-service'
-  import * as discord                                       from '$lib/core/discord'
-  import SplashScreen from '$lib/components/chrome/SplashScreen.svelte'
-  import AuthGate     from '$lib/components/chrome/AuthGate.svelte'
-  import Sidebar      from '$lib/components/chrome/Sidebar.svelte'
-  import TitleBar     from '$lib/components/chrome/TitleBar.svelte'
-  import Toaster      from '$lib/components/chrome/Toaster.svelte'
-  import Settings     from '$lib/components/settings/Settings.svelte'
-  import ThemeEditor  from '$lib/components/settings/ThemeEditor.svelte'
-  import { downloadStore } from '$lib/state/downloads.svelte'
-  import { seriesState }   from '$lib/state/series.svelte'
-  import MangaPreview      from '$lib/components/shared/manga/MangaPreview.svelte'
+  import { onMount }                                                    from 'svelte'
+  import { page }                                                       from '$app/stores'
+  import { appState, app }                                              from '$lib/state/app.svelte'
+  import { notifications }                                              from '$lib/state/notifications.svelte'
+  import { settingsState, loadSettingsIntoState, updateSettings }       from '$lib/state/settings.svelte'
+  import { applyTheme, mountSystemThemeSync }                           from '$lib/core/theme'
+  import { platformService }                                            from '$lib/platform-service'
+  import * as discord                                                   from '$lib/core/discord'
+  import SplashScreen                                                   from '$lib/components/chrome/SplashScreen.svelte'
+  import AuthGate                                                       from '$lib/components/chrome/AuthGate.svelte'
+  import Sidebar                                                        from '$lib/components/chrome/Sidebar.svelte'
+  import TitleBar                                                       from '$lib/components/chrome/TitleBar.svelte'
+  import Toaster                                                        from '$lib/components/chrome/Toaster.svelte'
+  import Settings                                                       from '$lib/components/settings/Settings.svelte'
+  import ThemeEditor                                                    from '$lib/components/settings/ThemeEditor.svelte'
+  import { downloadStore }                                              from '$lib/state/downloads.svelte'
+  import { seriesState }                                                from '$lib/state/series.svelte'
+  import MangaPreview                                                   from '$lib/components/shared/manga/MangaPreview.svelte'
   import '../app.css'
 
   let { children } = $props()
@@ -31,13 +31,14 @@
     if (polling) pollTimer = setTimeout(pollLoop, POLL_MS)
   }
 
-  const isTauri  = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
-  const ringFull = $derived(appState.status === 'ready' || appState.status === 'auth')
+  const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 
   let splashVisible   = $state(true)
   let bypassed        = $state(false)
   let themeEditorOpen = $state(false)
   let themeEditorId   = $state<string | null>(null)
+
+  const ringFull = $derived(appState.status === 'ready')
 
   const showApp = $derived(
     appState.status === 'ready' ||
@@ -50,22 +51,47 @@
   const strippedLayout      = $derived(isReaderRoute && !readerContainerized)
 
   onMount(async () => {
-    if (isTauri && settingsState.settings.autoStartServer) {
-      const { startProbe } = await import('$lib/state/boot.svelte')
+    const { detectAdapter }       = await import('$lib/platform-adapters')
+    const { initPlatformService } = await import('$lib/platform-service')
+    const { loadSettings }        = await import('$lib/core/persistence/persist')
+    const { startProbe }          = await import('$lib/state/boot.svelte')
 
+    const adapter = detectAdapter()
+    initPlatformService(adapter)
+    await adapter.init()
+    appState.platform = adapter.platform
+    appState.version  = await platformService.getVersion().catch(() => '')
+    appState.appDir   = await platformService.getAppDir().catch(() => '')
+
+    const persisted = await loadSettings()
+    const raw       = persisted?.settings ?? persisted ?? null
+    await loadSettingsIntoState(raw)
+
+    const s = (raw ?? {}) as Record<string, unknown>
+    appState.serverUrl = (s.serverUrl      as string) ?? ''
+    appState.authMode  = (s.serverAuthMode as 'NONE' | 'BASIC_AUTH' | 'UI_LOGIN') ?? 'NONE'
+    appState.authUser  = (s.serverAuthUser as string) ?? ''
+    appState.authPass  = (s.serverAuthPass as string) ?? ''
+
+    applyTheme(
+      settingsState.settings.theme        ?? 'dark',
+      settingsState.settings.customThemes ?? [],
+    )
+
+    if (isTauri && settingsState.settings.autoStartServer) {
       platformService.launchServer({
         binary:       settingsState.settings.serverBinary,
         binaryArgs:   settingsState.settings.serverBinaryArgs,
         webUiEnabled: settingsState.settings.suwayomiWebUI,
       }).catch(() => {})
-
-      startProbe(
-        appState.authMode  ?? 'NONE',
-        appState.authUser  ?? '',
-        appState.authPass  ?? '',
-        2000,
-      )
     }
+
+    startProbe(
+      appState.authMode ?? 'NONE',
+      appState.authUser ?? '',
+      appState.authPass ?? '',
+      isTauri && settingsState.settings.autoStartServer ? 2000 : 100,
+    )
 
     if (settingsState.settings.discordRpc) {
       await discord.initRpc()
@@ -74,11 +100,6 @@
 
     polling = true
     pollLoop()
-
-    applyTheme(
-      settingsState.settings.theme ?? 'dark',
-      settingsState.settings.customThemes ?? []
-    )
 
     return () => {
       polling = false
@@ -93,20 +114,27 @@
   })
 
   $effect(() => {
-    const theme        = settingsState.settings.theme ?? 'dark'
-    const customThemes = settingsState.settings.customThemes ?? []
-    applyTheme(theme, customThemes)
+    applyTheme(settingsState.settings.theme ?? 'dark', settingsState.settings.customThemes ?? [])
   })
 
   $effect(() => {
-    const enabled    = settingsState.settings.systemThemeSync ?? false
-    const darkTheme  = settingsState.settings.systemThemeDark  ?? 'dark'
-    const lightTheme = settingsState.settings.systemThemeLight ?? 'light'
-    mountSystemThemeSync(enabled, darkTheme, lightTheme, (id) => updateSettings({ theme: id }))
+    mountSystemThemeSync(
+      settingsState.settings.systemThemeSync  ?? false,
+      settingsState.settings.systemThemeDark  ?? 'dark',
+      settingsState.settings.systemThemeLight ?? 'light',
+      (id) => updateSettings({ theme: id }),
+    )
   })
 
-  function onSplashReady()  { splashVisible = false }
-  function onSplashBypass() { bypassed = true; splashVisible = false }
+  function onSplashReady()   { splashVisible = false }
+  function onSplashUnlock()  { appState.status = 'ready'; splashVisible = false }
+  function onSplashBypass()  { bypassed = true; splashVisible = false }
+
+  function onSplashRetry() {
+    import('$lib/state/boot.svelte').then(({ retryBoot }) => {
+      retryBoot(appState.authMode ?? 'NONE', appState.authUser ?? '', appState.authPass ?? '')
+    })
+  }
 
   function openThemeEditor(id?: string | null) {
     themeEditorId   = id ?? null
@@ -116,12 +144,15 @@
 
 {#if splashVisible}
   <SplashScreen
-    mode="loading"
+    mode={appState.status === 'locked' ? 'locked' : 'loading'}
     {ringFull}
     failed={appState.status === 'error'}
+    pinLen={settingsState.settings.appLockPin?.length ?? 0}
+    pinCorrect={settingsState.settings.appLockPin ?? ''}
     onReady={onSplashReady}
+    onUnlock={onSplashUnlock}
     onBypass={onSplashBypass}
-    onRetry={() => window.location.reload()}
+    onRetry={onSplashRetry}
   />
 {/if}
 
@@ -215,4 +246,4 @@
     contain: layout style;
     min-width: 0;
   }
-</style>x
+</style>

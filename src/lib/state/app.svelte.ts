@@ -1,11 +1,11 @@
 import type { Platform } from '$lib/platform-adapters/types'
 
-export type AppStatus = 'booting' | 'not-configured' | 'auth' | 'ready' | 'error'
+export type AppStatus = 'booting' | 'not-configured' | 'auth' | 'locked' | 'ready' | 'error'
 
 class AppStore {
-  settingsOpen:    boolean              = $state(false)
-  navPage:         string               = $state('')
-  scrollPositions: Map<string, number>  = $state(new Map())
+  settingsOpen:    boolean             = $state(false)
+  navPage:         string              = $state('')
+  scrollPositions: Map<string, number> = $state(new Map())
 
   setSettingsOpen(next: boolean) { this.settingsOpen = next }
   setNavPage(next: string)       { this.navPage = next }

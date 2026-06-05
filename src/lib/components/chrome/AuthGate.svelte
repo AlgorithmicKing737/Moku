@@ -1,6 +1,6 @@
 <script lang="ts">
-  import logoUrl from '$lib/assets/moku-icon-splash.svg'
-  import { appState } from '$lib/state/app.svelte'
+  import logoUrl                           from '$lib/assets/moku-icon-splash.svg'
+  import { appState }                      from '$lib/state/app.svelte'
   import { boot, submitLogin, bypassBoot } from '$lib/state/boot.svelte'
 
   function handleBypass() {
@@ -9,7 +9,7 @@
 </script>
 
 {#if appState.status === 'auth'}
-  <div class="overlay">
+  <div class="overlay overlay--clear">
     <div class="card anim-scale-in">
       <img src={logoUrl} alt="Moku" class="logo" />
       <p class="title">moku</p>
@@ -56,10 +56,14 @@
 {/if}
 
 <style>
-  .overlay   { position:fixed; inset:0; z-index:10000; display:flex; align-items:center; justify-content:center; pointer-events:none; }
-  .card      { pointer-events:auto; width:min(280px, calc(100vw - 48px)); background:var(--bg-surface); border:1px solid var(--border-base); border-radius:var(--radius-xl); padding:var(--sp-6) var(--sp-5); display:flex; flex-direction:column; align-items:center; gap:var(--sp-3); box-shadow:0 32px 80px rgba(0,0,0,0.75); text-align:center; }
+  .overlay       { position:fixed; inset:0; z-index:10000; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.7); backdrop-filter:blur(6px); animation:overlayIn 0.28s cubic-bezier(0,0,0.2,1) both; }
+  .overlay--clear { background:transparent; backdrop-filter:none; pointer-events:none; }
+  .overlay--clear .card { pointer-events:auto; }
 
-  .logo       { width:56px; height:56px; border-radius:14px; display:block; }
+  .card { width:min(280px, calc(100vw - 48px)); background:var(--bg-surface); border:1px solid var(--border-base); border-radius:var(--radius-xl); padding:var(--sp-6) var(--sp-5); display:flex; flex-direction:column; align-items:center; gap:var(--sp-3); box-shadow:0 32px 80px rgba(0,0,0,0.75); text-align:center; animation:cardIn 0.38s cubic-bezier(0.22,1,0.36,1) 0.06s both; }
+
+  .logo         { width:56px; height:56px; border-radius:14px; display:block; position:relative; }
+
   .title      { font-family:var(--font-ui); font-size:11px; font-weight:500; letter-spacing:0.26em; text-transform:uppercase; color:var(--text-secondary); margin:-6px 0 0; user-select:none; }
   .mode-badge { font-family:var(--font-ui); font-size:var(--text-2xs); letter-spacing:var(--tracking-wider); text-transform:uppercase; color:var(--accent-fg); background:var(--accent-muted); border:1px solid var(--accent-dim); border-radius:var(--radius-full); padding:2px 10px; }
   .host       { font-family:var(--font-ui); font-size:var(--text-xs); color:var(--text-faint); letter-spacing:var(--tracking-wide); margin:-4px 0 0; }
@@ -70,9 +74,14 @@
   .input:focus    { border-color:var(--border-focus); box-shadow:0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent); }
   .input:disabled { opacity:0.5; }
 
-  .btn               { width:100%; padding:9px; border-radius:var(--radius-md); background:var(--accent); border:1px solid var(--accent); color:var(--accent-fg); font-size:var(--text-sm); font-family:var(--font-ui); letter-spacing:var(--tracking-wide); cursor:pointer; transition:opacity var(--t-base); }
-  .btn:hover:not(:disabled) { opacity:0.85; }
-  .btn:disabled      { opacity:0.35; cursor:default; }
-  .btn--ghost        { background:none; border-color:transparent; color:var(--text-faint); font-size:var(--text-xs); padding:4px; }
-  .btn--ghost:hover:not(:disabled) { color:var(--text-muted); opacity:1; }
+  .btn                              { width:100%; padding:9px; border-radius:var(--radius-md); background:var(--accent); border:1px solid var(--accent); color:var(--accent-fg); font-size:var(--text-sm); font-family:var(--font-ui); letter-spacing:var(--tracking-wide); cursor:pointer; transition:opacity var(--t-base); }
+  .btn:hover:not(:disabled)         { opacity:0.85; }
+  .btn:disabled                     { opacity:0.35; cursor:default; }
+  .btn--ghost                       { background:none; border-color:transparent; color:var(--text-faint); font-size:var(--text-xs); padding:4px; }
+  .btn--ghost:hover:not(:disabled)  { color:var(--text-muted); opacity:1; }
+
+  @keyframes overlayIn { from { opacity:0 } to { opacity:1 } }
+  @keyframes cardIn    { from { opacity:0; transform:translateY(28px) scale(0.97) } to { opacity:1; transform:translateY(0) scale(1) } }
+  @keyframes anim-scale-in { from { opacity:0; transform:scale(0.96) } to { opacity:1; transform:scale(1) } }
+  .anim-scale-in { animation:anim-scale-in 0.2s cubic-bezier(0,0,0.2,1) both; }
 </style>

@@ -31,6 +31,35 @@
   let flareTtl      = $state(settingsState.settings.flareSolverrSessionTtl ?? 15)
   let flareFallback = $state(settingsState.settings.flareSolverrAsResponseFallback ?? false)
 
+  let lockEnabled = $state(settingsState.settings.appLockEnabled ?? false)
+  let lockPin     = $state(settingsState.settings.appLockEnabled ? (settingsState.settings.appLockPin ?? '') : '')
+  let lockPinVis  = $state(false)
+  let lockError   = $state<string | null>(null)
+  let lockSaved   = $state(false)
+
+  function onLockToggle() {
+    lockEnabled = !lockEnabled
+    lockError   = null
+    lockSaved   = false
+    if (!lockEnabled) {
+      lockPin = ''
+      updateSettings({ appLockEnabled: false, appLockPin: '' })
+    }
+  }
+
+  function onLockPinInput() {
+    lockPin   = lockPin.replace(/\D/g, '')
+    lockError = null
+    lockSaved = false
+  }
+
+  function saveLockPin() {
+    if (lockPin.length < 4) { lockError = 'PIN must be at least 4 digits'; return }
+    updateSettings({ appLockEnabled: true, appLockPin: lockPin })
+    lockSaved = true
+    setTimeout(() => lockSaved = false, 2000)
+  }
+
   function normalizeAuthMode(mode: string): 'NONE' | 'BASIC_AUTH' | 'UI_LOGIN' {
     if (mode === 'BASIC_AUTH' || mode === 'UI_LOGIN' || mode === 'NONE') return mode
     return 'NONE'
@@ -284,6 +313,41 @@
   </div>
 
   <div class="s-section">
+    <p class="s-section-title">App Lock</p>
+    <div class="s-section-body">
+      <label class="s-row">
+        <div class="s-row-info">
+          <span class="s-label">Require PIN on launch</span>
+          <span class="s-desc">Lock the app behind a numeric PIN when it opens</span>
+        </div>
+        <button role="switch" aria-checked={lockEnabled} aria-label="Enable app lock" class="s-toggle" class:on={lockEnabled}
+          onclick={onLockToggle}><span class="s-toggle-thumb"></span></button>
+      </label>
+      {#if lockEnabled}
+        {#if lockError}
+          <div class="s-banner s-banner-error" style="margin: 0">{lockError}</div>
+        {/if}
+        <div class="s-row">
+          <div class="s-row-info">
+            <span class="s-label">PIN</span>
+            <span class="s-desc">Minimum 4 digits</span>
+          </div>
+          <div class="s-pin-row">
+            <div class="s-field-wrap">
+              <input class="s-input" type={lockPinVis ? 'text' : 'password'} inputmode="numeric" pattern="\d*"
+                bind:value={lockPin} oninput={onLockPinInput} placeholder="••••" autocomplete="off" spellcheck="false" maxlength="8" />
+              <button class="s-eye-btn" onclick={() => lockPinVis = !lockPinVis} tabindex="-1" aria-label={lockPinVis ? 'Hide PIN' : 'Show PIN'}>{@html lockPinVis ? EyeClose : EyeOpen}</button>
+            </div>
+            <button class="s-btn s-btn-accent" onclick={saveLockPin} disabled={!lockPin}>
+              {lockSaved ? 'Saved ✓' : 'Save'}
+            </button>
+          </div>
+        </div>
+      {/if}
+    </div>
+  </div>
+
+  <div class="s-section">
     <p class="s-section-title">FlareSolverr</p>
     <div class="s-section-body">
       <label class="s-row">
@@ -337,4 +401,5 @@
   .s-ghost-btn { display: inline-flex; align-items: center; gap: 5px; background: none; border: none; color: var(--text-faint); font-family: var(--font-ui); font-size: var(--text-xs); letter-spacing: var(--tracking-wide); cursor: pointer; padding: 2px 0; transition: color 0.15s; }
   .s-ghost-btn:hover:not(:disabled) { color: var(--color-error); }
   .s-ghost-btn:disabled { opacity: 0.35; cursor: default; }
+  .s-pin-row { display: flex; align-items: center; gap: 8px; }
 </style>

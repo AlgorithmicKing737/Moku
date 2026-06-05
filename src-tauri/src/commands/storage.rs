@@ -2,9 +2,57 @@ use serde::Serialize;
 use std::path::PathBuf;
 use sysinfo::Disks;
 use tauri::Emitter;
+use tauri_plugin_store::StoreExt;
 use walkdir::WalkDir;
 
 use crate::server::resolve::suwayomi_data_dir;
+
+// ── Key-value store (used by the frontend via platformService) ────────────────
+
+#[tauri::command]
+pub fn load_store(app: tauri::AppHandle, key: String) -> Result<Option<String>, String> {
+    let store = app
+        .store(format!("{}.json", key))
+        .map_err(|e| e.to_string())?;
+    let value = store.get(&key);
+    Ok(value.map(|v| v.to_string()))
+}
+
+#[tauri::command]
+pub fn save_store(app: tauri::AppHandle, key: String, value: String) -> Result<(), String> {
+    let store = app
+        .store(format!("{}.json", key))
+        .map_err(|e| e.to_string())?;
+    let parsed: serde_json::Value =
+        serde_json::from_str(&value).map_err(|e| e.to_string())?;
+    store.set(key, parsed);
+    store.save().map_err(|e| e.to_string())
+}
+
+// ── Credential store (PIN-encrypted vault, auth tokens) ──────────────────────
+
+#[tauri::command]
+pub fn store_credential(app: tauri::AppHandle, key: String, value: String) -> Result<(), String> {
+    let store = app
+        .store("credentials.json")
+        .map_err(|e| e.to_string())?;
+    if value.is_empty() {
+        store.delete(&key);
+    } else {
+        store.set(&key, serde_json::Value::String(value));
+    }
+    store.save().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn get_credential(app: tauri::AppHandle, key: String) -> Result<Option<String>, String> {
+    let store = app
+        .store("credentials.json")
+        .map_err(|e| e.to_string())?;
+    Ok(store.get(&key).and_then(|v| v.as_str().map(|s| s.to_owned())))
+}
+
+// ── Disk / downloads storage ─────────────────────────────────────────────────
 
 #[derive(Serialize)]
 pub struct StorageInfo {

@@ -3,6 +3,7 @@ import { initPlatformService } from '$lib/platform-service'
 import { platformService }     from '$lib/platform-service'
 import { probeServer, loginBasic, loginUI } from '$lib/core/auth'
 import { appState }            from '$lib/state/app.svelte'
+import { settingsState }               from '$lib/state/settings.svelte'
 
 const MAX_ATTEMPTS    = 40
 const BG_MAX_ATTEMPTS = 120
@@ -31,13 +32,21 @@ export async function initPlatform(): Promise<void> {
   appState.appDir   = await platformService.getAppDir()
 }
 
+function pinLockEnabled(): boolean {
+  return (
+    settingsState.settings.appLockEnabled === true &&
+    typeof settingsState.settings.appLockPin === 'string' &&
+    settingsState.settings.appLockPin.length >= 4
+  )
+}
+
 function handleProbeSuccess(gen: number) {
   if (gen !== probeGeneration) return
   boot.failed        = false
   boot.skipped       = false
   boot.serverProbeOk = true
   appState.authenticated = true
-  appState.status        = 'ready'
+  appState.status        = pinLockEnabled() ? 'locked' : 'ready'
 }
 
 function handleAuthRequired(
@@ -144,7 +153,7 @@ export async function submitLogin(): Promise<void> {
     boot.loginError     = null
     boot.serverProbeOk  = true
     appState.authenticated = true
-    appState.status        = 'ready'
+    appState.status        = pinLockEnabled() ? 'locked' : 'ready'
   } catch (e: unknown) {
     boot.loginError = e instanceof Error ? e.message : 'Login failed'
   } finally {
