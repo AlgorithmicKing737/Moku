@@ -2,6 +2,7 @@
   import { onMount }                                                    from 'svelte'
   import { page }                                                       from '$app/stores'
   import { appState, app }                                              from '$lib/state/app.svelte'
+  import { boot }                                                        from '$lib/state/boot.svelte'
   import { notifications }                                              from '$lib/state/notifications.svelte'
   import { settingsState, loadSettingsIntoState, updateSettings }       from '$lib/state/settings.svelte'
   import { applyTheme, mountSystemThemeSync }                           from '$lib/core/theme'
@@ -147,6 +148,7 @@
     mode={appState.status === 'locked' ? 'locked' : 'loading'}
     {ringFull}
     failed={appState.status === 'error'}
+    notConfigured={boot.notConfigured}
     pinLen={settingsState.settings.appLockPin?.length ?? 0}
     pinCorrect={settingsState.settings.appLockPin ?? ''}
     onReady={onSplashReady}

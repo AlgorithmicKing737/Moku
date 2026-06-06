@@ -1,7 +1,9 @@
 <script lang="ts">
-  import { onMount }          from 'svelte'
-  import { getCurrentWindow } from '@tauri-apps/api/window'
-  import logoUrl              from '$lib/assets/moku-icon-splash.svg'
+  import { onMount } from 'svelte'
+  import logoUrl     from '$lib/assets/moku-icon-splash.svg'
+  import { platformService } from '$lib/platform-service'
+
+  const isTauri = platformService.platform === 'tauri'
 
   interface Props {
     mode?:          'loading' | 'idle' | 'locked'
@@ -78,6 +80,7 @@
 
   $effect(() => {
     if (mode === 'loading' && !failed && !notConfigured && !ringFull) {
+      if (!isTauri) return  // no ring animation on web; probe outcome drives exit
       animStart = null
       animPhase = 1
       animFrame = requestAnimationFrame(animateRing)
@@ -278,28 +281,45 @@
   }
 
   function mountCanvas(el: HTMLCanvasElement) {
-    const win = getCurrentWindow()
     const ctx = el.getContext('2d')!
     let live: RenderState | null = null
     let lastLogW = 0, lastLogH = 0, lastScale = 0, buildGen = 0
 
-    async function syncSize() {
+    function applySize(logW: number, logH: number, scale: number) {
       const gen = ++buildGen
-      const [phys, scale] = await Promise.all([win.innerSize(), win.scaleFactor()])
-      if (gen !== buildGen) return
-      const logW = phys.width / scale, logH = phys.height / scale
+      if (logW <= 0 || logH <= 0) return
       if (logW === lastLogW && logH === lastLogH && scale === lastScale) return
       lastLogW = logW; lastLogH = logH; lastScale = scale
       const built  = buildCards(logW, logH)
       const stamps = built.cards.map(c => buildStamp(c, scale))
       const vig    = buildVignette(logW, logH, scale)
-      el.width = phys.width; el.height = phys.height
-      live = { cards: built.cards, trigs: built.trigs, stamps, vignette: vig, CW: phys.width, CH: phys.height, scale }
+      el.width  = Math.round(logW * scale)
+      el.height = Math.round(logH * scale)
+      if (gen === buildGen) live = { cards: built.cards, trigs: built.trigs, stamps, vignette: vig, CW: el.width, CH: el.height, scale }
     }
 
-    const ro = new ResizeObserver(() => syncSize())
-    ro.observe(el)
-    syncSize()
+    let extraCleanup: (() => void) | undefined
+
+    if (isTauri) {
+      let tauriRo: ResizeObserver | undefined
+      let tauriUnlisten: (() => void) | undefined
+      import('@tauri-apps/api/window').then(({ getCurrentWindow }) => {
+        const win = getCurrentWindow()
+        const doSync = () => Promise.all([win.innerSize(), win.scaleFactor()])
+          .then(([phys, scale]) => applySize(phys.width / scale, phys.height / scale, scale))
+        doSync()
+        tauriRo = new ResizeObserver(() => doSync())
+        tauriRo.observe(el)
+        win.onFocusChanged(() => doSync()).then(u => { tauriUnlisten = u })
+      })
+      extraCleanup = () => { tauriRo?.disconnect(); tauriUnlisten?.() }
+    } else {
+      const syncWeb = () => applySize(el.clientWidth, el.clientHeight, window.devicePixelRatio || 1)
+      const ro = new ResizeObserver(() => syncWeb())
+      ro.observe(el)
+      requestAnimationFrame(() => syncWeb())
+      extraCleanup = () => ro.disconnect()
+    }
 
     let raf = 0, t0 = -1, paused = false
 
@@ -307,9 +327,11 @@
       if (paused) { raf = 0; return }
       raf = requestAnimationFrame(frame)
       if (!live) return
+      const { cards, trigs, stamps, vignette, CW, CH, scale } = live
+      if (CW <= 0 || CH <= 0 || vignette.width <= 0 || vignette.height <= 0) return
+      if (stamps.some(s => s.width <= 0 || s.height <= 0)) return
       if (t0 < 0) t0 = now
       if (showFps) tickFps(now)
-      const { cards, trigs, stamps, vignette, CW, CH, scale } = live
       drawFrame(ctx, (now - t0) / 1000, CW, CH, scale, cards, trigs, stamps, vignette)
     }
 
@@ -318,14 +340,11 @@
     function onVis()  { document.hidden ? pause() : resume() }
 
     document.addEventListener('visibilitychange', onVis)
-    const unlistenFocus = win.onFocusChanged(({ payload: focused }) => { focused ? resume() : pause() })
-
     raf = requestAnimationFrame(frame)
     return () => {
       cancelAnimationFrame(raf)
-      ro.disconnect()
+      extraCleanup?.()
       document.removeEventListener('visibilitychange', onVis)
-      unlistenFocus.then(f => f())
     }
   }
 </script>

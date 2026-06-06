@@ -87,7 +87,15 @@ export function startProbe(
   boot.skipped       = false
   boot.serverProbeOk = false
   appState.status    = 'booting'
-  let tries          = 0
+
+  if (appState.platform === 'web') {
+    boot.failed = true
+    appState.status = 'error'
+    startBackgroundProbe(gen, authMode, user, pass)
+    return
+  }
+
+  let tries = 0
 
   async function probe() {
     if (gen !== probeGeneration) return

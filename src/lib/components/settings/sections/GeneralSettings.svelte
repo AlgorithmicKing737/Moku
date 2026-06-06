@@ -2,6 +2,8 @@
   import { settingsState, updateSettings } from '$lib/state/settings.svelte'
   import { platformService } from '$lib/platform-service'
 
+  const isTauri = platformService.platform === 'tauri'
+
   interface Props {
     selectOpen: string | null
     closingSelect: string | null
@@ -67,6 +69,7 @@
         </div>
       </div>
 
+      {#if isTauri}
       <label class="s-row">
         <div class="s-row-info"><span class="s-label">Auto-start server</span><span class="s-desc">Launch tachidesk-server when Moku opens</span></div>
         <button role="switch" aria-checked={settingsState.settings.autoStartServer} aria-label="Auto-start server"
@@ -84,6 +87,7 @@
           <span class="s-toggle-thumb"></span>
         </button>
       </label>
+      {/if}
 
       {#if serverAdvancedOpen}
         <div class="srv-adv-panel">

@@ -441,7 +441,7 @@ export class SuwayomiAdapter implements ServerAdapter {
   async browseSource(sourceId: string, page: number): Promise<PaginatedResult<Manga>> {
     const data = await this.gql<{
       fetchSourceManga: { mangas: Record<string, unknown>[]; hasNextPage: boolean }
-    }>(FETCH_SOURCE_MANGA, { source: sourceId, type: 'LATEST', page })
+    }>(FETCH_SOURCE_MANGA, { source: sourceId, type: sourceId === '0' ? 'POPULAR' : 'LATEST', page })
     return {
       items:       data.fetchSourceManga.mangas.map(mapManga),
       hasNextPage: data.fetchSourceManga.hasNextPage,

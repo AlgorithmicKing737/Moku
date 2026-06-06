@@ -28,7 +28,7 @@
   }
 
   let extensions: Extension[] = $state([]);
-  let localMangaCount = $state(0);
+  let localMangaCount = $state<string>("0");
   let loading      = $state(true);
   let refreshing   = $state(false);
   let filter       = $state<Filter>("installed");
@@ -84,8 +84,10 @@
   }
 
   async function loadLocalManga() {
-    const d = await Promise.resolve(null);
-
+    try {
+      const r = await getAdapter().browseSource('0', 1)
+      localMangaCount = r.hasNextPage ? r.items.length + '+' : String(r.items.length)
+    } catch {}
   }
 
   async function fetchFromRepo() {
@@ -338,7 +340,7 @@
     {:else}
       <div class="list">
         {#if showLocal}
-          <div class="local-row">
+          <div class="local-row" style="cursor:pointer" onclick={() => libraryTarget = { pkgName: '__local__', extensionName: 'Local Source', iconUrl: '' }}>
             <div class="local-icon"><HardDrives size={18} weight="bold" /></div>
             <div class="info">
               <span class="name">Local Source</span>

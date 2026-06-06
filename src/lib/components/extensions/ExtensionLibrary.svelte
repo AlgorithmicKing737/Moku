@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ArrowLeft, MagnifyingGlass, GearSix, Swap, Funnel, Check } from "phosphor-svelte";
+  import { ArrowLeft, MagnifyingGlass, GearSix, Swap, Funnel, Check, CircleNotch } from "phosphor-svelte";
   import Thumbnail           from "$lib/components/shared/manga/Thumbnail.svelte";
   import { resolvedCover }   from "$lib/core/cover/coverResolver";
   import { getAdapter }      from "$lib/request-manager";
@@ -25,9 +25,22 @@
 
   let { pkgName, extensionName, iconUrl, cols, cropCovers, statsAlways, anims, sources, onBack, onSettings }: Props = $props();
 
+  const isLocal = pkgName === '__local__';
+
+  // ── Library mode state ──────────────────────────────────────────────
   let groups:  SourceLibrary[] = $state([]);
+  let sourceNodes: SourceNode[] = $state([]);
+
+  // ── Local/browse mode state ──────────────────────────────────────────
+  let localItems:       any[]    = $state([]);
+  let localPage:        number   = $state(1);
+  let localHasNext:     boolean  = $state(false);
+  let localLoadingMore: boolean  = $state(false);
+
+  // ── Shared state ─────────────────────────────────────────────────────
   let loading  = $state(true);
   let search   = $state("");
+  let searchInput = $state("");
 
   type ContentFilter = "unread" | "downloaded";
   let activeFilters = $state<Partial<Record<ContentFilter, boolean>>>({});
@@ -37,33 +50,78 @@
 
   let migrateTarget: { sourceId: string; sourceName: string; iconUrl: string; manga: LibraryManga[] } | null = $state(null);
 
-  const allManga = $derived(groups.flatMap(g => g.manga));
+  // ── Derived filtered lists ────────────────────────────────────────────
+  const allManga = $derived(isLocal ? localItems : groups.flatMap(g => g.manga));
 
   const filtered = $derived((() => {
     let items = allManga;
     const q = search.trim().toLowerCase();
-    if (q) items = items.filter(m => m.title.toLowerCase().includes(q));
-    if (activeFilters.unread)     items = items.filter(m => m.unreadCount > 0);
-    if (activeFilters.downloaded) items = items.filter(m => m.downloadCount > 0);
+    if (q && !isLocal) items = items.filter((m: any) => m.title.toLowerCase().includes(q));
+    if (!isLocal) {
+      if (activeFilters.unread)     items = items.filter((m: any) => m.unreadCount > 0);
+      if (activeFilters.downloaded) items = items.filter((m: any) => m.downloadCount > 0);
+    }
     return items;
   })());
-
-  let sourceNodes: SourceNode[] = $state([]);
 
   $effect(() => { load(); });
 
   async function load() {
     loading = true;
     try {
-      const [libData, srcData] = await Promise.all([
-        getAdapter().getMangaList({}).then(r => ({ mangas: { nodes: r.items as any } })),
-        getAdapter().getSources().then(nodes => ({ sources: { nodes } })),
-      ]);
-      sourceNodes = srcData.sources.nodes;
-      groups = libraryByExtension(libData.mangas.nodes, srcData.sources.nodes, pkgName);
+      if (isLocal) {
+        localPage    = 1;
+        localItems   = [];
+        const result = await getAdapter().browseSource('0', 1);
+        localItems   = result.items;
+        localHasNext = result.hasNextPage;
+        localPage    = 1;
+      } else {
+        const [libData, srcData] = await Promise.all([
+          getAdapter().getMangaList({}).then(r => ({ mangas: { nodes: r.items as any } })),
+          getAdapter().getSources().then(nodes => ({ sources: { nodes } })),
+        ]);
+        sourceNodes = srcData.sources.nodes;
+        groups = libraryByExtension(libData.mangas.nodes, srcData.sources.nodes, pkgName);
+      }
     } finally {
       loading = false;
     }
+  }
+
+  async function loadMoreLocal() {
+    if (localLoadingMore || !localHasNext) return;
+    localLoadingMore = true;
+    try {
+      const next   = localPage + 1;
+      const result = await getAdapter().browseSource('0', next);
+      localItems   = [...localItems, ...result.items];
+      localHasNext = result.hasNextPage;
+      localPage    = next;
+    } finally {
+      localLoadingMore = false;
+    }
+  }
+
+  async function searchLocal() {
+    const q = searchInput.trim();
+    if (!q) { load(); return; }
+    loading = true;
+    try {
+      const result = await getAdapter().searchSource('0', q, 1);
+      localItems   = result.items;
+      localHasNext = result.hasNextPage;
+      localPage    = 1;
+    } finally {
+      loading = false;
+    }
+    search = q;
+  }
+
+  function onSearchKeydown(e: KeyboardEvent) {
+    if (!isLocal) return;
+    if (e.key === 'Enter') searchLocal();
+    if (e.key === 'Escape') { searchInput = ''; search = ''; load(); }
   }
 
   function toggleFilter(f: ContentFilter) {
@@ -108,58 +166,72 @@
       <Thumbnail src={iconUrl} alt={extensionName} class="header-icon" onerror={(e) => ((e.target as HTMLImageElement).style.display = "none")} />
     {/if}
     <div class="title-block">
-      <span class="eyebrow">In Library</span>
+      <span class="eyebrow">{isLocal ? 'Local Source' : 'In Library'}</span>
       <span class="title">{extensionName}</span>
     </div>
     {#if !loading}
-      <span class="count-badge">{filtered.length}{filtered.length !== allManga.length ? ` / ${allManga.length}` : ""}</span>
+      <span class="count-badge">
+        {isLocal ? allManga.length + (localHasNext ? '+' : '') : `${filtered.length}${filtered.length !== allManga.length ? ` / ${allManga.length}` : ''}`}
+      </span>
     {/if}
     <div class="header-right">
       <div class="search-wrap">
         <MagnifyingGlass size={12} class="search-icon" weight="light" />
-        <input class="search" placeholder="Search" bind:value={search} autocomplete="off" />
-      </div>
-
-      <div class="filter-wrap">
-        <button
-          class="filter-btn"
-          class:filter-btn-active={hasActiveFilters}
-          title="Filter"
-          onclick={() => filterOpen = !filterOpen}
-        >
-          <Funnel size={13} weight={hasActiveFilters ? "fill" : "bold"} />
-        </button>
-        {#if filterOpen}
-          <div class="filter-panel" role="menu">
-            <div class="filter-panel-header">
-              <span class="panel-heading">Filter</span>
-              {#if hasActiveFilters}
-                <button class="panel-clear-btn" onclick={clearFilters}>Clear all</button>
-              {/if}
-            </div>
-            <div class="panel-divider"></div>
-            <p class="panel-label">Content</p>
-            {#each CONTENT_FILTERS as [f, label]}
-              <button
-                class="panel-item"
-                class:panel-item-active={activeFilters[f]}
-                role="menuitem"
-                onclick={() => toggleFilter(f)}
-              >
-                <span class="panel-check" class:panel-check-on={activeFilters[f]}>
-                  {#if activeFilters[f]}<Check size={9} weight="bold" />{/if}
-                </span>
-                {label}
-              </button>
-            {/each}
-          </div>
+        {#if isLocal}
+          <input
+            class="search"
+            placeholder="Search…"
+            bind:value={searchInput}
+            autocomplete="off"
+            onkeydown={onSearchKeydown}
+          />
+        {:else}
+          <input class="search" placeholder="Search" bind:value={search} autocomplete="off" />
         {/if}
       </div>
 
-      {#if sources.length > 0}
-        <button class="settings-btn" onclick={onSettings} title="Extension settings">
-          <GearSix size={14} weight="bold" />
-        </button>
+      {#if !isLocal}
+        <div class="filter-wrap">
+          <button
+            class="filter-btn"
+            class:filter-btn-active={hasActiveFilters}
+            title="Filter"
+            onclick={() => filterOpen = !filterOpen}
+          >
+            <Funnel size={13} weight={hasActiveFilters ? "fill" : "bold"} />
+          </button>
+          {#if filterOpen}
+            <div class="filter-panel" role="menu">
+              <div class="filter-panel-header">
+                <span class="panel-heading">Filter</span>
+                {#if hasActiveFilters}
+                  <button class="panel-clear-btn" onclick={clearFilters}>Clear all</button>
+                {/if}
+              </div>
+              <div class="panel-divider"></div>
+              <p class="panel-label">Content</p>
+              {#each CONTENT_FILTERS as [f, label]}
+                <button
+                  class="panel-item"
+                  class:panel-item-active={activeFilters[f]}
+                  role="menuitem"
+                  onclick={() => toggleFilter(f)}
+                >
+                  <span class="panel-check" class:panel-check-on={activeFilters[f]}>
+                    {#if activeFilters[f]}<Check size={9} weight="bold" />{/if}
+                  </span>
+                  {label}
+                </button>
+              {/each}
+            </div>
+          {/if}
+        </div>
+
+        {#if sources.length > 0}
+          <button class="settings-btn" onclick={onSettings} title="Extension settings">
+            <GearSix size={14} weight="bold" />
+          </button>
+        {/if}
       {/if}
     </div>
   </div>
@@ -176,10 +248,14 @@
       </div>
     {:else if filtered.length === 0}
       <div class="empty">
-        {allManga.length === 0 ? "Nothing from this extension is in your library." : "No matches."}
+        {isLocal
+          ? 'No manga found in local source. Add manga folders to your local source directory.'
+          : allManga.length === 0
+            ? 'Nothing from this extension is in your library.'
+            : 'No matches.'}
       </div>
     {:else}
-      {#if groups.length > 1}
+      {#if !isLocal && groups.length > 1}
         <div class="source-groups">
           {#each groups as group}
             <div class="source-group-header">
@@ -192,7 +268,7 @@
             </div>
           {/each}
         </div>
-      {:else if groups.length === 1}
+      {:else if !isLocal && groups.length === 1}
         <div class="single-source-bar">
           <span class="source-group-name">{groups[0].displayName}</span>
           <button class="migrate-btn" onclick={() => openMigrate(groups[0])} title="Migrate this source">
@@ -214,23 +290,38 @@
                 style="object-fit:{cropCovers ? 'cover' : 'contain'}"
                 draggable="false"
               />
-              <div class="card-info-overlay" class:anim={anims} class:instant={!anims} class:always={statsAlways}>
-                <div class="overlay-badges">
-                  {#if isCompleted}
-                    <span class="badge badge-done">✓ Done</span>
-                  {:else if m.unreadCount}
-                    <span class="badge badge-unread">{m.unreadCount} new</span>
-                  {/if}
-                  {#if m.downloadCount}
-                    <span class="badge badge-dl">↓ {m.downloadCount}</span>
-                  {/if}
+              {#if !isLocal}
+                <div class="card-info-overlay" class:anim={anims} class:instant={!anims} class:always={statsAlways}>
+                  <div class="overlay-badges">
+                    {#if isCompleted}
+                      <span class="badge badge-done">✓ Done</span>
+                    {:else if m.unreadCount}
+                      <span class="badge badge-unread">{m.unreadCount} new</span>
+                    {/if}
+                    {#if m.downloadCount}
+                      <span class="badge badge-dl">↓ {m.downloadCount}</span>
+                    {/if}
+                  </div>
                 </div>
-              </div>
+              {/if}
             </div>
             <p class="card-title">{m.title}</p>
           </button>
         {/each}
       </div>
+
+      {#if isLocal && localHasNext}
+        <div class="load-more">
+          <button class="load-more-btn" onclick={loadMoreLocal} disabled={localLoadingMore}>
+            {#if localLoadingMore}
+              <CircleNotch size={13} weight="light" class="anim-spin" />
+              Loading…
+            {:else}
+              Load more
+            {/if}
+          </button>
+        </div>
+      {/if}
     {/if}
   </div>
 </div>
@@ -330,7 +421,12 @@
   .cover-skeleton { aspect-ratio: 2/3; border-radius: var(--radius-md); }
   .title-skeleton { height: 12px; margin-top: var(--sp-2); width: 80%; border-radius: var(--radius-sm); }
 
-  .empty { display: flex; align-items: center; justify-content: center; height: 60%; color: var(--text-muted); font-size: var(--text-sm); }
+  .empty { display: flex; align-items: center; justify-content: center; height: 60%; color: var(--text-muted); font-size: var(--text-sm); text-align: center; padding: 0 var(--sp-6); }
+
+  .load-more { display: flex; justify-content: center; padding: var(--sp-4) 0; }
+  .load-more-btn { display: flex; align-items: center; gap: var(--sp-2); font-family: var(--font-ui); font-size: var(--text-xs); letter-spacing: var(--tracking-wide); padding: 7px 20px; border-radius: var(--radius-md); background: var(--bg-raised); color: var(--text-muted); border: 1px solid var(--border-dim); cursor: pointer; transition: color var(--t-base), border-color var(--t-base), background var(--t-base); }
+  .load-more-btn:hover:not(:disabled) { color: var(--text-primary); border-color: var(--border-strong); }
+  .load-more-btn:disabled { opacity: 0.5; cursor: default; }
 
   @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
 </style>
