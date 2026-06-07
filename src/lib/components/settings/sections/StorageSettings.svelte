@@ -12,6 +12,9 @@
   import { clearBlobCache } from '$lib/core/cache/imageCache'
   import { clearPageCache } from '$lib/request-manager'
   import { cache as queryCache } from '$lib/core/cache/queryCache'
+  import { getAdapter } from '$lib/request-manager'
+  import { requestManager } from '$lib/request-manager'
+  import type { ValidateBackupResult, RestoreStatus } from '$lib/server-adapters/types'
 
   const supportsFilesystem = platformService.isSupported('filesystem')
 
@@ -79,7 +82,7 @@
     await Promise.all([
       platformService.clearMokuCache(),
       platformService.clearSuwayomiCache(),
-      gql(`mutation { clearCachedImages(input: { cachedPages: true, cachedThumbnails: true, downloadedThumbnails: false }) { cachedPages cachedThumbnails } }`),
+      getAdapter().clearCachedImages({ cachedPages: true, cachedThumbnails: true, downloadedThumbnails: false }),
     ])
   }
 
@@ -168,11 +171,7 @@
     if (!supportsFilesystem) return
     storageLoading = true; storageError = null
     try {
-      const pathData = await gql<{ settings: { downloadsPath: string | null; localSourcePath: string | null } }>(
-        `{ settings { downloadsPath localSourcePath } }`
-      )
-      const dl  = pathData.settings.downloadsPath  ?? ''
-      const loc = pathData.settings.localSourcePath ?? ''
+      const { downloadsPath: dl, localSourcePath: loc } = await getAdapter().getDownloadsPath()
       downloadsPathInput = dl; localSourcePathInput = loc
       confirmedDownloadsPath = dl; confirmedLocalSourcePath = loc
       updateSettings({ serverDownloadsPath: dl, serverLocalSourcePath: loc })
@@ -218,8 +217,8 @@
     if (dlErr || locErr) { pathsFieldError = { ...(dlErr ? { dl: dlErr } : {}), ...(locErr ? { loc: locErr } : {}) }; return }
     pathsSaving = true
     try {
-      await gql(`mutation($path: String!) { setSettings(input: { settings: { downloadsPath: $path } }) { settings { downloadsPath } } }`, { path: dl })
-      if (loc) await gql(`mutation($path: String!) { setSettings(input: { settings: { localSourcePath: $path } }) { settings { localSourcePath } } }`, { path: loc })
+      await getAdapter().setDownloadsPath(dl)
+      if (loc) await getAdapter().setLocalSourcePath(loc)
       updateSettings({ serverDownloadsPath: dl, serverLocalSourcePath: loc })
       if (supportsFilesystem && !isExternalServer) {
         const oldDl = confirmedDownloadsPath || defaultDownloadsPath
@@ -301,8 +300,7 @@
   async function createBackup() {
     backupLoading = true; backupError = null
     try {
-      const data = await gql<{ createBackup: { url: string } }>(`mutation { createBackup { url } }`)
-      const { url } = data.createBackup
+      const { url } = await getAdapter().createBackup()
       const name = url.split('/').pop() ?? url
       backupList = [{ url, name }, ...backupList]
       await saveBackupList()
@@ -313,7 +311,7 @@
   async function deleteBackup(url: string) {
     backupList = backupList.map(b => b.url === url ? { ...b, deleting: true } : b)
     try {
-      await fetch(`${serverUrl()}${url}`, { method: 'DELETE', headers: buildAuthHeaders() })
+      await getAdapter().deleteBackup(url)
       backupList = backupList.filter(b => b.url !== url)
       await saveBackupList()
     } catch (e: any) {
@@ -324,9 +322,7 @@
 
   async function downloadBackup(backup: BackupEntry) {
     try {
-      const resp = await fetch(`${serverUrl()}${backup.url}`, { headers: buildAuthHeaders() })
-      if (!resp.ok) throw new Error(`Server returned ${resp.status}`)
-      const blob = await resp.blob()
+      const blob = await getAdapter().downloadBackup(backup.url)
       if ('showSaveFilePicker' in window) {
         try {
           const handle = await (window as any).showSaveFilePicker({
@@ -349,12 +345,11 @@
 
   let restoreLoading      = $state(false)
   let restoreError        = $state<string | null>(null)
-  let restoreJobId        = $state<string | null>(null)
-  let restoreStatus       = $state<{ mangaProgress: number; state: string; totalManga: number } | null>(null)
+  let restoreStatus       = $state<RestoreStatus | null>(null)
   let restorePollInterval = $state<ReturnType<typeof setInterval> | null>(null)
   let validateLoading     = $state(false)
   let validateError       = $state<string | null>(null)
-  let validateResult      = $state<{ missingSources: { id: string; name: string }[]; missingTrackers: { name: string }[] } | null>(null)
+  let validateResult      = $state<ValidateBackupResult | null>(null)
   let restoreFile         = $state<File | null>(null)
 
   function stopRestorePoll() {
@@ -363,62 +358,19 @@
 
   async function pollRestoreStatus(id: string) {
     try {
-      const data = await gql<{ restoreStatus: { mangaProgress: number; state: string; totalManga: number } }>(
-        `query($id: String!) { restoreStatus(id: $id) { mangaProgress state totalManga } }`,
-        { id }
-      )
-      const status = data.restoreStatus
+      const status = await getAdapter().pollRestoreStatus(id)
       restoreStatus = status
       if (status?.state === 'SUCCESS' || status?.state === 'FAILURE') stopRestorePoll()
     } catch {}
   }
 
-  function buildBackupFormData(file: File, query: string, variables: Record<string, unknown>) {
-    const form = new FormData()
-    form.append('operations', JSON.stringify({ query, variables }))
-    form.append('map', JSON.stringify({ '0': ['variables.backup'] }))
-    form.append('0', file, file.name)
-    return form
-  }
-
-  function buildAuthHeaders(): Record<string, string> {
-    const headers: Record<string, string> = { Accept: 'application/json' }
-    const pass = settingsState.settings.serverAuthPass ?? '', user = settingsState.settings.serverAuthUser ?? ''
-    if (settingsState.settings.serverAuthMode === 'BASIC_AUTH' && user && pass)
-      headers['Authorization'] = 'Basic ' + btoa(`${user}:${pass}`)
-    return headers
-  }
-
-  function serverUrl(): string {
-    return (settingsState.settings.serverUrl ?? 'http://localhost:4567').replace(/\/$/, '')
-  }
-
-  async function gql<T = unknown>(query: string, variables?: Record<string, unknown>): Promise<T> {
-    const res = await fetch(`${serverUrl()}/api/graphql`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...buildAuthHeaders() },
-      body: JSON.stringify({ query, variables }),
-    })
-    const json = await res.json()
-    if (json.errors?.length) throw new Error(json.errors[0].message)
-    return json.data as T
-  }
-
   async function submitRestore() {
     if (!restoreFile) return
-    restoreLoading = true; restoreError = null; restoreStatus = null; restoreJobId = null
+    restoreLoading = true; restoreError = null; restoreStatus = null
     stopRestorePoll()
     try {
-      const form = buildBackupFormData(
-        restoreFile,
-        `mutation RestoreBackup($backup: Upload!) { restoreBackup(input: { backup: $backup }) { id status { mangaProgress state totalManga } } }`,
-        { backup: null }
-      )
-      const resp = await fetch(`${serverUrl()}/api/graphql`, { method: 'POST', headers: buildAuthHeaders(), body: form })
-      const json = await resp.json()
-      if (json.errors?.length) throw new Error(json.errors[0].message)
-      const result = json.data.restoreBackup
-      restoreJobId = result.id; restoreStatus = result.status
+      const result = await requestManager.meta.restoreBackup(restoreFile)
+      restoreStatus = result.status
       if (result.status?.state !== 'SUCCESS' && result.status?.state !== 'FAILURE')
         restorePollInterval = setInterval(() => pollRestoreStatus(result.id), 1500)
     } catch (e: any) { restoreError = e?.message ?? 'Failed to start restore' }
@@ -429,15 +381,7 @@
     if (!restoreFile) return
     validateLoading = true; validateError = null; validateResult = null
     try {
-      const form = buildBackupFormData(
-        restoreFile,
-        `query ValidateBackup($backup: Upload!) { validateBackup(input: { backup: $backup }) { missingSources { id name } missingTrackers { name } } }`,
-        { backup: null }
-      )
-      const resp = await fetch(`${serverUrl()}/api/graphql`, { method: 'POST', headers: buildAuthHeaders(), body: form })
-      const json = await resp.json()
-      if (json.errors?.length) throw new Error(json.errors[0].message)
-      validateResult = json.data.validateBackup
+      validateResult = await requestManager.meta.validateBackup(restoreFile)
     } catch (e: any) { validateError = e?.message ?? 'Failed to validate backup' }
     finally { validateLoading = false }
   }

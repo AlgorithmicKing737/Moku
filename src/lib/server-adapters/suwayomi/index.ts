@@ -16,6 +16,8 @@ import type {
   TrackRecordPatch,
   AboutServer,
   AboutWebUI,
+  RestoreStatus,
+  ValidateBackupResult,
 } from '$lib/server-adapters/types'
 import type { DownloadStatus } from '$lib/types/api'
 import type { Manga, Chapter, Extension, Source, Tracker, TrackRecord, Category } from '$lib/types'
@@ -39,11 +41,10 @@ import {
   UPDATE_STOP,
   SET_MANGA_META,
   DELETE_MANGA_META,
-  CREATE_BACKUP,
-  RESTORE_BACKUP,
   FETCH_SOURCE_MANGA,
   LIBRARY_UPDATE_STATUS,
   MANGAS_BY_GENRE,
+  POLL_RESTORE_STATUS,
 } from './manga'
 import {
   GET_CHAPTERS,
@@ -101,6 +102,7 @@ import {
   UPDATE_TRACK,
   LOGIN_TRACKER_CREDENTIALS,
   LOGOUT_TRACKER,
+  LOGIN_TRACKER_OAUTH,
 } from './tracking'
 import {
   GET_ABOUT_SERVER,
@@ -110,6 +112,9 @@ import {
   GET_METAS,
   SET_SOCKS_PROXY,
   SET_FLARE_SOLVERR,
+  RESTORE_BACKUP,
+  VALIDATE_BACKUP,
+  CREATE_BACKUP,
 } from './meta'
 import {
   type GQLResponse,
@@ -136,7 +141,7 @@ function mapDownloadStatus(raw: { state: string; queue: RawQueueItem[] }): Downl
 }
 
 export class SuwayomiAdapter implements ServerAdapter {
-  private baseUrl = 'http://127.0.0.1:4567'
+  private baseUrl    = 'http://127.0.0.1:4567'
   private authHeader: string | null = null
 
   async connect(config: ServerConfig): Promise<void> {
@@ -220,6 +225,26 @@ export class SuwayomiAdapter implements ServerAdapter {
     return { items, hasNextPage: false }
   }
 
+  async getMangasByGenre(
+    filter:  Record<string, unknown>,
+    first:   number,
+    offset:  number,
+    signal?: AbortSignal,
+  ): Promise<{ items: Manga[]; hasNextPage: boolean; totalCount: number }> {
+    const data = await this.gql<{
+      mangas: {
+        nodes:      Record<string, unknown>[]
+        pageInfo:   { hasNextPage: boolean }
+        totalCount: number
+      }
+    }>(MANGAS_BY_GENRE, { filter, first, offset }, signal)
+    return {
+      items:       data.mangas.nodes.map(mapManga),
+      hasNextPage: data.mangas.pageInfo.hasNextPage,
+      totalCount:  data.mangas.totalCount,
+    }
+  }
+
   async searchManga(query: string, sourceId?: string): Promise<Manga[]> {
     if (!sourceId) return []
     const data = await this.gql<{ fetchSourceManga: { mangas: Record<string, unknown>[] } }>(
@@ -280,9 +305,7 @@ export class SuwayomiAdapter implements ServerAdapter {
   }
 
   async getRecentlyUpdated(): Promise<Chapter[]> {
-    const data = await this.gql<{ chapters: { nodes: Record<string, unknown>[] } }>(
-      GET_RECENTLY_UPDATED
-    )
+    const data = await this.gql<{ chapters: { nodes: Record<string, unknown>[] } }>(GET_RECENTLY_UPDATED)
     return data.chapters.nodes.map(mapChapter)
   }
 
@@ -357,9 +380,7 @@ export class SuwayomiAdapter implements ServerAdapter {
         reorderChapterDownload: { downloadStatus: { state: string; queue: RawQueueItem[] } }
       }>(REORDER_DOWNLOAD, { chapterId: Number(chapterId), to })
       return mapDownloadStatus(data.reorderChapterDownload.downloadStatus)
-    } catch {
-      return null
-    }
+    } catch { return null }
   }
 
   async clearDownloads(): Promise<void> {
@@ -545,6 +566,18 @@ export class SuwayomiAdapter implements ServerAdapter {
     await this.gql(TRACK_PROGRESS, { mangaId: Number(mangaId) })
   }
 
+  async loginTrackerOAuth(trackerId: string, callbackUrl: string): Promise<void> {
+    await this.gql(LOGIN_TRACKER_OAUTH, { trackerId: Number(trackerId), callbackUrl })
+  }
+
+  async loginTrackerCredentials(trackerId: string, username: string, password: string): Promise<void> {
+    await this.gql(LOGIN_TRACKER_CREDENTIALS, { trackerId: Number(trackerId), username, password })
+  }
+
+  async logoutTracker(trackerId: string): Promise<void> {
+    await this.gql(LOGOUT_TRACKER, { trackerId: Number(trackerId) })
+  }
+
   async getServerSecurity(): Promise<ServerSecurity> {
     const data = await this.gql<{ settings: ServerSecurity }>(GET_SERVER_SECURITY)
     return data.settings
@@ -581,24 +614,58 @@ export class SuwayomiAdapter implements ServerAdapter {
     }
   }
 
-  async getMangasByGenre(
-    filter:  Record<string, unknown>,
-    first:   number,
-    offset:  number,
-    signal?: AbortSignal,
-  ): Promise<{ items: Manga[]; hasNextPage: boolean; totalCount: number }> {
-    const data = await this.gql<{
-      mangas: {
-        nodes:      Record<string, unknown>[]
-        pageInfo:   { hasNextPage: boolean }
-        totalCount: number
-      }
-    }>(MANGAS_BY_GENRE, { filter, first, offset }, signal)
+  async getDownloadsPath(): Promise<{ downloadsPath: string; localSourcePath: string }> {
+    const data = await this.gql<{ settings: { downloadsPath: string | null; localSourcePath: string | null } }>(
+      GET_DOWNLOADS_PATH
+    )
     return {
-      items:       data.mangas.nodes.map(mapManga),
-      hasNextPage: data.mangas.pageInfo.hasNextPage,
-      totalCount:  data.mangas.totalCount,
+      downloadsPath:   data.settings.downloadsPath  ?? '',
+      localSourcePath: data.settings.localSourcePath ?? '',
     }
+  }
+
+  async setDownloadsPath(path: string): Promise<void> {
+    await this.gql(SET_DOWNLOADS_PATH, { path })
+  }
+
+  async setLocalSourcePath(path: string): Promise<void> {
+    await this.gql(SET_LOCAL_SOURCE_PATH, { path })
+  }
+
+  async createBackup(): Promise<{ url: string }> {
+    const data = await this.gql<{ createBackup: { url: string } }>(CREATE_BACKUP)
+    return data.createBackup
+  }
+
+  private multipartGql<T>(query: string, file: File): Promise<T> {
+    const form = new FormData()
+    form.append('operations', JSON.stringify({ query, variables: { backup: null } }))
+    form.append('map', JSON.stringify({ '0': ['variables.backup'] }))
+    form.append('0', file, file.name)
+    const headers: Record<string, string> = { Accept: 'application/json' }
+    if (this.authHeader) headers['Authorization'] = this.authHeader
+    return fetch(`${this.baseUrl}/api/graphql`, { method: 'POST', headers, body: form })
+      .then(r => { if (!r.ok) throw new Error(`Suwayomi HTTP ${r.status}`); return r.json() })
+      .then((json: GQLResponse<T>) => { if (json.errors?.length) throw new Error(json.errors[0].message); return json.data })
+  }
+
+  async restoreBackup(file: File): Promise<{ id: string; status: RestoreStatus }> {
+    const data = await this.multipartGql<{ restoreBackup: { id: string; status: RestoreStatus } }>(RESTORE_BACKUP, file)
+    return data.restoreBackup
+  }
+
+  async validateBackup(file: File): Promise<ValidateBackupResult> {
+    const data = await this.multipartGql<{ validateBackup: ValidateBackupResult }>(VALIDATE_BACKUP, file)
+    return data.validateBackup
+  }
+
+  async pollRestoreStatus(id: string): Promise<RestoreStatus> {
+    const data = await this.gql<{ restoreStatus: RestoreStatus }>(POLL_RESTORE_STATUS, { id })
+    return data.restoreStatus
+  }
+
+  async clearCachedImages(opts: { cachedPages: boolean; cachedThumbnails: boolean; downloadedThumbnails: boolean }): Promise<void> {
+    await this.gql(CLEAR_CACHED_IMAGES, opts)
   }
 
   async checkForUpdates(mangaIds?: string[]): Promise<UpdateResult[]> {

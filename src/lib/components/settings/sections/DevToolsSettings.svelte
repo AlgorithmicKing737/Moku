@@ -76,7 +76,7 @@
     let entries = 0, oldest: number | null = null, newest: number | null = null
     const foundKeys: string[] = []
     const checkKey = (k: string) => {
-      const age = cache.ageOf(k)
+      const age = cache?.ageOf?.(k)
       if (age !== undefined) {
         entries++
         foundKeys.push(k)
@@ -85,7 +85,7 @@
         if (newest === null || ts > newest) newest = ts
       }
     }
-    ['library', 'sources', 'popular'].forEach(checkKey)
+    ['library', 'sources', 'popular'].forEach(checkKey);
     ['Action','Romance','Fantasy','Comedy','Drama','Horror','Sci-Fi','Adventure','Thriller',
      'Isekai','Supernatural','Historical','Psychological','Sports','Mystery','Mecha',
      'Slice of Life','School Life','Martial Arts','Magic','Military'].forEach(g => checkKey(`genre:${g}`))
@@ -104,7 +104,7 @@
   function triggerSplash() {
     splashTriggered = true
     setTimeout(() => splashTriggered = false, 200)
-    ;(window as any).__mokuShowSplash?.()
+    appState.idleSplash = true
   }
 
   async function testWindowsHello() {
@@ -192,7 +192,7 @@
       <div class="s-dev-grid">
         <span class="s-dev-key">Filter</span>  <span class="s-dev-val">{appState.libraryFilter}</span>
         <span class="s-dev-key">Folders</span> <span class="s-dev-val">{appState.categories.filter(c => c.id !== 0).map(c => c.name).join(', ') || 'none'}</span>
-        <span class="s-dev-key">History</span> <span class="s-dev-val">{appState.history.length} entries</span>
+        <span class="s-dev-key">History</span> <span class="s-dev-val">{appState.history?.length ?? 0} entries</span>
         <span class="s-dev-key">Cache</span>   <span class="s-dev-val">{perfSnapshot?.cacheEntries ?? '—'} entries</span>
         <span class="s-dev-key">Toasts</span> <span class="s-dev-val">{appState.toasts.length} queued</span>
         <span class="s-dev-key">Version</span> <span class="s-dev-val">{appVersion} · {import.meta.env.MODE}</span>

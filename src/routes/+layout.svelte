@@ -130,6 +130,7 @@
   function onSplashReady()   { splashVisible = false }
   function onSplashUnlock()  { appState.status = 'ready'; splashVisible = false }
   function onSplashBypass()  { bypassed = true; splashVisible = false }
+  function onIdleDismiss()   { appState.idleSplash = false }
 
   function onSplashRetry() {
     import('$lib/state/boot.svelte').then(({ retryBoot }) => {
@@ -156,6 +157,10 @@
     onBypass={onSplashBypass}
     onRetry={onSplashRetry}
   />
+{/if}
+
+{#if appState.idleSplash}
+  <SplashScreen mode="idle" onDismiss={onIdleDismiss} />
 {/if}
 
 {#if showApp}

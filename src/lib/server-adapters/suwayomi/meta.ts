@@ -60,6 +60,28 @@ export const SET_SOCKS_PROXY = `
   }
 `
 
+export const RESTORE_BACKUP = `
+  mutation RestoreBackup($backup: Upload!) {
+    restoreBackup(input: { backup: $backup }) {
+      id status { mangaProgress state totalManga }
+    }
+  }
+`
+
+export const VALIDATE_BACKUP = `
+  query ValidateBackup($backup: Upload!) {
+    validateBackup(input: { backup: $backup }) {
+      missingSources { id name } missingTrackers { name }
+    }
+  }
+`
+
+export const CREATE_BACKUP = `
+  mutation CreateBackup {
+    createBackup(input: {}) { url }
+  }
+`
+
 export const SET_FLARE_SOLVERR = `
   mutation SetFlareSolverr(
     $flareSolverrEnabled: Boolean!

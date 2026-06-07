@@ -128,6 +128,17 @@ export interface TrackRecordPatch {
   private?:         boolean
 }
 
+export interface RestoreStatus {
+  mangaProgress: number
+  state:         string
+  totalManga:    number
+}
+
+export interface ValidateBackupResult {
+  missingSources: { id: string; name: string }[]
+  missingTrackers: { name: string }[]
+}
+
 export interface ServerAdapter {
   connect(config: ServerConfig): Promise<void>
   getStatus(): Promise<ServerStatus>
@@ -135,6 +146,7 @@ export interface ServerAdapter {
 
   getManga(id: string, signal?: AbortSignal): Promise<Manga>
   getMangaList(filters: MangaFilters): Promise<PaginatedResult<Manga>>
+  getMangasByGenre(filter: Record<string, unknown>, first: number, offset: number, signal?: AbortSignal): Promise<{ items: Manga[]; hasNextPage: boolean; totalCount: number }>
   searchManga(query: string, sourceId?: string): Promise<Manga[]>
   fetchManga(id: string): Promise<Manga>
   addToLibrary(mangaId: string): Promise<void>
@@ -200,11 +212,23 @@ export interface ServerAdapter {
   updateTrackRecord(recordId: string, patch: TrackRecordPatch): Promise<TrackRecord>
   fetchTrackRecord(recordId: string): Promise<TrackRecord>
   syncTracking(mangaId: string): Promise<void>
+  loginTrackerOAuth(trackerId: string, callbackUrl: string): Promise<void>
+  loginTrackerCredentials(trackerId: string, username: string, password: string): Promise<void>
+  logoutTracker(trackerId: string): Promise<void>
 
   getServerSecurity(): Promise<ServerSecurity>
   setServerAuth(input: SetServerAuthInput): Promise<void>
   setSocksProxy(input: SetSocksProxyInput): Promise<void>
   setFlareSolverr(input: SetFlareSolverrInput): Promise<void>
+
+  getDownloadsPath(): Promise<{ downloadsPath: string; localSourcePath: string }>
+  setDownloadsPath(path: string): Promise<void>
+  setLocalSourcePath(path: string): Promise<void>
+  createBackup(): Promise<{ url: string }>
+  restoreBackup(file: File): Promise<{ id: string; status: RestoreStatus }>
+  validateBackup(file: File): Promise<ValidateBackupResult>
+  pollRestoreStatus(id: string): Promise<RestoreStatus>
+  clearCachedImages(opts: { cachedPages: boolean; cachedThumbnails: boolean; downloadedThumbnails: boolean }): Promise<void>
 
   checkForUpdates(mangaIds?: string[]): Promise<UpdateResult[]>
   stopLibraryUpdate(): Promise<void>

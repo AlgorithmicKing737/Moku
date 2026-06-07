@@ -114,6 +114,14 @@ export const LOGIN_TRACKER_CREDENTIALS = `
   }
 `
 
+export const LOGIN_TRACKER_OAUTH = `
+  mutation LoginTrackerOAuth($trackerId: Int!, $callbackUrl: String!) {
+    loginTrackerOAuth(input: { trackerId: $trackerId, callbackUrl: $callbackUrl }) {
+      isLoggedIn
+    }
+  }
+`
+
 export const LOGOUT_TRACKER = `
   mutation LogoutTracker($trackerId: Int!) {
     logoutTracker(input: { trackerId: $trackerId }) {

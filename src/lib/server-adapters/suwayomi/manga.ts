@@ -76,6 +76,12 @@ export const GET_DOWNLOADS_PATH = `
   }
 `
 
+export const POLL_RESTORE_STATUS = `
+  query PollRestoreStatus($id: String!) {
+    restoreStatus(id: $id) { mangaProgress state totalManga }
+  }
+`
+
 export const FETCH_MANGA = `
   mutation FetchManga($id: Int!) {
     fetchManga(input: { id: $id }) {
@@ -210,6 +216,15 @@ export const RESTORE_BACKUP = `
     restoreBackup(input: { backup: $backup }) {
       id
       status { mangaProgress state totalManga }
+    }
+  }
+`
+
+export const VALIDATE_BACKUP = `
+  query ValidateBackup($backup: Upload!) {
+    validateBackup(input: { backup: $backup }) {
+      missingSources { id name }
+      missingTrackers { name }
     }
   }
 `

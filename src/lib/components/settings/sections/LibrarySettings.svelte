@@ -83,8 +83,8 @@
   <div class="s-section">
     <div class="s-section-body">
       <div class="s-row">
-        <div class="s-row-info"><span class="s-label">Reading history</span><span class="s-desc">{homeState.history.length} entries</span></div>
-        <button class="s-btn s-btn-danger" onclick={clearHistory} disabled={homeState.history.length === 0}>Clear</button>
+        <div class="s-row-info"><span class="s-label">Reading history</span><span class="s-desc">{homeState.history?.length ?? 0} entries</span></div>
+        <button class="s-btn s-btn-danger" onclick={clearHistory} disabled={!homeState.history?.length}>Clear</button>
       </div>
     </div>
   </div>

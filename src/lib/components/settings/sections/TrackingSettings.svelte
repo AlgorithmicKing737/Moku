@@ -3,6 +3,7 @@
   import { settingsState, updateSettings } from "$lib/state/settings.svelte";
   import { toast } from "$lib/state/notifications.svelte";
   import { getAdapter } from "$lib/request-manager";
+  import { platformService } from "$lib/platform-service";
   import { syncBackFromTracker } from "$lib/components/tracking/lib/trackingSync";
   import { trackingState } from "$lib/state/tracking.svelte";
   import type { Tracker, TrackRecord } from "$lib/types/index";
@@ -41,7 +42,7 @@
   async function startOAuth(tracker: Tracker) {
     if (!tracker.authUrl) return;
     oauthTrackerId = tracker.id; oauthCallbackInput = "";
-    window.open(tracker.authUrl, "_blank");
+    await platformService.openExternal(tracker.authUrl);
   }
 
   async function submitOAuth() {
@@ -274,6 +275,7 @@
 
 <style>
   .s-tracker-status-row { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+  .s-tracker-status-row .s-pill { border-radius: 4px; }
   .s-pill-warn { background: color-mix(in srgb, var(--color-warn, #c97c2b) 15%, transparent); color: var(--color-warn, #c97c2b); border-color: color-mix(in srgb, var(--color-warn, #c97c2b) 35%, transparent); }
   .s-banner-dismissible { cursor: pointer; max-height: 8rem; overflow-y: auto; }
   .s-banner-dismissible:hover { opacity: 0.85; }
