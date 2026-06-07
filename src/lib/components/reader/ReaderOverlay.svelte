@@ -1,6 +1,5 @@
 <script lang="ts">
   import { readerState }                    from "$lib/state/reader.svelte";
-  import { settingsState }                  from "$lib/state/settings.svelte";
   import { getAdapter }                     from "$lib/request-manager";
   import type { Chapter }                   from "$lib/types";
 
@@ -14,28 +13,6 @@
   }
 
   const { showResumeBanner, resumePage, resumeFading, adjacent, onDismissResume, barPosition }: Props = $props();
-
-  async function gqlMutation(query: string, variables: Record<string, unknown>): Promise<void> {
-    const base    = settingsState.settings.serverUrl ?? "http://localhost:4567";
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    const mode    = settingsState.settings.serverAuthMode ?? "NONE";
-    if (mode === "BASIC_AUTH") {
-      const u = settingsState.settings.serverAuthUser?.trim() ?? "";
-      const p = settingsState.settings.serverAuthPass?.trim() ?? "";
-      if (u && p) headers["Authorization"] = `Basic ${btoa(`${u}:${p}`)}`;
-    }
-    const res = await fetch(`${base}/api/graphql`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ query, variables }),
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const json = await res.json();
-    if (json.errors?.length) throw new Error(json.errors[0].message);
-  }
-
-  const ENQUEUE_ONE  = `mutation EnqueueOne($id: Int!) { fetchChapterPages(input: { chapterId: $id }) { chapter { id } } }`;
-  const ENQUEUE_MANY = `mutation EnqueueMany($ids: [Int!]!) { enqueueChaptersDownloads(input: { ids: $ids }) { downloadStatus { queue { chapter { id } } } } }`;
 
   async function runDl(fn: () => Promise<void>) {
     readerState.dlBusy = true;
@@ -60,14 +37,14 @@
       <p class="dl-title">Download</p>
 
       <button class="dl-option" disabled={readerState.dlBusy || !!chapter.downloaded}
-        onclick={() => runDl(() => gqlMutation(ENQUEUE_ONE, { id: chapter.id }))}>
+        onclick={() => runDl(() => getAdapter().enqueueDownload(String(chapter.id)))}>
         This chapter
         <span class="dl-sub">{chapter.downloaded ? "Already downloaded" : chapter.name}</span>
       </button>
 
       <div class="dl-row">
         <button class="dl-option" disabled={readerState.dlBusy || queueable.length === 0}
-          onclick={() => runDl(() => gqlMutation(ENQUEUE_MANY, { ids: queueable.slice(0, readerState.nextN).map(c => c.id) }))}>
+          onclick={() => runDl(() => getAdapter().enqueueDownloads(queueable.slice(0, readerState.nextN).map(c => String(c.id))))}>
           Next chapters
           <span class="dl-sub">{Math.min(readerState.nextN, queueable.length)} not yet downloaded</span>
         </button>
@@ -79,7 +56,7 @@
       </div>
 
       <button class="dl-option" disabled={readerState.dlBusy || queueable.length === 0}
-        onclick={() => runDl(() => gqlMutation(ENQUEUE_MANY, { ids: queueable.map(c => c.id) }))}>
+        onclick={() => runDl(() => getAdapter().enqueueDownloads(queueable.map(c => String(c.id))))}>
         All remaining
         <span class="dl-sub">{queueable.length} not yet downloaded</span>
       </button>

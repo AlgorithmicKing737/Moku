@@ -104,8 +104,7 @@
   async function loadRepos() {
     reposLoading = true;
     try {
-      const d = await (getAdapter() as any).gql<{ settings: { extensionRepos: string[] } }>(`query GetSettings { settings { extensionRepos } }`);
-      repos = d.settings.extensionRepos ?? [];
+      repos = await getAdapter().getExtensionRepos();
     } catch (e) { console.error(e); }
     finally { reposLoading = false; }
   }
@@ -113,11 +112,11 @@
   async function saveRepos(updated: string[], intent: "add" | "remove") {
     savingRepos = true;
     try {
-      const d = await (getAdapter() as any).gql<{ setSettings: { settings: { extensionRepos: string[] } } }>(`mutation SetExtensionRepos($repos: [String!]!) { setSettings(input: { settings: { extensionRepos: $repos } }) { settings { extensionRepos } } }`, { repos: updated });
-      repos = d.setSettings.settings.extensionRepos;
+      const removed = repos.find(r => !updated.includes(r)) ?? "";
+      repos = await getAdapter().setExtensionRepos(updated);
       addToast(intent === "add"
         ? { kind: "success", title: "Repo added",   body: updated[updated.length - 1] }
-        : { kind: "info",    title: "Repo removed", body: repos.find(r => !updated.includes(r)) ?? "" }
+        : { kind: "info",    title: "Repo removed", body: removed }
       );
     } catch (e: any) {
       repoError = e instanceof Error ? e.message : "Failed to save";
@@ -138,13 +137,11 @@
   async function mutate(pkgName: string, op: "install" | "update" | "uninstall") {
     working = new Set(working).add(pkgName);
     const label = extensions.find((e) => e.pkgName === pkgName)?.name ?? pkgName;
-    const gqlArgs = {
-      install:   { id: pkgName, install:   true },
-      update:    { id: pkgName, update:    true },
-      uninstall: { id: pkgName, uninstall: true },
-    }[op];
     try {
-      await getAdapter()[{ install: 'installExtension', update: 'updateExtension', uninstall: 'uninstallExtension' }[op] as 'installExtension'](pkgName);
+      const adapter = getAdapter();
+      if      (op === "install")   await adapter.installExtension(pkgName);
+      else if (op === "update")    await adapter.updateExtension(pkgName);
+      else                         await adapter.uninstallExtension(pkgName);
       await load();
       addToast({
         install:   { kind: "download" as const, title: "Extension installed", body: label },

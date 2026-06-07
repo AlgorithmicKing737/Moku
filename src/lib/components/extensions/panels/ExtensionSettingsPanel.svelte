@@ -66,17 +66,7 @@
     editKey  = null;
     listOpen = null;
     try {
-      const d = await (getAdapter() as any).gql<{ source: { preferences: Preference[] } }>(
-        `query GetSourceSettings($id: LongString!) { source(id: $id) { preferences {
-          ... on CheckBoxPreference        { type: __typename CheckBoxTitle: title CheckBoxSummary: summary CheckBoxDefault: default CheckBoxCurrentValue: currentValue key }
-          ... on SwitchPreference          { type: __typename SwitchPreferenceTitle: title SwitchPreferenceSummary: summary SwitchPreferenceDefault: default SwitchPreferenceCurrentValue: currentValue key }
-          ... on ListPreference            { type: __typename ListPreferenceTitle: title ListPreferenceSummary: summary ListPreferenceDefault: default ListPreferenceCurrentValue: currentValue entries entryValues key }
-          ... on EditTextPreference        { type: __typename EditTextPreferenceTitle: title EditTextPreferenceSummary: summary EditTextPreferenceDefault: default EditTextPreferenceCurrentValue: currentValue dialogTitle dialogMessage key }
-          ... on MultiSelectListPreference { type: __typename MultiSelectListPreferenceTitle: title MultiSelectListPreferenceSummary: summary MultiSelectListPreferenceDefault: default MultiSelectListPreferenceCurrentValue: currentValue entries entryValues key }
-        } } }`,
-        { id: String(src.id) },
-      );
-      prefs = d.source.preferences ?? [];
+      prefs = (await getAdapter().getSourceSettings(src.id)) as Preference[];
     } catch (e: any) {
       addToast({ kind: "error", title: "Failed to load settings", body: e?.message ?? "" });
     } finally {
@@ -86,24 +76,9 @@
 
   async function save(position: number, changeType: string, value: unknown) {
     if (!activeSource) return;
-    const pref = prefs[position];
-    saving = pref.key;
+    saving = prefs[position].key;
     try {
-      await (getAdapter() as any).gql(
-        `mutation UpdateSourcePreference($source: LongString!, $change: SourcePreferenceChangeInput!) { updateSourcePreference(input: { source: $source, change: $change }) { source { id } } }`,
-        { source: String(activeSource.id), change: { position, [changeType]: value } },
-      );
-      const d = await (getAdapter() as any).gql<{ source: { preferences: Preference[] } }>(
-        `query GetSourceSettings($id: LongString!) { source(id: $id) { preferences {
-          ... on CheckBoxPreference        { type: __typename CheckBoxTitle: title CheckBoxCurrentValue: currentValue key }
-          ... on SwitchPreference          { type: __typename SwitchPreferenceTitle: title SwitchPreferenceCurrentValue: currentValue key }
-          ... on ListPreference            { type: __typename ListPreferenceTitle: title ListPreferenceCurrentValue: currentValue entries entryValues key }
-          ... on EditTextPreference        { type: __typename EditTextPreferenceTitle: title EditTextPreferenceCurrentValue: currentValue key }
-          ... on MultiSelectListPreference { type: __typename MultiSelectListPreferenceTitle: title MultiSelectListPreferenceCurrentValue: currentValue entries entryValues key }
-        } } }`,
-        { id: String(activeSource.id) },
-      );
-      prefs = d.source.preferences ?? [];
+      prefs = (await getAdapter().updateSourcePreference(activeSource.id, position, changeType, value)) as Preference[];
     } catch (e: any) {
       addToast({ kind: "error", title: "Failed to save", body: e?.message ?? "" });
     } finally {

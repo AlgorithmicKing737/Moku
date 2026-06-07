@@ -1,5 +1,6 @@
 <script lang="ts">
   import { CheckSquare, Trash, Folder } from 'phosphor-svelte'
+  import Thumbnail from '$lib/components/shared/manga/Thumbnail.svelte'
   import type { Manga, Category } from '$lib/types'
 
   interface Props {
@@ -24,14 +25,7 @@
     onCardClick, onCardContextMenu, onSelectAll, onExitSelect, onBulkRemove, onBulkMove,
   }: Props = $props()
 
-  const THUMB_BASE = 'http://127.0.0.1:4567'
-
   let movePanelOpen = $state(false)
-
-  function coverUrl(m: Manga) {
-    const url = m.thumbnailUrl ?? ''
-    return url.startsWith('http') ? url : `${THUMB_BASE}${url}`
-  }
 
   function onDocDown(e: MouseEvent) {
     if (movePanelOpen && !(e.target as HTMLElement).closest('.move-wrap')) movePanelOpen = false
@@ -124,13 +118,7 @@
           oncontextmenu={(e) => onCardContextMenu(e, m)}
         >
           <div class="cover-wrap" class:completed={isCompleted}>
-            <img
-              class="cover"
-              src={coverUrl(m)}
-              alt={m.title}
-              draggable="false"
-              loading="lazy"
-            />
+            <Thumbnail src={m.thumbnailUrl} alt={m.title} class="cover" id={m.id} />
             <div class="overlay">
               <div class="badges">
                 {#if isCompleted}
@@ -247,7 +235,7 @@
   }
   .cover-wrap.completed { box-shadow: inset 0 -2px 0 0 var(--accent); }
 
-  .cover { width: 100%; height: 100%; object-fit: cover; display: block; }
+  :global(.cover) { width: 100%; height: 100%; object-fit: cover; display: block; }
 
   .overlay {
     position: absolute; bottom: 0; left: 0; right: 0; z-index: 2;

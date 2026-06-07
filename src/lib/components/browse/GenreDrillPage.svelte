@@ -204,7 +204,7 @@
       {#each visibleItems as m, i (m.id)}
         <button class="card" onclick={() => setPreviewManga(m)} oncontextmenu={(e) => { e.stopPropagation(); openCtx(e, m); }}>
           <div class="cover-wrap">
-            <Thumbnail src={m.thumbnailUrl} alt={m.title} class="cover" priority={i < 12 ? 12 - i : 0} />
+            <Thumbnail src={m.thumbnailUrl} alt={m.title} class="cover" priority={i < 12 ? 12 - i : 0} id={m.id} />
             {#if m.inLibrary}<span class="in-library-badge">Saved</span>{/if}
           </div>
           <p class="card-title">{m.title}</p>

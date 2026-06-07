@@ -59,7 +59,7 @@ export const LIBRARY_UPDATE_STATUS = `
 
 export const MANGAS_BY_GENRE = `
   query MangasByGenre($filter: MangaFilterInput, $first: Int, $offset: Int) {
-    mangas(filter: $filter, first: $first, offset: $offset, orderBy: IN_LIBRARY_AT, orderByType: DESC) {
+    mangas(filter: $filter, first: $first, offset: $offset) {
       nodes {
         id title thumbnailUrl inLibrary genre status
         source { id displayName }

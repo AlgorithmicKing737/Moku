@@ -175,9 +175,13 @@ export interface ServerAdapter {
   updateExtension(id: string): Promise<void>
   updateExtensions(ids: string[]): Promise<void>
   installExternalExtension(url: string): Promise<void>
+  getExtensionRepos(): Promise<string[]>
+  setExtensionRepos(repos: string[]): Promise<string[]>
 
   getSources(): Promise<Source[]>
   browseSource(sourceId: string, page: number): Promise<PaginatedResult<Manga>>
+  getSourceSettings(sourceId: string): Promise<unknown[]>
+  updateSourcePreference(sourceId: string, position: number, changeType: string, value: unknown): Promise<unknown[]>
 
   getCategories(): Promise<Category[]>
   createCategory(name: string): Promise<Category>

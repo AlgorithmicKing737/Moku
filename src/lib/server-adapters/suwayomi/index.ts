@@ -410,6 +410,18 @@ export class SuwayomiAdapter implements ServerAdapter {
     await this.gql(INSTALL_EXTERNAL_EXTENSION, { url })
   }
 
+  async getExtensionRepos(): Promise<string[]> {
+    const data = await this.gql<{ settings: { extensionRepos: string[] } }>(GET_SETTINGS)
+    return data.settings.extensionRepos ?? []
+  }
+
+  async setExtensionRepos(repos: string[]): Promise<string[]> {
+    const data = await this.gql<{ setSettings: { settings: { extensionRepos: string[] } } }>(
+      SET_EXTENSION_REPOS, { repos }
+    )
+    return data.setSettings.settings.extensionRepos
+  }
+
   async getSources(): Promise<Source[]> {
     const data = await this.gql<{ sources: { nodes: Source[] } }>(GET_SOURCES)
     return data.sources.nodes
@@ -423,6 +435,29 @@ export class SuwayomiAdapter implements ServerAdapter {
       items:       data.fetchSourceManga.mangas.map(mapManga),
       hasNextPage: data.fetchSourceManga.hasNextPage,
     }
+  }
+
+  async getSourceSettings(sourceId: string): Promise<unknown[]> {
+    const data = await this.gql<{ source: { preferences: unknown[] } }>(
+      GET_SOURCE_SETTINGS, { id: sourceId }
+    )
+    return data.source.preferences ?? []
+  }
+
+  async updateSourcePreference(
+    sourceId:   string,
+    position:   number,
+    changeType: string,
+    value:      unknown,
+  ): Promise<unknown[]> {
+    await this.gql(UPDATE_SOURCE_PREFERENCE, {
+      source: sourceId,
+      change: { position, [changeType]: value },
+    })
+    const data = await this.gql<{ source: { preferences: unknown[] } }>(
+      GET_SOURCE_SETTINGS, { id: sourceId }
+    )
+    return data.source.preferences ?? []
   }
 
   async getCategories(): Promise<Category[]> {

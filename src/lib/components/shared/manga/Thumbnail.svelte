@@ -4,6 +4,7 @@
 
   let {
     src,
+    id         = undefined,
     alt        = "",
     class: cls = "",
     loading    = "lazy",
@@ -13,6 +14,7 @@
     ...rest
   }: {
     src:       string | null | undefined;
+    id?:       string | number;
     alt?:      string;
     class?:    string;
     loading?:  string;
@@ -27,10 +29,14 @@
     return typeof url === "string" && url.trim() ? url.replace(/\/$/, "") : "http://127.0.0.1:4567";
   }
 
+  function withBust(url: string): string {
+    return id != null ? `${url}${url.includes('?') ? '&' : '?'}id=${id}` : url;
+  }
+
   function plainThumbUrl(path: string | null | undefined): string {
     if (!path) return "";
-    if (path.startsWith("http")) return path;
-    return `${getServerUrl()}${path}`;
+    const base = path.startsWith("http") ? path : `${getServerUrl()}${path}`;
+    return withBust(base);
   }
 
   const isAuth = $derived((settingsState.settings.serverAuthMode ?? "NONE") !== "NONE");
@@ -45,15 +51,15 @@
 
     if (!_isAuth || !_src) { blobUrl = ""; return; }
 
-    const id      = ++reqId;
+    const myId    = ++reqId;
     const bareUrl = _src.startsWith("http") ? _src : `${getServerUrl()}${_src}`;
-    getBlobUrl(bareUrl, _priority)
-      .then(u  => { if (id === reqId) blobUrl = u; })
-      .catch(() => { if (id === reqId) blobUrl = ""; });
+    getBlobUrl(withBust(bareUrl), _priority)
+      .then(u  => { if (myId === reqId) blobUrl = u; })
+      .catch(() => { if (myId === reqId) blobUrl = ""; });
   });
 
-  const plainUrl  = $derived(plainThumbUrl(src));
-  const resolved  = $derived(isAuth ? (blobUrl || plainUrl) || undefined : plainUrl || undefined);
+  const plainUrl = $derived(plainThumbUrl(src));
+  const resolved = $derived(isAuth ? (blobUrl || plainUrl) || undefined : plainUrl || undefined);
 </script>
 
 <img src={resolved} {alt} class={cls} {loading} {decoding} {onerror} {...rest} />

@@ -93,7 +93,7 @@
 
   <div class="cover-wrap">
     <button class="cover-btn" onclick={() => manga && setPreviewManga(manga)} title="Quick preview" disabled={!manga}>
-      <Thumbnail src={resolvedCover(seriesState.activeManga?.id ?? manga?.id ?? 0, seriesState.activeManga?.thumbnailUrl ?? manga?.thumbnailUrl ?? "")} alt={seriesState.activeManga?.title ?? manga?.title ?? ""} class="cover" />
+      <Thumbnail src={resolvedCover(seriesState.activeManga?.id ?? manga?.id ?? 0, seriesState.activeManga?.thumbnailUrl ?? manga?.thumbnailUrl ?? "")} alt={seriesState.activeManga?.title ?? manga?.title ?? ""} class="cover" id={seriesState.activeManga?.id ?? manga?.id} />
     </button>
   </div>
 

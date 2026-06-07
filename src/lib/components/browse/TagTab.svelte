@@ -360,7 +360,7 @@
           {#each tag_mergedResults as m, i (m.id)}
             <button class="card" onclick={() => onPreview(m)}>
               <div class="coverWrap">
-                <Thumbnail src={m.thumbnailUrl} alt={m.title} class="cover" priority={i < 12 ? 12 - i : 0} />
+                <Thumbnail src={m.thumbnailUrl} alt={m.title} class="cover" priority={i < 12 ? 12 - i : 0} id={m.id} />
                 {#if m.inLibrary}<span class="inLibBadge">Saved</span>{/if}
               </div>
               <p class="cardTitle">{m.title}</p>

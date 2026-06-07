@@ -9,6 +9,7 @@ export interface RecommendedManga {
 
 const TOP_GENRES       = 6
 const TARGET_PER_GENRE = 20
+const FALLBACK_GENRES  = ['Action', 'Adventure', 'Fantasy', 'Romance', 'Comedy', 'Drama']
 
 export function topGenres(history: ReadSession[], libraryManga: Manga[]): string[] {
   const byId  = new Map(libraryManga.map(m => [m.id, m]))
@@ -16,8 +17,8 @@ export function topGenres(history: ReadSession[], libraryManga: Manga[]): string
 
   for (const session of history) {
     const manga = byId.get(session.mangaId)
-    if (!manga?.genre?.length) continue
-    for (const g of manga.genre) {
+    if (!manga?.tags?.length) continue
+    for (const g of manga.tags) {
       const key      = g.toLowerCase()
       const existing = tally.get(key)
       if (existing) existing.count++
@@ -25,10 +26,12 @@ export function topGenres(history: ReadSession[], libraryManga: Manga[]): string
     }
   }
 
-  return [...tally.values()]
+  const derived = [...tally.values()]
     .sort((a, b) => b.count - a.count)
     .slice(0, TOP_GENRES)
     .map(e => e.original)
+
+  return derived.length > 0 ? derived : FALLBACK_GENRES
 }
 
 export async function fetchRecommendations(
@@ -36,20 +39,22 @@ export async function fetchRecommendations(
   libraryManga: Manga[],
   signal?:      AbortSignal,
 ): Promise<RecommendedManga[]> {
-  if (!history.length || !libraryManga.length) return []
-
   const genres = topGenres(history, libraryManga)
-  if (!genres.length) return []
 
-  const adapter    = getAdapter()
+  const adapter    = getAdapter() as any
   const globalSeen = new Set<number>(libraryManga.map(m => m.id))
 
   const perGenre = await Promise.all(
     genres.map(async genre => {
       if (signal?.aborted) return []
       try {
-        const { items } = await adapter.getMangaList({ tags: [genre], inLibrary: false })
-        return items
+        const { items } = await adapter.getMangasByGenre(
+          { genre: { like: `%${genre}%` } },
+          TARGET_PER_GENRE,
+          0,
+          signal,
+        )
+        return items as Manga[]
       } catch {
         return []
       }
@@ -57,19 +62,21 @@ export async function fetchRecommendations(
   )
 
   const merged: Manga[] = []
-  for (const items of perGenre) {
+  outer: for (const items of perGenre) {
     for (const m of items) {
+      if (signal?.aborted) break outer
       if (globalSeen.has(m.id)) continue
       globalSeen.add(m.id)
       merged.push(m)
-      if (merged.length >= genres.length * TARGET_PER_GENRE) break
     }
   }
 
-  return merged.map(m => ({
-    manga: m,
-    matchedGenres: (m.genre ?? []).filter(g =>
-      genres.some(tg => tg.toLowerCase() === g.toLowerCase())
-    ),
-  }))
+  return merged.map(m => {
+    const mTagsLower = (m.tags ?? []).map(g => g.toLowerCase())
+    const matched    = genres.filter(g => mTagsLower.includes(g.toLowerCase()))
+    return {
+      manga:         m,
+      matchedGenres: matched.length > 0 ? matched : [genres[0]],
+    }
+  })
 }

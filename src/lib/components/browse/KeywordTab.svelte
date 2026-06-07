@@ -37,6 +37,8 @@
   let kw_inputEl:       HTMLInputElement | null = $state(null);
   let kw_abortCtrl:     AbortController | null = null;
   let kw_debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  let kw_localQuery     = $state(query);
+  let kw_pending        = $state(false);
 
   interface SourceResult {
     source:  Source;
@@ -57,18 +59,23 @@
     if (!loadingSources && pendingPrefill && allSources.length) {
       const q = pendingPrefill;
       onPrefillConsumed();
+      kw_localQuery = q;
       onQueryChange(q);
       kwDoSearch(q);
     }
   });
 
-  $effect(() => {
-    const q = query;
+  function kwHandleInput(value: string) {
+    kw_localQuery = value;
     if (kw_debounceTimer) clearTimeout(kw_debounceTimer);
-    if (!q.trim()) { kw_abortCtrl?.abort(); kw_results = []; return; }
-    kw_debounceTimer = setTimeout(() => kwDoSearch(q), 350);
-    return () => { if (kw_debounceTimer) clearTimeout(kw_debounceTimer); };
-  });
+    if (!value.trim()) { kw_abortCtrl?.abort(); kw_results = []; kw_pending = false; onQueryChange(""); return; }
+    kw_pending = true;
+    kw_debounceTimer = setTimeout(() => {
+      kw_pending = false;
+      onQueryChange(value);
+      kwDoSearch(value);
+    }, 2000);
+  }
 
   function kwGetVisibleSources(): Source[] {
     let srcs = allSources;
@@ -142,18 +149,17 @@
     </svg>
     <input
       bind:this={kw_inputEl}
-      value={query}
-      oninput={(e) => onQueryChange((e.target as HTMLInputElement).value)}
+      value={kw_localQuery}
+      oninput={(e) => kwHandleInput((e.target as HTMLInputElement).value)}
       class="searchInput"
       placeholder="Search across sources…"
-      use:focusOnMount
     />
-    {#if kw_anyLoading}
+    {#if kw_pending || kw_anyLoading}
       <svg width="13" height="13" viewBox="0 0 256 256" fill="currentColor" class="anim-spin" style="color:var(--text-faint);flex-shrink:0" aria-hidden="true">
         <path d="M232,128a104,104,0,0,1-208,0c0-41,23.81-78.36,60.66-95.27a8,8,0,0,1,6.68,14.54C60.15,61.59,40,93.27,40,128a88,88,0,0,0,176,0c0-34.73-20.15-66.41-51.34-80.73a8,8,0,0,1,6.68-14.54C208.19,49.64,232,87,232,128Z"/>
       </svg>
-    {:else if query}
-      <button class="clearBtn" title="Clear" onclick={() => { onQueryChange(""); kw_results = []; kw_inputEl?.focus(); }}>×</button>
+    {:else if kw_localQuery}
+      <button class="clearBtn" title="Clear" onclick={() => { kwHandleInput(""); kw_inputEl?.focus(); }}>×</button>
     {/if}
     {#if hasMultipleLangs}
       <button
@@ -193,7 +199,7 @@
   {/if}
 </div>
 
-{#if !query.trim()}
+{#if !kw_localQuery.trim()}
   {#if popularLoading && popularResults.length === 0}
     <div class="searchGrid">
       {#each Array(24) as _, i (i)}<div class="skCard"><div class="skeleton skCover"></div></div>{/each}
@@ -206,7 +212,7 @@
       {#each popularResults as m (m.id)}
         <button class="srchCard" onclick={() => onPreview(m)}>
           <div class="srchCoverWrap">
-            <Thumbnail src={m.thumbnailUrl} alt={m.title} class="cover" priority={m._priority} />
+            <Thumbnail src={m.thumbnailUrl} alt={m.title} class="cover" priority={m._priority} id={m.id} />
             <div class="srchGradient"></div>
             {#if m.inLibrary}<span class="inLibBadge">Saved</span>{/if}
             <div class="srchFooter">
@@ -235,16 +241,20 @@
       </p>
     </div>
   {/if}
+{:else if kw_pending}
+  <div class="searchGrid">
+    {#each Array(12) as _, i (i)}<div class="skCard"><div class="skeleton skCover"></div></div>{/each}
+  </div>
 {:else}
   {#if kw_flatResults.length > 0}
     <div class="searchHeader">
-      <span class="searchLabel">{kw_flatResults.length} result{kw_flatResults.length !== 1 ? "s" : ""}</span>
+      <span class="searchLabel">{kw_flatResults.length} result{kw_flatResults.length !== 1 ? "s" : ""} for "{kw_localQuery.trim()}"</span>
     </div>
     <div class="searchGrid">
       {#each kw_flatResults as m (m.id)}
         <button class="srchCard" onclick={() => onPreview(m)}>
           <div class="srchCoverWrap">
-            <Thumbnail src={m.thumbnailUrl} alt={m.title} class="cover" priority={m._priority} />
+            <Thumbnail src={m.thumbnailUrl} alt={m.title} class="cover" priority={m._priority} id={m.id} />
             <div class="srchGradient"></div>
             {#if m.inLibrary}<span class="inLibBadge">Saved</span>{/if}
             <div class="srchFooter">
@@ -264,15 +274,14 @@
     </div>
   {:else if kw_allDone && !kw_hasResults}
     <div class="empty">
-      <p class="emptyText">No results for "{query.trim()}"</p>
+      <svg width="36" height="36" viewBox="0 0 256 256" fill="currentColor" class="emptyIcon" aria-hidden="true">
+        <path d="M229.66,218.34l-50.07-50.07a88,88,0,1,0-11.31,11.31l50.06,50.07a8,8,0,0,0,11.32-11.31ZM40,112a72,72,0,1,1,72,72A72.08,72.08,0,0,1,40,112Z"/>
+      </svg>
+      <p class="emptyText">No results for "{kw_localQuery.trim()}"</p>
       <p class="emptyHint">Try a different spelling or fewer words</p>
     </div>
   {/if}
 {/if}
-
-<script module>
-  function focusOnMount(node: HTMLElement) { node.focus(); }
-</script>
 
 <style>
   .keywordBar    { padding: var(--sp-3) var(--sp-4) var(--sp-2); flex-shrink: 0; display: flex; flex-direction: column; gap: var(--sp-2); }
