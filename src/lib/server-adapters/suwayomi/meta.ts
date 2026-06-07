@@ -37,3 +37,47 @@ export const GET_METAS = `
     }
   }
 `
+
+export const SET_SOCKS_PROXY = `
+  mutation SetSocksProxy(
+    $socksProxyEnabled: Boolean!
+    $socksProxyHost: String!
+    $socksProxyPort: String!
+    $socksProxyVersion: Int!
+    $socksProxyUsername: String!
+    $socksProxyPassword: String!
+  ) {
+    setSettings(input: { settings: {
+      socksProxyEnabled: $socksProxyEnabled
+      socksProxyHost: $socksProxyHost
+      socksProxyPort: $socksProxyPort
+      socksProxyVersion: $socksProxyVersion
+      socksProxyUsername: $socksProxyUsername
+      socksProxyPassword: $socksProxyPassword
+    }}) {
+      settings { socksProxyEnabled socksProxyHost socksProxyPort }
+    }
+  }
+`
+
+export const SET_FLARE_SOLVERR = `
+  mutation SetFlareSolverr(
+    $flareSolverrEnabled: Boolean!
+    $flareSolverrUrl: String!
+    $flareSolverrTimeout: Int!
+    $flareSolverrSessionName: String!
+    $flareSolverrSessionTtl: Int!
+    $flareSolverrAsResponseFallback: Boolean!
+  ) {
+    setSettings(input: { settings: {
+      flareSolverrEnabled: $flareSolverrEnabled
+      flareSolverrUrl: $flareSolverrUrl
+      flareSolverrTimeout: $flareSolverrTimeout
+      flareSolverrSessionName: $flareSolverrSessionName
+      flareSolverrSessionTtl: $flareSolverrSessionTtl
+      flareSolverrAsResponseFallback: $flareSolverrAsResponseFallback
+    }}) {
+      settings { flareSolverrEnabled flareSolverrUrl }
+    }
+  }
+`

@@ -12,6 +12,7 @@
   import { clampZoom, captureZoomAnchor, restoreZoomAnchor } from "$lib/components/reader/lib/zoomHelpers";
   import { loadChapter, scheduleResumeDismiss }              from "$lib/components/reader/lib/chapterLoader";
   import { historyState }                                    from "$lib/state/history.svelte";
+  import { getAdapter }                                      from "$lib/request-manager";
   import type { ReaderSettings }                             from "$lib/state/reader.svelte";
   import ReaderControls                                      from "$lib/components/reader/ReaderControls.svelte";
   import PageView                                            from "$lib/components/reader/PageView.svelte";
@@ -380,19 +381,7 @@
             const toQueue = list.slice(idx + 1, idx + 1 + prefs.downloadAhead)
               .filter(c => !c.downloaded && !c.read)
               .map(c => c.id);
-            if (toQueue.length) {
-              const DL = `mutation EnqueueDl($ids: [Int!]!) { enqueueChaptersDownloads(input: { ids: $ids }) { downloadStatus { queue { chapter { id } } } } }`;
-              const base    = settingsState.settings.serverUrl ?? "http://localhost:4567";
-              const headers: Record<string, string> = { "Content-Type": "application/json" };
-              const mode    = settingsState.settings.serverAuthMode ?? "NONE";
-              if (mode === "BASIC_AUTH") {
-                const u = settingsState.settings.serverAuthUser?.trim() ?? "";
-                const p = settingsState.settings.serverAuthPass?.trim() ?? "";
-                if (u && p) headers["Authorization"] = `Basic ${btoa(`${u}:${p}`)}`;
-              }
-              fetch(`${base}/api/graphql`, { method: "POST", headers, body: JSON.stringify({ query: DL, variables: { ids: toQueue } }) })
-                .catch(console.error);
-            }
+            if (toQueue.length) getAdapter().enqueueDownloads(toQueue.map(String)).catch(console.error);
           }
         }
       });

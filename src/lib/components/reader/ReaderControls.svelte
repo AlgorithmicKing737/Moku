@@ -3,10 +3,11 @@
     X, CaretLeft, CaretRight, CaretUp, CaretDown,
     MagnifyingGlassMinus, MagnifyingGlassPlus,
     Bookmark, MapPin, Download, Check, GearSix, Sliders,
-    ArrowsOut, ArrowsIn,
+    ArrowsOut, ArrowsIn, Minus,
   } from "phosphor-svelte";
   import { readerState, MARKER_COLORS, MARKER_COLOR_HEX, ZOOM_STEP, ZOOM_MIN, ZOOM_MAX } from "$lib/state/reader.svelte";
-  import { settingsState }  from "$lib/state/settings.svelte";
+  import { getAdapter }        from "$lib/request-manager";
+  import { platformService }   from "$lib/platform-service";
   import { fly }               from "svelte/transition";
   import { cubicOut, cubicIn } from "svelte/easing";
   import type { Chapter }      from "$lib/types";
@@ -52,29 +53,19 @@
 
   const queueable = $derived(adjacent.remaining.filter(c => !c.downloaded));
 
-  async function gqlMutation(query: string, variables: Record<string, unknown>): Promise<void> {
-    const base = settingsState.settings.serverUrl ?? "http://localhost:4567";
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    const mode = settingsState.settings.serverAuthMode ?? "NONE";
-    if (mode === "BASIC_AUTH") {
-      const u = settingsState.settings.serverAuthUser?.trim() ?? "";
-      const p = settingsState.settings.serverAuthPass?.trim() ?? "";
-      if (u && p) headers["Authorization"] = `Basic ${btoa(`${u}:${p}`)}`;
-    }
-    const res = await fetch(`${base}/api/graphql`, { method: "POST", headers, body: JSON.stringify({ query, variables }) });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const json = await res.json();
-    if (json.errors?.length) throw new Error(json.errors[0].message);
-  }
-
-  const ENQUEUE_ONE  = `mutation EnqueueOne($id: Int!) { fetchChapterPages(input: { chapterId: $id }) { chapter { id } } }`;
-  const ENQUEUE_MANY = `mutation EnqueueMany($ids: [Int!]!) { enqueueChaptersDownloads(input: { ids: $ids }) { downloadStatus { queue { chapter { id } } } } }`;
-
   async function runDl(fn: () => Promise<void>) {
     readerState.dlBusy = true;
     try { await fn(); } catch (e) { console.error(e); }
     readerState.dlBusy = false;
     readerState.dlOpen = false;
+  }
+
+  function enqueueOne(chapterId: number) {
+    return getAdapter().enqueueDownload(String(chapterId));
+  }
+
+  function enqueueMany(chapterIds: number[]) {
+    return getAdapter().enqueueDownloads(chapterIds.map(String));
   }
 
   const isVertical  = $derived(barPosition === "left" || barPosition === "right");
@@ -96,9 +87,10 @@
     onRestoreZoomAnchor();
   }
 
+  const isTauri = platformService.platform === "tauri";
+
   async function toggleFullscreen() {
-    if (!document.fullscreenElement) await document.documentElement.requestFullscreen();
-    else await document.exitFullscreen();
+    await platformService.toggleFullscreen();
   }
 
   function closeAllPopovers() {
@@ -337,6 +329,16 @@
               <span>Fullscreen</span>
             {/if}
           </button>
+          {#if isTauri}
+            <button class="action-row" onclick={() => { readerState.actionsOpen = false; platformService.minimize(); }}>
+              <Minus size={13} weight="regular" />
+              <span>Minimize</span>
+            </button>
+            <button class="action-row action-row-danger" onclick={() => { readerState.actionsOpen = false; platformService.close(); }}>
+              <X size={13} weight="regular" />
+              <span>Close window</span>
+            </button>
+          {/if}
         </div>
       {/if}
 
@@ -345,13 +347,13 @@
         <div class="popover dl-popover popover-{popoverSide}" role="presentation" onclick={(e) => e.stopPropagation()}>
           <p class="dl-title">Download</p>
           <button class="dl-option" disabled={readerState.dlBusy || !!chapter.downloaded}
-            onclick={() => runDl(() => gqlMutation(ENQUEUE_ONE, { id: chapter.id }))}>
+            onclick={() => runDl(() => enqueueOne(chapter.id))}>
             This chapter
             <span class="dl-sub">{chapter.downloaded ? "Already downloaded" : chapter.name}</span>
           </button>
           <div class="dl-row">
             <button class="dl-option" disabled={readerState.dlBusy || queueable.length === 0}
-              onclick={() => runDl(() => gqlMutation(ENQUEUE_MANY, { ids: queueable.slice(0, readerState.nextN).map(c => c.id) }))}>
+              onclick={() => runDl(() => enqueueMany(queueable.slice(0, readerState.nextN).map(c => c.id)))}>
               Next chapters
               <span class="dl-sub">{Math.min(readerState.nextN, queueable.length)} not yet downloaded</span>
             </button>
@@ -362,7 +364,7 @@
             </div>
           </div>
           <button class="dl-option" disabled={readerState.dlBusy || queueable.length === 0}
-            onclick={() => runDl(() => gqlMutation(ENQUEUE_MANY, { ids: queueable.map(c => c.id) }))}>
+            onclick={() => runDl(() => enqueueMany(queueable.map(c => c.id)))}>
             All remaining
             <span class="dl-sub">{queueable.length} not yet downloaded</span>
           </button>
@@ -661,8 +663,10 @@
     transition: background var(--t-fast), color var(--t-fast);
   }
   .action-row:hover { background: var(--bg-overlay); color: var(--text-primary); }
+  .action-row.action-row-danger:hover { background: color-mix(in srgb, #c0392b 15%, transparent); color: var(--color-error, #e57373); }
   .action-row svg, .action-row :global(svg) { flex-shrink: 0; color: var(--text-faint); }
   .action-row:hover svg, .action-row:hover :global(svg) { color: var(--text-muted); }
+  .action-row-danger:hover svg, .action-row-danger:hover :global(svg) { color: var(--color-error, #e57373); }
 
   .action-divider { height: 1px; background: var(--border-dim); margin: var(--sp-1) 0; }
 

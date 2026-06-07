@@ -2,9 +2,9 @@
   import { getAdapter }   from '$lib/request-manager'
   import { libraryState } from '$lib/state/library.svelte'
   import type { LibrarySortOption, LibraryContentFilter, LibraryStatusFilter } from '$lib/state/library.svelte'
-  import { startLibraryUpdate } from '$lib/components/library/lib/libraryUpdater'
   import { addToast }           from '$lib/state/notifications.svelte'
   import { updateSettings, settingsState } from '$lib/state/settings.svelte'
+  import { readerState } from '$lib/state/reader.svelte'
   import { goto }               from '$app/navigation'
   import LibraryToolbar  from '$lib/components/library/LibraryToolbar.svelte'
   import LibraryGrid     from '$lib/components/library/LibraryGrid.svelte'
@@ -23,13 +23,17 @@
   const DT_TAB         = 'application/x-moku-tab'
   const COMPLETED_NAME = 'Completed'
 
-  let cancelUpdate:     (() => void) | null = null
+  let statusPollTimer:  ReturnType<typeof setTimeout> | null = null
   let refreshDoneTimer: ReturnType<typeof setTimeout> | null = null
+
+  const UPDATE_STATUS_POLL_MS = 2_000
 
   let ctx:      { x: number; y: number; manga: Manga } | null = $state(null)
   let emptyCtx: { x: number; y: number } | null              = $state(null)
 
-  let bulkWorking:    boolean      = $state(false)
+  let bulkWorking:     boolean      = $state(false)
+  let sortPanelOpen:   boolean      = $state(false)
+  let filterPanelOpen: boolean      = $state(false)
   let activeDragKind: 'tab' | null = $state(null)
   let dragInsertIdx                = $state(-1)
   let dragTabId:      string|null  = $state(null)
@@ -42,6 +46,9 @@
   $effect(() => { libraryState.syncFromSettings(settingsState.settings) })
   $effect(() => { libraryState.tab; libraryState.exitSelect() })
   $effect(() => { libraryState.guardTab() })
+  $effect(() => {
+    if (readerState.activeManga === null) loadLibrary()
+  })
 
   async function loadLibrary() {
     libraryState.loading = true
@@ -197,33 +204,57 @@
     } finally { bulkWorking = false }
   }
 
+  function stopStatusPolling() {
+    if (!statusPollTimer) return
+    clearTimeout(statusPollTimer)
+    statusPollTimer = null
+  }
+
   async function startRefresh() {
     if (libraryState.refreshing) return
     libraryState.refreshing = true
     libraryState.refreshProgress = { finished: 0, total: 0 }
 
-    cancelUpdate = startLibraryUpdate({
-      onProgress(p) { libraryState.refreshProgress = p },
-      async onDone({ newChapters, totalUpdated }) {
-        cancelUpdate = null
-        await loadLibrary()
-        libraryState.refreshing = false
-        libraryState.refreshDone = true
-        if (refreshDoneTimer) clearTimeout(refreshDoneTimer)
-        refreshDoneTimer = setTimeout(() => { libraryState.refreshDone = false }, 2500)
-        if (newChapters > 0) {
-          addToast({ kind: 'success', title: 'Library updated', body: `${newChapters} new chapter${newChapters !== 1 ? 's' : ''} across ${totalUpdated} series` })
-        } else {
-          addToast({ kind: 'info', title: 'Already up to date' })
+    try {
+      await getAdapter().checkForUpdates()
+    } catch (e) {
+      libraryState.refreshing = false
+      addToast({ kind: 'error', title: 'Update failed', body: String(e) })
+      return
+    }
+
+    const tick = async () => {
+      statusPollTimer = null
+      try {
+        const statusRes = await getAdapter().getLibraryUpdateStatus()
+        const wasRunning = libraryState.refreshing
+
+        libraryState.refreshProgress = {
+          finished: statusRes.finishedJobs ?? 0,
+          total:    statusRes.totalJobs    ?? 0,
         }
-      },
-      onError() { libraryState.refreshing = false; cancelUpdate = null },
-    })
+
+        if (statusRes.isRunning) {
+          statusPollTimer = setTimeout(tick, UPDATE_STATUS_POLL_MS)
+        } else if (wasRunning) {
+          libraryState.refreshing = false
+          libraryState.refreshDone = true
+          if (refreshDoneTimer) clearTimeout(refreshDoneTimer)
+          refreshDoneTimer = setTimeout(() => { libraryState.refreshDone = false }, 2500)
+          await loadLibrary()
+          addToast({ kind: 'info', title: 'Library updated' })
+        }
+      } catch {
+        if (libraryState.refreshing) statusPollTimer = setTimeout(tick, UPDATE_STATUS_POLL_MS)
+      }
+    }
+
+    statusPollTimer = setTimeout(tick, UPDATE_STATUS_POLL_MS)
   }
 
   async function cancelRefresh() {
     if (!libraryState.refreshing) return
-    cancelUpdate?.(); cancelUpdate = null
+    stopStatusPolling()
     try { await getAdapter().stopLibraryUpdate() } catch {}
     libraryState.refreshing = false
     libraryState.refreshProgress = { finished: 0, total: 0 }
@@ -370,7 +401,7 @@
       visibleCategories={libraryState.visibleCategories}
       visibleTabIds={libraryState.visibleTabIds}
       counts={libraryState.counts}
-      query={libraryState.filter.query}
+      search={libraryState.filter.query}
       refreshing={libraryState.refreshing}
       refreshProgress={libraryState.refreshProgress}
       refreshDone={libraryState.refreshDone}
@@ -379,13 +410,17 @@
       {dragInsertIdx}
       {dragTabId}
       {dragOverTabId}
+      {sortPanelOpen}
+      {filterPanelOpen}
       onTabChange={(t) => libraryState.tab = t}
-      onQuery={(q) => libraryState.filter.query = q}
+      onSearchChange={(q) => libraryState.filter.query = q}
       onSortChange={(mode) => libraryState.setTabSort(libraryState.tab, mode)}
       onSortDirToggle={() => libraryState.toggleTabSortDir(libraryState.tab)}
+      onSortPanelToggle={() => sortPanelOpen = !sortPanelOpen}
       onStatusChange={(s) => libraryState.setTabStatus(libraryState.tab, s)}
       onFilterToggle={(f) => libraryState.toggleTabFilter(libraryState.tab, f)}
       onFiltersClear={() => libraryState.clearTabFilters(libraryState.tab)}
+      onFilterPanelToggle={() => filterPanelOpen = !filterPanelOpen}
       onRefresh={startRefresh}
       onCancelRefresh={cancelRefresh}
       onRefreshCategory={refreshCategory}

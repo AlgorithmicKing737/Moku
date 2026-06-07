@@ -149,7 +149,7 @@ class LibraryState {
 
     const f = this.tabFilters[tab] ?? {};
     if (f.unread)     items = items.filter(m => (m.unreadCount ?? 0) > 0);
-    if (f.started)    items = items.filter(m => (m.unreadCount ?? 0) > 0 && (m.chapters?.totalCount ?? 0) > (m.unreadCount ?? 0));
+    if (f.started)    items = items.filter(m => (m.unreadCount ?? 0) > 0 && (m.totalChapters ?? 0) > (m.unreadCount ?? 0));
     if (f.downloaded) items = items.filter(m => (m.downloadCount ?? 0) > 0);
     if (f.bookmarked) items = items.filter(m => (m.bookmarkCount ?? 0) > 0);
 

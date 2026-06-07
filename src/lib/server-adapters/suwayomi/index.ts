@@ -23,12 +23,14 @@ import {
   GET_LIBRARY,
   GET_MANGA,
   GET_CATEGORIES,
+  GET_DOWNLOADS_PATH,
   FETCH_MANGA,
   UPDATE_MANGA,
   UPDATE_MANGAS,
   UPDATE_MANGA_CATEGORIES,
   UPDATE_MANGAS_CATEGORIES,
   CREATE_CATEGORY,
+  UPDATE_CATEGORY,
   DELETE_CATEGORY,
   UPDATE_CATEGORY_ORDER,
   UPDATE_CATEGORY_MANGA,
@@ -37,6 +39,8 @@ import {
   UPDATE_STOP,
   SET_MANGA_META,
   DELETE_MANGA_META,
+  CREATE_BACKUP,
+  RESTORE_BACKUP,
   FETCH_SOURCE_MANGA,
   LIBRARY_UPDATE_STATUS,
   MANGAS_BY_GENRE,
@@ -64,16 +68,26 @@ import {
   START_DOWNLOADER,
   STOP_DOWNLOADER,
   CLEAR_DOWNLOADER,
+  SET_DOWNLOADS_PATH,
+  SET_LOCAL_SOURCE_PATH,
 } from './downloads'
 import {
   GET_EXTENSIONS,
   GET_SOURCES,
+  GET_SOURCE_SETTINGS,
+  GET_SETTINGS,
   GET_SERVER_SECURITY,
   FETCH_EXTENSIONS,
   UPDATE_EXTENSION,
   UPDATE_EXTENSIONS,
   INSTALL_EXTERNAL_EXTENSION,
+  UPDATE_SOURCE_PREFERENCE,
+  SET_SOURCE_META,
+  DELETE_SOURCE_META,
+  SET_EXTENSION_REPOS,
   SET_SERVER_AUTH,
+  CLEAR_CACHED_IMAGES,
+  RESET_SETTINGS,
 } from './extensions'
 import {
   GET_TRACKERS,
@@ -85,10 +99,17 @@ import {
   UNLINK_TRACK,
   TRACK_PROGRESS,
   UPDATE_TRACK,
+  LOGIN_TRACKER_CREDENTIALS,
+  LOGOUT_TRACKER,
 } from './tracking'
 import {
   GET_ABOUT_SERVER,
   GET_ABOUT_WEBUI,
+  CHECK_FOR_SERVER_UPDATES,
+  GET_META,
+  GET_METAS,
+  SET_SOCKS_PROXY,
+  SET_FLARE_SOLVERR,
 } from './meta'
 import {
   type GQLResponse,
@@ -99,50 +120,6 @@ import {
   mapCategory,
 } from './types'
 import { initPageCache, clearPageCache as _clearPageCache } from './pageCache'
-
-const SET_SOCKS_PROXY = `
-  mutation SetSocksProxy(
-    $socksProxyEnabled: Boolean!
-    $socksProxyHost: String!
-    $socksProxyPort: String!
-    $socksProxyVersion: Int!
-    $socksProxyUsername: String!
-    $socksProxyPassword: String!
-  ) {
-    setSettings(input: { settings: {
-      socksProxyEnabled: $socksProxyEnabled
-      socksProxyHost: $socksProxyHost
-      socksProxyPort: $socksProxyPort
-      socksProxyVersion: $socksProxyVersion
-      socksProxyUsername: $socksProxyUsername
-      socksProxyPassword: $socksProxyPassword
-    }}) {
-      settings { socksProxyEnabled socksProxyHost socksProxyPort }
-    }
-  }
-`
-
-const SET_FLARE_SOLVERR = `
-  mutation SetFlareSolverr(
-    $flareSolverrEnabled: Boolean!
-    $flareSolverrUrl: String!
-    $flareSolverrTimeout: Int!
-    $flareSolverrSessionName: String!
-    $flareSolverrSessionTtl: Int!
-    $flareSolverrAsResponseFallback: Boolean!
-  ) {
-    setSettings(input: { settings: {
-      flareSolverrEnabled: $flareSolverrEnabled
-      flareSolverrUrl: $flareSolverrUrl
-      flareSolverrTimeout: $flareSolverrTimeout
-      flareSolverrSessionName: $flareSolverrSessionName
-      flareSolverrSessionTtl: $flareSolverrSessionTtl
-      flareSolverrAsResponseFallback: $flareSolverrAsResponseFallback
-    }}) {
-      settings { flareSolverrEnabled flareSolverrUrl }
-    }
-  }
-`
 
 type RawQueueItem = Record<string, unknown>
 

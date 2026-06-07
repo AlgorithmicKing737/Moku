@@ -79,15 +79,6 @@ export const CLEAR_DOWNLOADER = `
   }
 `
 
-export const FETCH_SOURCE_MANGA = `
-  mutation FetchSourceManga($source: LongString!, $type: FetchSourceMangaType!, $page: Int!, $query: String, $filters: [FilterChangeInput!]) {
-    fetchSourceManga(input: { source: $source, type: $type, page: $page, query: $query, filters: $filters }) {
-      mangas { id title thumbnailUrl inLibrary }
-      hasNextPage
-    }
-  }
-`
-
 export const SET_DOWNLOADS_PATH = `
   mutation SetDownloadsPath($path: String!) {
     setSettings(input: { settings: { downloadsPath: $path } }) {

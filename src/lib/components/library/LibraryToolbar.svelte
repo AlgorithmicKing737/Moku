@@ -212,14 +212,14 @@
     </div>
 
     <LibraryFilters
-      {tabStatus}
-      {tabFilters}
-      {hasActiveFilters}
-      {filterPanelOpen}
+      status={tabStatus}
+      filters={tabFilters}
+      hasActive={hasActiveFilters}
+      open={filterPanelOpen}
+      onToggle={onFilterPanelToggle}
       {onStatusChange}
       {onFilterToggle}
-      {onFiltersClear}
-      {onFilterPanelToggle}
+      onClear={onFiltersClear}
     />
   </div>
 </div>
