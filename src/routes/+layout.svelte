@@ -158,30 +158,33 @@
     if (appState.status !== 'ready') return
     // capture phase so events from any component — including modals — reset the timer
     const onActivity = () => resetIdleTimer()
-    document.addEventListener('mousemove',   onActivity, true)
-    document.addEventListener('keydown',     onActivity, true)
-    document.addEventListener('touchstart',  onActivity, true)
-    document.addEventListener('touchmove',   onActivity, true)   // sustained touch-scroll in reader
-    document.addEventListener('wheel',       onActivity, true)   // mouse-wheel / trackpad scroll in reader
-    document.addEventListener('click',       onActivity, true)
+    document.addEventListener('mousemove',  onActivity, true)
+    document.addEventListener('keydown',    onActivity, true)
+    document.addEventListener('touchstart', onActivity, true)
+    // passive:true tells the browser it can render scroll frames without waiting for the handler
+    document.addEventListener('touchmove',  onActivity, { capture: true, passive: true })
+    document.addEventListener('wheel',      onActivity, { capture: true, passive: true })
+    document.addEventListener('click',      onActivity, true)
     return () => {
-      document.removeEventListener('mousemove',   onActivity, true)
-      document.removeEventListener('keydown',     onActivity, true)
-      document.removeEventListener('touchstart',  onActivity, true)
-      document.removeEventListener('touchmove',   onActivity, true)
-      document.removeEventListener('wheel',       onActivity, true)
-      document.removeEventListener('click',       onActivity, true)
+      document.removeEventListener('mousemove',  onActivity, true)
+      document.removeEventListener('keydown',    onActivity, true)
+      document.removeEventListener('touchstart', onActivity, true)
+      document.removeEventListener('touchmove',  onActivity, { capture: true })
+      document.removeEventListener('wheel',      onActivity, { capture: true })
+      document.removeEventListener('click',      onActivity, true)
     }
   })
 
   function resetIdleTimer() {
-    if (idleTimer) clearTimeout(idleTimer)
-    appState.idleSplash = false
+    if (idleTimer) { clearTimeout(idleTimer); idleTimer = null }
+    if (appState.idleSplash) appState.idleSplash = false
     // read the setting live so changes take effect without a restart
-    const timeoutMs = (settingsState.settings.idleTimeoutMin ?? 5) * 60_000
+    // 0 means "Never" — skip the timer entirely
+    const mins = settingsState.settings.idleTimeoutMin ?? 5
+    if (mins === 0) return
     idleTimer = setTimeout(() => {
       if (appState.status === 'ready') appState.idleSplash = true
-    }, timeoutMs)
+    }, mins * 60_000)
   }
 
   function onIdleDismiss() { appState.idleSplash = false; resetIdleTimer() }
