@@ -145,7 +145,7 @@ class ReaderState {
   addBookmark(entry: Omit<BookmarkEntry, "savedAt">) {
     this.bookmarks = [
       { ...entry, savedAt: Date.now() },
-      ...this.bookmarks.filter(b => b.chapterId !== entry.chapterId),
+      ...this.bookmarks.filter(b => b.mangaId !== entry.mangaId),
     ].slice(0, 200);
   }
 

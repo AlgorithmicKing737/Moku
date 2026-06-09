@@ -2,8 +2,8 @@
   moku = "0.9.4";
 
   suwayomi = {
-    version = "2.1.2087";
-    hash = "sha256-9YmkImdCUjlME7KJqci+aRkFv1g++39NXxUBrl6R5rM=";
+    version = "2.2.2196";
+    hash = "sha256-jnJEwmlFZmGodwX3RvDYcnV3Cql2urfGkg5NUT6Xw/Y=";
   };
 
   frontend = {
