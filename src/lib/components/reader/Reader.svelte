@@ -216,6 +216,7 @@
     ? () => goForward(style, adjacent, lastPage, maybeMarkCurrentRead, startAtLast)
     : () => goBack(style, adjacent, startAtLast));
 
+  // clear Discord presence before closing
   function handleCloseReader() {
     clearReading().catch(() => {});
     readerState.closeReader();
@@ -314,7 +315,7 @@
           ch.id, ch.name, readerState.pageNumber,
         );
         loadChapter(ch.id, useBlob, abortCtrl, startAtLastPageRef, markedRead, adjacent);
-        setReading(manga, ch).catch(() => {});
+        setReading(manga, ch).catch(() => {});  // update Discord presence to show current chapter
       });
     }
   });
