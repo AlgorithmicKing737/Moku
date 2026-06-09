@@ -7,7 +7,7 @@
   import { settingsState, loadSettingsIntoState, updateSettings }       from '$lib/state/settings.svelte'
   import { applyTheme, mountSystemThemeSync }                           from '$lib/core/theme'
   import { platformService }                                            from '$lib/platform-service'
-  import * as discord                                                   from '$lib/core/discord'
+  import { initRpc, setIdle, destroyRpc }                                from '$lib/core/discord'
   import SplashScreen                                                   from '$lib/components/chrome/SplashScreen.svelte'
   import AuthGate                                                       from '$lib/components/chrome/AuthGate.svelte'
   import Sidebar                                                        from '$lib/components/chrome/Sidebar.svelte'
@@ -107,9 +107,11 @@
       isTauri && settingsState.settings.autoStartServer ? 2000 : 100,
     )
 
+    let discordInitialized = false
     if (settingsState.settings.discordRpc) {
-      await discord.initRpc()
-      await discord.setIdle()
+      await initRpc()
+      await setIdle()
+      discordInitialized = true
     }
 
     polling = true
@@ -118,7 +120,7 @@
     return () => {
       polling = false
       if (pollTimer !== null) { clearTimeout(pollTimer); pollTimer = null }
-      discord.destroyRpc()
+      if (discordInitialized) destroyRpc()
       platformService.destroy()
     }
   })
