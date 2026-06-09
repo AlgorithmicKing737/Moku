@@ -177,8 +177,6 @@
 
   function resetIdleTimer() {
     if (idleTimer) { clearTimeout(idleTimer); idleTimer = null }
-    if (appState.idleSplash) appState.idleSplash = false
-    // read the setting live so changes take effect without a restart
     // 0 means "Never" — skip the timer entirely
     const mins = settingsState.settings.idleTimeoutMin ?? 5
     if (mins === 0) return
