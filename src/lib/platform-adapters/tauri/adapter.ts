@@ -3,6 +3,7 @@ import { getCurrentWindow }                                from '@tauri-apps/api
 import { listen }                                          from '@tauri-apps/api/event'
 import { open }                                            from '@tauri-apps/plugin-dialog'
 import { readFile, writeFile }                             from '@tauri-apps/plugin-fs'
+import { fetch as tauriFetch }                             from '@tauri-apps/plugin-http'
 import { open as openUrl }                                 from '@tauri-apps/plugin-shell'
 import { getVersion }                                      from '@tauri-apps/api/app'
 import { connect, disconnect, setActivity, clearActivity } from 'tauri-plugin-discord-rpc-api'
@@ -114,6 +115,12 @@ export class TauriAdapter implements PlatformAdapter {
 
   async getAutoBackupDir(): Promise<string> {
     return invoke('get_auto_backup_dir')
+  }
+
+  async fetchImage(url: string, headers: Record<string, string>): Promise<Blob> {
+    const res = await tauriFetch(url, { method: 'GET', headers })
+    if (!res.ok) throw new Error(`${res.status}`)
+    return res.blob()
   }
 
   async launchServer(config: ServerLaunchConfig): Promise<void> {

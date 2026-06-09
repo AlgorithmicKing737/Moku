@@ -34,18 +34,31 @@
 
   const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 
-  let splashVisible   = $state(true)
-  let bypassed        = $state(false)
-  let themeEditorOpen = $state(false)
-  let themeEditorId   = $state<string | null>(null)
+  let _splashDismissed = $state(false)
+  let bypassed         = $state(false)
+  let themeEditorOpen  = $state(false)
+  let themeEditorId    = $state<string | null>(null)
+
+  const splashVisible = $derived(
+    !_splashDismissed ||
+    appState.status === 'booting' ||
+    appState.status === 'locked'  ||
+    appState.status === 'error'   ||
+    appState.status === 'auth'
+  )
 
   const ringFull = $derived(appState.status === 'ready')
 
   const showApp = $derived(
-    appState.status === 'ready' ||
-    appState.status === 'auth'  ||
-    bypassed
+    !splashVisible && (
+      appState.status === 'ready' ||
+      bypassed
+    )
   )
+
+  function onSplashReady()  { _splashDismissed = true }
+  function onSplashUnlock() { appState.status = 'ready'; _splashDismissed = true }
+  function onSplashBypass() { bypassed = true; _splashDismissed = true }
 
   const isReaderRoute       = $derived($page.url.pathname.startsWith('/reader'))
   const readerContainerized = $derived(settingsState.settings.readerContainerized ?? false)
@@ -127,10 +140,11 @@
     )
   })
 
-  function onSplashReady()   { splashVisible = false }
-  function onSplashUnlock()  { appState.status = 'ready'; splashVisible = false }
-  function onSplashBypass()  { bypassed = true; splashVisible = false }
-  function onIdleDismiss()   { appState.idleSplash = false }
+  $effect(() => {
+    if (appState.status === 'booting') _splashDismissed = false
+  })
+
+  function onIdleDismiss() { appState.idleSplash = false }
 
   function onSplashRetry() {
     import('$lib/state/boot.svelte').then(({ retryBoot }) => {

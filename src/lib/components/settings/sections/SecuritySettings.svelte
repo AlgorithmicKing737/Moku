@@ -1,7 +1,8 @@
 <script lang="ts">
   import { settingsState, updateSettings } from '$lib/state/settings.svelte'
   import { requestManager } from '$lib/request-manager'
-  import { authSession, loginUI } from '$lib/core/auth'
+  import { retryBoot } from '$lib/state/boot.svelte'
+  import { authSession, configureAuth } from '$lib/core/auth'
 
   interface Props { selectOpen: string | null; toggleSelect: (id: string) => void }
   let { selectOpen, toggleSelect }: Props = $props()
@@ -13,9 +14,15 @@
   let secSaved      = $state<string | null>(null)
   let secLoaded     = $state(false)
 
-  let authMode     = $state(settingsState.settings.serverAuthMode ?? 'NONE')
+  function normalizeForUI(mode: string | undefined): 'NONE' | 'BASIC_AUTH' | 'UI_LOGIN' {
+    if (mode === 'BASIC_AUTH' || mode === 'UI_LOGIN') return mode
+    return 'NONE'
+  }
+
+  let authMode     = $state(normalizeForUI(settingsState.settings.serverAuthMode))
   let authUsername = $state(settingsState.settings.serverAuthUser ?? '')
   let authPassword = $state('')
+  let authDirty    = $state(false)
 
   let socksEnabled  = $state(settingsState.settings.socksProxyEnabled ?? false)
   let socksHost     = $state(settingsState.settings.socksProxyHost ?? '')
@@ -60,28 +67,23 @@
     setTimeout(() => lockSaved = false, 2000)
   }
 
-  function normalizeAuthMode(mode: string): 'NONE' | 'BASIC_AUTH' | 'UI_LOGIN' {
-    if (mode === 'BASIC_AUTH' || mode === 'UI_LOGIN' || mode === 'NONE') return mode
-    return 'NONE'
-  }
-
   function showSaved(key: string) {
     secSaved = key; secError = null
     setTimeout(() => { if (secSaved === key) secSaved = null }, 2000)
   }
 
   $effect(() => {
-    if (!secLoaded) { secLoaded = true; authSession.clearTokens(); loadServerSecurity() }
+    if (!secLoaded) { secLoaded = true; loadServerSecurity() }
   })
 
   async function loadServerSecurity() {
     try {
       const s = await requestManager.extensions.getServerSecurity()
-      const serverMode = normalizeAuthMode(s.authMode)
-      if (serverMode !== 'UI_LOGIN') authSession.clearTokens()
-      authMode = serverMode
-      authUsername = s.authUsername || ''
-      updateSettings({ serverAuthMode: serverMode, serverAuthUser: authUsername })
+      if (!authDirty) {
+        authMode     = normalizeForUI(s.authMode)
+        authUsername = s.authUsername || ''
+        updateSettings({ serverAuthMode: authMode, serverAuthUser: authUsername })
+      }
       socksEnabled = s.socksProxyEnabled; socksHost = s.socksProxyHost
       socksPort = s.socksProxyPort; socksVersion = s.socksProxyVersion
       socksUsername = s.socksProxyUsername
@@ -95,37 +97,28 @@
         flareSolverrTimeout: flareTimeout, flareSolverrSessionName: flareSession,
         flareSolverrSessionTtl: flareTtl, flareSolverrAsResponseFallback: flareFallback,
       })
-    } catch {}
+    } catch (e: any) {
+      console.warn('[SecuritySettings] loadServerSecurity failed:', e?.message ?? e)
+    }
   }
 
   async function saveAuth() {
     if (authMode === 'NONE') { await clearAuth(); return }
     if (!authUsername.trim() || !authPassword.trim()) { secError = 'Username and password are required'; return }
     secLoading = true; secError = null
-    const prev = { mode: settingsState.settings.serverAuthMode, user: settingsState.settings.serverAuthUser, pass: settingsState.settings.serverAuthPass }
     try {
       const newUser = authUsername.trim()
       const newPass = authPassword.trim()
-      authSession.clearTokens()
-      if (authMode === 'UI_LOGIN') {
-        await loginUI(newUser, newPass)
-        updateSettings({ serverAuthMode: 'UI_LOGIN', serverAuthUser: newUser, serverAuthPass: '' })
-      } else {
-        updateSettings({ serverAuthMode: 'BASIC_AUTH', serverAuthUser: newUser, serverAuthPass: newPass })
-      }
       await requestManager.extensions.setServerAuth({ authMode, authUsername: newUser, authPassword: newPass })
+      authSession.clearTokens()
+      updateSettings({ serverAuthMode: authMode as any, serverAuthUser: newUser, serverAuthPass: authMode === 'BASIC_AUTH' ? newPass : '' })
+      configureAuth(settingsState.settings.serverUrl ?? '', authMode as any, newUser, authMode === 'BASIC_AUTH' ? newPass : undefined)
       authPassword = ''
+      authDirty    = false
       showSaved('auth')
+      retryBoot(authMode as any, newUser, newPass)
     } catch (e: any) {
-      const msg = e?.message ?? 'Failed to save authentication settings'
-      const authMismatch = /unauthorized|unauthenticated|authentication|401/i.test(msg)
-      if (!authMismatch) {
-        authSession.clearTokens()
-        updateSettings({ serverAuthMode: prev.mode, serverAuthUser: prev.user, serverAuthPass: prev.pass })
-      }
-      secError = authMismatch
-        ? 'Saved local auth settings, but the server rejected the update. Verify your new credentials with the current server configuration.'
-        : msg
+      secError = e?.message ?? 'Failed to save authentication settings'
     } finally { secLoading = false }
   }
 
@@ -134,9 +127,11 @@
     const prev = { mode: settingsState.settings.serverAuthMode, user: settingsState.settings.serverAuthUser, pass: settingsState.settings.serverAuthPass }
     try {
       await requestManager.extensions.setServerAuth({ authMode: 'NONE', authUsername: '', authPassword: '' })
+      authSession.clearTokens()
+      configureAuth(settingsState.settings.serverUrl ?? '', 'NONE')
       updateSettings({ serverAuthMode: 'NONE', serverAuthUser: '', serverAuthPass: '' })
-      authMode = 'NONE'; authUsername = ''; authPassword = ''
-      authSession.clearTokens(); showSaved('auth')
+      authMode = 'NONE'; authUsername = ''; authPassword = ''; authDirty = false
+      showSaved('auth')
     } catch (e: any) {
       updateSettings({ serverAuthMode: prev.mode, serverAuthUser: prev.user, serverAuthPass: prev.pass })
       secError = e?.message ?? 'Failed to disable authentication'
@@ -186,6 +181,7 @@
     authMode = 'NONE'
     authUsername = ''
     authPassword = ''
+    authDirty = false
     updateSettings({ serverAuthMode: 'NONE', serverAuthUser: '', serverAuthPass: '' })
     showSaved('auth')
   }
@@ -214,21 +210,26 @@
         <div class="s-segment">
           {#each [{ value: 'NONE', label: 'None' }, { value: 'BASIC_AUTH', label: 'Basic' }, { value: 'UI_LOGIN', label: 'UI Login' }] as opt}
             <button class="s-segment-btn" class:active={authMode === opt.value}
-              onclick={() => authMode = opt.value as any} disabled={secLoading}>{opt.label}</button>
+              onclick={() => { authMode = opt.value as any; authPassword = ''; authDirty = true }} disabled={secLoading}>{opt.label}</button>
           {/each}
         </div>
       </div>
       {#if authMode !== 'NONE'}
         <div class="s-row">
           <div class="s-row-info"><span class="s-label">Username</span></div>
-          <input class="s-input" bind:value={authUsername} placeholder="Username" autocomplete="off" spellcheck="false" disabled={secLoading} />
+          <input class="s-input" bind:value={authUsername} oninput={() => authDirty = true} placeholder="Username" autocomplete="off" spellcheck="false" disabled={secLoading} />
         </div>
         <div class="s-row">
           <div class="s-row-info"><span class="s-label">Password</span></div>
           <div class="s-field-wrap">
-            <input class="s-input" type={showAuthPass ? 'text' : 'password'} bind:value={authPassword} placeholder="Password" autocomplete="off" spellcheck="false" disabled={secLoading} />
+            <input class="s-input" type={showAuthPass ? 'text' : 'password'} bind:value={authPassword} oninput={() => authDirty = true} placeholder="Password" autocomplete="off" spellcheck="false" disabled={secLoading} />
             <button class="s-eye-btn" onclick={() => showAuthPass = !showAuthPass} tabindex="-1" aria-label={showAuthPass ? 'Hide password' : 'Show password'}>{@html showAuthPass ? EyeClose : EyeOpen}</button>
           </div>
+        </div>
+      {/if}
+      {#if authMode !== 'NONE' && settingsState.settings.serverAuthMode === authMode && !authPassword}
+        <div class="s-row">
+          <span class="s-desc" style="color: var(--text-muted)">Re-enter your password to update credentials.</span>
         </div>
       {/if}
       {#if settingsState.settings.serverAuthMode === 'BASIC_AUTH'}
@@ -250,8 +251,16 @@
             </button>
           {/if}
           <button class="s-btn s-btn-accent" onclick={saveAuth}
-            disabled={secLoading || ((authMode === 'BASIC_AUTH' || authMode === 'UI_LOGIN') && (!authUsername.trim() || !authPassword.trim()))}>
-            {secLoading ? 'Saving…' : secSaved === 'auth' ? 'Saved ✓' : settingsState.settings.serverAuthMode === 'BASIC_AUTH' ? 'Update' : authMode === 'NONE' ? 'Save' : 'Enable'}
+            disabled={secLoading || (authMode !== 'NONE' && (!authUsername.trim() || !authPassword.trim()))}>
+            {#if secLoading}
+              Saving…
+            {:else if secSaved === 'auth'}
+              Saved ✓
+            {:else if authMode === 'NONE'}
+              Save
+            {:else}
+              {authDirty ? 'Enable' : 'Save'}
+            {/if}
           </button>
         </div>
       </div>

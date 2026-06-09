@@ -93,6 +93,8 @@ export interface PlatformAdapter {
   migrateDownloads(src: string, dst: string): Promise<void>
   getAutoBackupDir():                      Promise<string>
 
+  fetchImage(url: string, headers: Record<string, string>): Promise<Blob>
+
   launchServer(config: ServerLaunchConfig): Promise<void>
   stopServer():                             Promise<void>
   getServerStatus():                        Promise<'running' | 'stopped' | 'error'>

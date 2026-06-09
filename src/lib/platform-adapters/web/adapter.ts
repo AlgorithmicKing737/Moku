@@ -61,6 +61,12 @@ export class WebAdapter implements PlatformAdapter {
   async migrateDownloads(_src: string, _dst: string): Promise<void> {}
   async getAutoBackupDir(): Promise<string> { return '' }
 
+  async fetchImage(url: string, headers: Record<string, string>): Promise<Blob> {
+    const res = await fetch(url, { method: 'GET', headers })
+    if (!res.ok) throw new Error(`${res.status}`)
+    return res.blob()
+  }
+
   async launchServer(_config: ServerLaunchConfig): Promise<void> {}
   async stopServer(): Promise<void> {}
   async getServerStatus(): Promise<'running' | 'stopped' | 'error'> { return 'stopped' }

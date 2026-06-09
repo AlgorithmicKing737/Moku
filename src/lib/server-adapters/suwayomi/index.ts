@@ -41,6 +41,7 @@ import {
   UPDATE_STOP,
   SET_MANGA_META,
   DELETE_MANGA_META,
+  CREATE_BACKUP,
   FETCH_SOURCE_MANGA,
   LIBRARY_UPDATE_STATUS,
   MANGAS_BY_GENRE,
@@ -114,8 +115,8 @@ import {
   SET_FLARE_SOLVERR,
   RESTORE_BACKUP,
   VALIDATE_BACKUP,
-  CREATE_BACKUP,
 } from './meta'
+import { authHeaders } from '$lib/core/auth'
 import {
   type GQLResponse,
   mapManga,
@@ -141,15 +142,10 @@ function mapDownloadStatus(raw: { state: string; queue: RawQueueItem[] }): Downl
 }
 
 export class SuwayomiAdapter implements ServerAdapter {
-  private baseUrl    = 'http://127.0.0.1:4567'
-  private authHeader: string | null = null
+  private baseUrl = 'http://127.0.0.1:4567'
 
   async connect(config: ServerConfig): Promise<void> {
     this.baseUrl = config.baseUrl.replace(/\/$/, '')
-    if (config.credentials) {
-      const { username, password } = config.credentials
-      this.authHeader = 'Basic ' + btoa(`${username}:${password}`)
-    }
     initPageCache(this.gql.bind(this), this.getServerUrl.bind(this))
   }
 
@@ -160,9 +156,9 @@ export class SuwayomiAdapter implements ServerAdapter {
   async getStatus(): Promise<ServerStatus> {
     try {
       const res = await fetch(`${this.baseUrl}/api/graphql`, {
-        method: 'POST',
-        headers: this.headers(),
-        body: JSON.stringify({ query: '{ aboutServer { name } }' }),
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body:    JSON.stringify({ query: '{ aboutServer { name } }' }),
       })
       return res.ok ? 'connected' : 'error'
     } catch {
@@ -171,9 +167,7 @@ export class SuwayomiAdapter implements ServerAdapter {
   }
 
   private headers(): Record<string, string> {
-    const h: Record<string, string> = { 'Content-Type': 'application/json' }
-    if (this.authHeader) h['Authorization'] = this.authHeader
-    return h
+    return { 'Content-Type': 'application/json', ...authHeaders() }
   }
 
   private async gql<T>(
@@ -182,9 +176,9 @@ export class SuwayomiAdapter implements ServerAdapter {
     signal?: AbortSignal,
   ): Promise<T> {
     const res = await fetch(`${this.baseUrl}/api/graphql`, {
-      method: 'POST',
+      method:  'POST',
       headers: this.headers(),
-      body: JSON.stringify({ query, variables }),
+      body:    JSON.stringify({ query, variables }),
       signal,
     })
     if (!res.ok) throw new Error(`Suwayomi HTTP ${res.status}`)
@@ -642,8 +636,7 @@ export class SuwayomiAdapter implements ServerAdapter {
     form.append('operations', JSON.stringify({ query, variables: { backup: null } }))
     form.append('map', JSON.stringify({ '0': ['variables.backup'] }))
     form.append('0', file, file.name)
-    const headers: Record<string, string> = { Accept: 'application/json' }
-    if (this.authHeader) headers['Authorization'] = this.authHeader
+    const headers: Record<string, string> = { Accept: 'application/json', ...authHeaders() }
     return fetch(`${this.baseUrl}/api/graphql`, { method: 'POST', headers, body: form })
       .then(r => { if (!r.ok) throw new Error(`Suwayomi HTTP ${r.status}`); return r.json() })
       .then((json: GQLResponse<T>) => { if (json.errors?.length) throw new Error(json.errors[0].message); return json.data })

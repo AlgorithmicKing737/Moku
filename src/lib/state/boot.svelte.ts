@@ -1,9 +1,9 @@
 import { detectAdapter }      from '$lib/platform-adapters'
 import { initPlatformService } from '$lib/platform-service'
 import { platformService }     from '$lib/platform-service'
-import { probeServer, loginBasic, loginUI } from '$lib/core/auth'
+import { probeServer, loginBasic, loginUI, configureAuth } from '$lib/core/auth'
 import { appState }            from '$lib/state/app.svelte'
-import { settingsState }               from '$lib/state/settings.svelte'
+import { settingsState }       from '$lib/state/settings.svelte'
 
 const MAX_ATTEMPTS    = 40
 const BG_MAX_ATTEMPTS = 120
@@ -42,9 +42,9 @@ function pinLockEnabled(): boolean {
 
 function handleProbeSuccess(gen: number) {
   if (gen !== probeGeneration) return
-  boot.failed        = false
-  boot.skipped       = false
-  boot.serverProbeOk = true
+  boot.failed            = false
+  boot.skipped           = false
+  boot.serverProbeOk     = true
   appState.authenticated = true
   appState.status        = pinLockEnabled() ? 'locked' : 'ready'
 }
@@ -56,7 +56,8 @@ function handleAuthRequired(
   pass:     string,
 ) {
   if (gen !== probeGeneration) return
-  boot.failed = false
+  boot.failed       = false
+  appState.authMode = authMode
 
   if (authMode === 'BASIC_AUTH' && user && pass) {
     loginBasic(user, pass)
@@ -75,21 +76,25 @@ function handleAuthRequired(
   appState.status    = 'auth'
 }
 
-export function startProbe(
+export async function startProbe(
   authMode: 'NONE' | 'BASIC_AUTH' | 'UI_LOGIN' = 'NONE',
   user = '',
   pass = '',
   initialDelay = 100,
-) {
+): Promise<void> {
   const gen = ++probeGeneration
   boot.failed        = false
   boot.loginRequired = false
   boot.skipped       = false
   boot.serverProbeOk = false
   appState.status    = 'booting'
+  appState.authMode  = authMode
+
+  const baseUrl = settingsState.settings.serverUrl ?? 'http://127.0.0.1:4567'
+  configureAuth(baseUrl, authMode, user || undefined, pass || undefined)
 
   if (appState.platform === 'web') {
-    boot.failed = true
+    boot.failed     = true
     appState.status = 'error'
     startBackgroundProbe(gen, authMode, user, pass)
     return

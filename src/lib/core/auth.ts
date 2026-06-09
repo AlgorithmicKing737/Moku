@@ -1,4 +1,5 @@
 const DEFAULT_URL = 'http://127.0.0.1:4567'
+const SKEW_MS     = 60_000 * 2
 
 interface AuthConfig {
   baseUrl: string
@@ -10,74 +11,61 @@ interface AuthConfig {
 export interface UiAuthDebugStatus {
   mode:               'NONE' | 'BASIC_AUTH' | 'UI_LOGIN'
   hasSession:         boolean
-  hasRefreshToken:    boolean
   accessExpiresAt:    number | null
-  refreshExpiresAt:   number | null
   accessExpiresInMs:  number | null
-  refreshExpiresInMs: number | null
   shouldRefreshSoon:  boolean
   refreshInFlight:    boolean
   skewMs:             number
 }
 
-const SKEW_MS = 60_000 * 2
-
 let config: AuthConfig = { baseUrl: DEFAULT_URL, mode: 'NONE' }
 
-let accessToken:      string | null = null
-let refreshToken:     string | null = null
-let accessExpiresAt:  number | null = null
-let refreshExpiresAt: number | null = null
-let refreshInFlight                 = false
+let accessToken:     string | null = null
+let refreshToken:    string | null = null
+let accessExpiresAt: number | null = null
+let refreshInFlight                = false
 
 function parseExpiry(token: string): number | null {
   try {
     const payload = JSON.parse(atob(token.split('.')[1]))
     return typeof payload.exp === 'number' ? payload.exp * 1000 : null
-  } catch {
-    return null
-  }
+  } catch { return null }
 }
 
 export const authSession = {
   clearTokens() {
-    accessToken      = null
-    refreshToken     = null
-    accessExpiresAt  = null
-    refreshExpiresAt = null
+    accessToken     = null
+    refreshToken    = null
+    accessExpiresAt = null
   },
 }
 
-export function getUIAccessToken(): string | null {
-  return accessToken
-}
+export function getUIAccessToken(): string | null { return accessToken }
 
 export function getUiAuthDebugStatus(): UiAuthDebugStatus {
-  const now = Date.now()
-  const accessExpiresInMs  = accessExpiresAt  !== null ? accessExpiresAt  - now : null
-  const refreshExpiresInMs = refreshExpiresAt !== null ? refreshExpiresAt - now : null
+  const now               = Date.now()
+  const accessExpiresInMs = accessExpiresAt !== null ? accessExpiresAt - now : null
   return {
-    mode:               config.mode,
-    hasSession:         accessToken  !== null,
-    hasRefreshToken:    refreshToken !== null,
+    mode:              config.mode,
+    hasSession:        accessToken !== null,
     accessExpiresAt,
-    refreshExpiresAt,
     accessExpiresInMs,
-    refreshExpiresInMs,
-    shouldRefreshSoon:  accessExpiresInMs !== null && accessExpiresInMs < SKEW_MS,
+    shouldRefreshSoon: accessExpiresInMs !== null && accessExpiresInMs < SKEW_MS,
     refreshInFlight,
-    skewMs:             SKEW_MS,
+    skewMs:            SKEW_MS,
   }
 }
 
 export function configureAuth(
   baseUrl: string,
-  mode: 'NONE' | 'BASIC_AUTH' | 'UI_LOGIN',
-  user?: string,
-  pass?: string,
+  mode:    'NONE' | 'BASIC_AUTH' | 'UI_LOGIN',
+  user?:   string,
+  pass?:   string,
 ): void {
-  config = { baseUrl: baseUrl.replace(/\/$/, ''), mode, user, pass }
-  authSession.clearTokens()
+  config      = { baseUrl: baseUrl.replace(/\/$/, ''), mode, user, pass }
+  accessToken     = null
+  refreshToken    = null
+  accessExpiresAt = null
 }
 
 export function authHeaders(): Record<string, string> {
@@ -90,16 +78,18 @@ export function authHeaders(): Record<string, string> {
   return {}
 }
 
-async function gqlRaw(query: string, variables?: Record<string, unknown>): Promise<unknown> {
+async function gql<T>(query: string, variables?: Record<string, unknown>, bare = false): Promise<T> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (!bare) Object.assign(headers, authHeaders())
   const res = await fetch(`${config.baseUrl}/api/graphql`, {
     method:  'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    headers,
     body:    JSON.stringify({ query, variables }),
   })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   const json = await res.json()
   if (json.errors?.length) throw new Error(json.errors[0].message)
-  return json.data
+  return json.data as T
 }
 
 export async function probeServer(): Promise<'ok' | 'auth_required' | 'unreachable'> {
@@ -107,7 +97,7 @@ export async function probeServer(): Promise<'ok' | 'auth_required' | 'unreachab
     const res = await fetch(`${config.baseUrl}/api/graphql`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body:    JSON.stringify({ query: '{ aboutServer { name } }' }),
+      body:    JSON.stringify({ query: '{ settings { authMode } }' }),
     })
     if (res.status === 401 || res.status === 403) return 'auth_required'
     if (!res.ok) return 'unreachable'
@@ -116,17 +106,7 @@ export async function probeServer(): Promise<'ok' | 'auth_required' | 'unreachab
       /unauthorized|unauthenticated/i.test(e.message)
     )
     return isAuthError ? 'auth_required' : 'ok'
-  } catch {
-    return 'unreachable'
-  }
-}
-
-export async function loginBasic(user: string, pass: string): Promise<void> {
-  config.user = user
-  config.pass = pass
-  config.mode = 'BASIC_AUTH'
-  const probe = await probeServer()
-  if (probe !== 'ok') throw new Error('Invalid credentials')
+  } catch { return 'unreachable' }
 }
 
 const LOGIN_MUTATION = `
@@ -145,30 +125,29 @@ const REFRESH_MUTATION = `
   }
 `
 
-export async function loginUI(user: string, pass: string): Promise<void> {
-  const data = await gqlRaw(LOGIN_MUTATION, { username: user, password: pass }) as {
-    login: { accessToken: string; refreshToken: string }
+export async function loginBasic(user: string, pass: string): Promise<void> {
+  const prev = { user: config.user, pass: config.pass, mode: config.mode }
+  config.user = user
+  config.pass = pass
+  config.mode = 'BASIC_AUTH'
+  const probe = await probeServer()
+  if (probe !== 'ok') {
+    config.user = prev.user
+    config.pass = prev.pass
+    config.mode = prev.mode as typeof config.mode
+    throw new Error('Invalid credentials')
   }
-  accessToken      = data.login.accessToken
-  refreshToken     = data.login.refreshToken
-  accessExpiresAt  = parseExpiry(accessToken)
-  refreshExpiresAt = parseExpiry(refreshToken)
-  config.mode      = 'UI_LOGIN'
-  config.user      = user
 }
 
-export async function refreshAccessToken(): Promise<boolean> {
-  if (!refreshToken) return false
-  try {
-    const data = await gqlRaw(REFRESH_MUTATION, { refreshToken }) as {
-      refreshToken: { accessToken: string }
-    }
-    accessToken     = data.refreshToken.accessToken
-    accessExpiresAt = parseExpiry(accessToken)
-    return true
-  } catch {
-    return false
-  }
+export async function loginUI(user: string, pass: string): Promise<void> {
+  const data = await gql<{ login: { accessToken: string; refreshToken: string } }>(
+    LOGIN_MUTATION, { username: user, password: pass }, true
+  )
+  accessToken     = data.login.accessToken
+  refreshToken    = data.login.refreshToken
+  accessExpiresAt = parseExpiry(accessToken)
+  config.mode     = 'UI_LOGIN'
+  config.user     = user
 }
 
 export async function refreshUiAccessToken(force = false): Promise<string | null> {
@@ -179,8 +158,14 @@ export async function refreshUiAccessToken(force = false): Promise<string | null
   if (refreshInFlight) return accessToken
   refreshInFlight = true
   try {
-    const ok = await refreshAccessToken()
-    return ok ? accessToken : null
+    const data = await gql<{ refreshToken: { accessToken: string } }>(
+      REFRESH_MUTATION, { refreshToken }
+    )
+    accessToken     = data.refreshToken.accessToken
+    accessExpiresAt = parseExpiry(accessToken)
+    return accessToken
+  } catch {
+    return null
   } finally {
     refreshInFlight = false
   }

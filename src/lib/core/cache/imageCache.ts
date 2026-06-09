@@ -1,6 +1,6 @@
-import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
-import { settingsState } from "$lib/state/settings.svelte";
-import { getUIAccessToken } from "$lib/core/auth";
+import { platformService }    from "$lib/platform-service";
+import { settingsState }      from "$lib/state/settings.svelte";
+import { getUIAccessToken }   from "$lib/core/auth";
 
 const cache    = new Map<string, string>();
 const inflight = new Map<string, Promise<string>>();
@@ -19,14 +19,14 @@ interface QueueEntry {
 const queue: QueueEntry[] = [];
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
-  const mode = settingsState.serverAuthMode ?? "NONE";
+  const mode = settingsState.settings.serverAuthMode ?? "NONE";
   if (mode === "UI_LOGIN") {
-    const token = await getUIAccessToken();
+    const token = getUIAccessToken();
     return token ? { Authorization: `Bearer ${token}` } : {};
   }
   if (mode === "BASIC_AUTH") {
-    const user = settingsState.serverAuthUser?.trim() ?? "";
-    const pass = settingsState.serverAuthPass?.trim() ?? "";
+    const user = settingsState.settings.serverAuthUser?.trim() ?? "";
+    const pass = settingsState.settings.serverAuthPass?.trim() ?? "";
     return user && pass ? { Authorization: `Basic ${btoa(`${user}:${pass}`)}` } : {};
   }
   return {};
@@ -34,9 +34,7 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
 
 async function doFetch(url: string): Promise<string> {
   const headers = await getAuthHeaders();
-  const res = await tauriFetch(url, { method: "GET", headers });
-  if (!res.ok) throw new Error(`${res.status}`);
-  const blob = await res.blob();
+  const blob = await platformService.fetchImage(url, headers);
   if (clearing) throw new DOMException("Cancelled", "AbortError");
   const blobUrl = URL.createObjectURL(blob);
   cache.set(url, blobUrl);

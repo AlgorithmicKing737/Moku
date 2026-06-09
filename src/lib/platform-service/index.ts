@@ -42,6 +42,8 @@ export const platformService = {
   migrateDownloads:(src: string, dst: string)              => get().migrateDownloads(src, dst),
   getAutoBackupDir:()                                      => get().getAutoBackupDir(),
 
+  fetchImage:      (url: string, headers: Record<string, string>) => get().fetchImage(url, headers),
+
   launchServer:    (c: ServerLaunchConfig)                 => get().launchServer(c),
   stopServer:      ()                                      => get().stopServer(),
   getServerStatus: ()                                      => get().getServerStatus(),
