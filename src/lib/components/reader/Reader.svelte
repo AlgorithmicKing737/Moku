@@ -14,6 +14,7 @@
   import { historyState }                                    from "$lib/state/history.svelte";
   import { getAdapter }                                      from "$lib/request-manager";
   import { setReading, clearReading }                        from "$lib/core/discord";
+  import { revokeBlobUrl }                                   from "$lib/core/cache/imageCache";
   import type { ReaderSettings }                             from "$lib/state/reader.svelte";
   import ReaderControls                                      from "$lib/components/reader/ReaderControls.svelte";
   import PageView                                            from "$lib/components/reader/PageView.svelte";
@@ -216,9 +217,13 @@
     ? () => goForward(style, adjacent, lastPage, maybeMarkCurrentRead, startAtLast)
     : () => goBack(style, adjacent, startAtLast));
 
-  // clear Discord presence before closing
+  // clear Discord presence and free page blob textures before closing
   function handleCloseReader() {
     clearReading().catch(() => {});
+    for (const url of readerState.pageUrls) revokeBlobUrl(url);
+    for (const strip of readerState.stripChapters) {
+      for (const url of strip.urls) revokeBlobUrl(url);
+    }
     readerState.closeReader();
   }
 

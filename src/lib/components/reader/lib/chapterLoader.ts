@@ -1,7 +1,7 @@
-import { readerState }          from "$lib/state/reader.svelte";
-import { fetchPages }           from "./pageLoader";
-import { cancelQueuedFetches }  from "$lib/core/cache/imageCache";
-import { clearResolvedUrlCache } from "$lib/core/cache/pageCache";
+import { readerState }                          from "$lib/state/reader.svelte";
+import { fetchPages }                           from "./pageLoader";
+import { cancelQueuedFetches, revokeBlobUrl }   from "$lib/core/cache/imageCache";
+import { clearResolvedUrlCache }                from "$lib/core/cache/pageCache";
 
 export function scheduleResumeDismiss() {
   setTimeout(() => { readerState.resumeFading = true; }, 1500);
@@ -21,7 +21,14 @@ export async function loadChapter(
   abortCtrl.current = ctrl;
 
   cancelQueuedFetches();
-  if (useBlob) clearResolvedUrlCache();
+  if (useBlob) {
+    clearResolvedUrlCache();
+    // revoke blob URLs for all loaded pages so the GPU can release their textures
+    for (const url of readerState.pageUrls) revokeBlobUrl(url);
+    for (const strip of readerState.stripChapters) {
+      for (const url of strip.urls) revokeBlobUrl(url);
+    }
+  }
 
   startAtLastPage.current = false;
   markedRead.clear();
