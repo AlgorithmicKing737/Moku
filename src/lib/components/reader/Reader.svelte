@@ -13,6 +13,7 @@
   import { loadChapter, scheduleResumeDismiss }              from "$lib/components/reader/lib/chapterLoader";
   import { historyState }                                    from "$lib/state/history.svelte";
   import { getAdapter }                                      from "$lib/request-manager";
+  import { setReading, clearReading }                        from "$lib/core/discord";
   import type { ReaderSettings }                             from "$lib/state/reader.svelte";
   import ReaderControls                                      from "$lib/components/reader/ReaderControls.svelte";
   import PageView                                            from "$lib/components/reader/PageView.svelte";
@@ -215,10 +216,15 @@
     ? () => goForward(style, adjacent, lastPage, maybeMarkCurrentRead, startAtLast)
     : () => goBack(style, adjacent, startAtLast));
 
+  function handleCloseReader() {
+    clearReading().catch(() => {});
+    readerState.closeReader();
+  }
+
   const onKey = createReaderKeyHandler({
     goNext:           () => goNext(),
     goPrev:           () => goPrev(),
-    closeReader:      () => readerState.closeReader(),
+    closeReader:      () => handleCloseReader(),
     goToPage:         (p) => jumpToPage(p, style, lastPage, containerEl),
     lastPage:         () => lastPage,
     adjustZoom:       (d) => { captureZoomAnchor(containerEl, style, zoomAnchor); applySettings({ readerZoom: clampZoom(zoom + d) }); restoreZoomAnchor(containerEl, zoomAnchor); },
@@ -308,6 +314,7 @@
           ch.id, ch.name, readerState.pageNumber,
         );
         loadChapter(ch.id, useBlob, abortCtrl, startAtLastPageRef, markedRead, adjacent);
+        setReading(manga, ch).catch(() => {});
       });
     }
   });
