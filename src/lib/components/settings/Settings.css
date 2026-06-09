@@ -140,6 +140,7 @@
 .s-content-body {
   flex: 1;
   overflow-y: auto;
+  transform: translateZ(0);
 }
 
 
