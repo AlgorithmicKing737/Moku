@@ -7,7 +7,7 @@
   import { settingsState, loadSettingsIntoState, updateSettings }       from '$lib/state/settings.svelte'
   import { applyTheme, mountSystemThemeSync }                           from '$lib/core/theme'
   import { platformService }                                            from '$lib/platform-service'
-  import { initRpc, setIdle, destroyRpc }                                from '$lib/core/discord'
+  import * as discord                                                   from '$lib/core/discord'
   import SplashScreen                                                   from '$lib/components/chrome/SplashScreen.svelte'
   import AuthGate                                                       from '$lib/components/chrome/AuthGate.svelte'
   import Sidebar                                                        from '$lib/components/chrome/Sidebar.svelte'
@@ -24,7 +24,6 @@
 
   const POLL_MS = 1500
   let pollTimer: ReturnType<typeof setTimeout> | null = null
-  let idleTimer: ReturnType<typeof setTimeout> | null = null
   let polling = false
 
   async function pollLoop() {
@@ -35,13 +34,12 @@
 
   const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 
-  let _splashDismissed = $state(false)
-  let bypassed         = $state(false)
-  let themeEditorOpen  = $state(false)
-  let themeEditorId    = $state<string | null>(null)
+  let splashDismissed = $state(false)
+  let themeEditorOpen = $state(false)
+  let themeEditorId   = $state<string | null>(null)
 
   const splashVisible = $derived(
-    !_splashDismissed ||
+    !splashDismissed ||
     appState.status === 'booting' ||
     appState.status === 'locked'  ||
     appState.status === 'error'   ||
@@ -49,17 +47,16 @@
   )
 
   const ringFull = $derived(appState.status === 'ready')
+  const showApp  = $derived(!splashVisible)
 
-  const showApp = $derived(
-    !splashVisible && (
-      appState.status === 'ready' ||
-      bypassed
-    )
-  )
-
-  function onSplashReady()  { _splashDismissed = true }
-  function onSplashUnlock() { appState.status = 'ready'; _splashDismissed = true }
-  function onSplashBypass() { bypassed = true; _splashDismissed = true }
+  function onSplashReady()  { splashDismissed = true }
+  function onSplashUnlock() { appState.status = 'ready'; splashDismissed = true }
+  function onSplashBypass() {
+    import('$lib/state/boot.svelte').then(({ bypassBoot }) => {
+      bypassBoot(appState.authMode ?? 'NONE', appState.authUser ?? '', appState.authPass ?? '')
+    })
+    splashDismissed = true
+  }
 
   const isReaderRoute       = $derived($page.url.pathname.startsWith('/reader'))
   const readerContainerized = $derived(settingsState.settings.readerContainerized ?? false)
@@ -108,24 +105,19 @@
       isTauri && settingsState.settings.autoStartServer ? 2000 : 100,
     )
 
-    let discordInitialized = false
     if (settingsState.settings.discordRpc) {
-      await initRpc()
-      await setIdle()
-      discordInitialized = true
+      await discord.initRpc()
+      await discord.setIdle()
     }
 
     polling = true
     pollLoop()
 
-    resetIdleTimer()
-
     return () => {
       polling = false
       if (pollTimer !== null) { clearTimeout(pollTimer); pollTimer = null }
-      if (idleTimer !== null) { clearTimeout(idleTimer); idleTimer = null }
-      if (discordInitialized) destroyRpc().catch(() => {})
-      platformService.destroy().catch(() => {})
+      discord.destroyRpc()
+      platformService.destroy()
     }
   })
 
@@ -147,49 +139,22 @@
   })
 
   $effect(() => {
-    if (appState.status === 'booting') _splashDismissed = false
+    if (appState.status === 'booting') splashDismissed = false
   })
 
-  $effect(() => {
-    if (appState.status === 'ready') resetIdleTimer()
-  })
+  let idleSplashLocked = false
 
-  $effect(() => {
-    if (appState.idleSplash && settingsState.settings.discordRpc) setIdle().catch(() => {})
-  })
-
-  $effect(() => {
-    if (appState.status !== 'ready') return
-    // capture phase so events from any component — including modals — reset the timer
-    const onActivity = () => resetIdleTimer()
-    document.addEventListener('mousemove',  onActivity, true)
-    document.addEventListener('keydown',    onActivity, true)
-    document.addEventListener('touchstart', onActivity, true)
-    // passive:true tells the browser it can render scroll frames without waiting for the handler
-    document.addEventListener('touchmove',  onActivity, { capture: true, passive: true })
-    document.addEventListener('wheel',      onActivity, { capture: true, passive: true })
-    document.addEventListener('click',      onActivity, true)
-    return () => {
-      document.removeEventListener('mousemove',  onActivity, true)
-      document.removeEventListener('keydown',    onActivity, true)
-      document.removeEventListener('touchstart', onActivity, true)
-      document.removeEventListener('touchmove',  onActivity, { capture: true })
-      document.removeEventListener('wheel',      onActivity, { capture: true })
-      document.removeEventListener('click',      onActivity, true)
-    }
-  })
-
-  function resetIdleTimer() {
-    if (idleTimer) { clearTimeout(idleTimer); idleTimer = null }
-    // 0 means "Never" — skip the timer entirely
-    const mins = settingsState.settings.idleTimeoutMin ?? 5
-    if (mins === 0) return
-    idleTimer = setTimeout(() => {
-      if (appState.status === 'ready') appState.idleSplash = true
-    }, mins * 60_000)
+  function showIdleSplash() {
+    if (idleSplashLocked || appState.idleSplash) return
+    appState.idleSplash = true
   }
 
-  function onIdleDismiss() { appState.idleSplash = false; resetIdleTimer() }
+  function onIdleDismiss() {
+    if (idleSplashLocked) return
+    idleSplashLocked = true
+    appState.idleSplash = false
+    setTimeout(() => { idleSplashLocked = false }, 400)
+  }
 
   function onSplashRetry() {
     import('$lib/state/boot.svelte').then(({ retryBoot }) => {
@@ -219,7 +184,7 @@
 {/if}
 
 {#if appState.idleSplash}
-  <SplashScreen mode="idle" onDismiss={onIdleDismiss} />
+  <SplashScreen mode="idle" showCards={settingsState.settings.splashCards ?? true} onDismiss={onIdleDismiss} />
 {/if}
 
 {#if showApp}

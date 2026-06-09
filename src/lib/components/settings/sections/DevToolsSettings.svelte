@@ -102,6 +102,7 @@
   }
 
   function triggerSplash() {
+    if (appState.idleSplash) return
     splashTriggered = true
     setTimeout(() => splashTriggered = false, 200)
     appState.idleSplash = true
