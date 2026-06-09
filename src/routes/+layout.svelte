@@ -155,6 +155,10 @@
   })
 
   $effect(() => {
+    if (appState.idleSplash && settingsState.settings.discordRpc) setIdle().catch(() => {})
+  })
+
+  $effect(() => {
     if (appState.status !== 'ready') return
     // capture phase so events from any component — including modals — reset the timer
     const onActivity = () => resetIdleTimer()

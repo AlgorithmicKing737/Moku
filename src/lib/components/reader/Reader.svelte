@@ -2,7 +2,7 @@
   import { onMount, untrack, tick }        from "svelte";
   import { readerState, PAGE_STYLES }      from "$lib/state/reader.svelte";
   import { settingsState, updateSettings } from "$lib/state/settings.svelte";
-  import { app }                           from "$lib/state/app.svelte";
+  import { app, appState }                 from "$lib/state/app.svelte";
   import { DEFAULT_KEYBINDS }              from "$lib/core/keybinds/defaultBinds";
   import { fetchPages, resolveUrl, preloadImage, measureAspect, buildPageGroups } from "$lib/components/reader/lib/pageLoader";
   import { setupScrollTracking, appendNextChapter }          from "$lib/components/reader/lib/scrollHandler";
@@ -321,8 +321,17 @@
           ch.id, ch.name, readerState.pageNumber,
         );
         loadChapter(ch.id, useBlob, abortCtrl, startAtLastPageRef, markedRead, adjacent);
-        setReading(manga, ch).catch(() => {});  // update Discord presence to show current chapter
       });
+    }
+  });
+
+  // Separate from chapter load: also re-fires when idle splash dismisses so presence is restored.
+  $effect(() => {
+    const ch    = readerState.activeChapter;
+    const manga = readerState.activeManga;
+    const idle  = appState.idleSplash;
+    if (ch && manga && !idle) {
+      untrack(() => setReading(manga, ch).catch(() => {}));
     }
   });
 
