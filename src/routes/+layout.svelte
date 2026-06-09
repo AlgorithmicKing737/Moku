@@ -24,6 +24,7 @@
 
   const POLL_MS = 1500
   let pollTimer: ReturnType<typeof setTimeout> | null = null
+  let idleTimer: ReturnType<typeof setTimeout> | null = null
   let polling = false
 
   async function pollLoop() {
@@ -117,11 +118,14 @@
     polling = true
     pollLoop()
 
+    resetIdleTimer()
+
     return () => {
       polling = false
       if (pollTimer !== null) { clearTimeout(pollTimer); pollTimer = null }
-      if (discordInitialized) destroyRpc()
-      platformService.destroy()
+      if (idleTimer !== null) { clearTimeout(idleTimer); idleTimer = null }
+      if (discordInitialized) destroyRpc().catch(() => {})
+      platformService.destroy().catch(() => {})
     }
   })
 
@@ -146,7 +150,37 @@
     if (appState.status === 'booting') _splashDismissed = false
   })
 
-  function onIdleDismiss() { appState.idleSplash = false }
+  $effect(() => {
+    if (appState.status === 'ready') resetIdleTimer()
+  })
+
+  $effect(() => {
+    if (appState.status !== 'ready') return
+    // capture phase so events from any component — including modals — reset the timer
+    const onActivity = () => resetIdleTimer()
+    document.addEventListener('mousemove',   onActivity, true)
+    document.addEventListener('keydown',     onActivity, true)
+    document.addEventListener('touchstart',  onActivity, true)
+    document.addEventListener('click',       onActivity, true)
+    return () => {
+      document.removeEventListener('mousemove',   onActivity, true)
+      document.removeEventListener('keydown',     onActivity, true)
+      document.removeEventListener('touchstart',  onActivity, true)
+      document.removeEventListener('click',       onActivity, true)
+    }
+  })
+
+  function resetIdleTimer() {
+    if (idleTimer) clearTimeout(idleTimer)
+    appState.idleSplash = false
+    // read the setting live so changes take effect without a restart
+    const timeoutMs = (settingsState.settings.idleTimeoutMin ?? 5) * 60_000
+    idleTimer = setTimeout(() => {
+      if (appState.status === 'ready') appState.idleSplash = true
+    }, timeoutMs)
+  }
+
+  function onIdleDismiss() { appState.idleSplash = false; resetIdleTimer() }
 
   function onSplashRetry() {
     import('$lib/state/boot.svelte').then(({ retryBoot }) => {

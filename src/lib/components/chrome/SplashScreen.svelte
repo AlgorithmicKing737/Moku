@@ -290,6 +290,7 @@
       if (logW <= 0 || logH <= 0) return
       if (logW === lastLogW && logH === lastLogH && scale === lastScale) return
       lastLogW = logW; lastLogH = logH; lastScale = scale
+      if (live) cleanup()  // release old offscreen canvases before rebuilding at new size
       const built  = buildCards(logW, logH)
       const stamps = built.cards.map(c => buildStamp(c, scale))
       const vig    = buildVignette(logW, logH, scale)
@@ -339,10 +340,25 @@
     function resume() { if (!paused) return; paused = false; raf = requestAnimationFrame(frame) }
     function onVis()  { document.hidden ? pause() : resume() }
 
+    // clears all canvas contexts and nulls live state so the GC can collect the offscreen bitmaps
+    function cleanup() {
+      if (live) {
+        live.stamps.forEach(canvas => {
+          const c = canvas.getContext('2d')
+          if (c) c.clearRect(0, 0, canvas.width, canvas.height)
+        })
+        const vigCtx = live.vignette.getContext('2d')
+        if (vigCtx) vigCtx.clearRect(0, 0, live.vignette.width, live.vignette.height)
+      }
+      ctx.clearRect(0, 0, el.width, el.height)
+      live = null
+    }
+
     document.addEventListener('visibilitychange', onVis)
     raf = requestAnimationFrame(frame)
     return () => {
       cancelAnimationFrame(raf)
+      cleanup()
       extraCleanup?.()
       document.removeEventListener('visibilitychange', onVis)
     }
