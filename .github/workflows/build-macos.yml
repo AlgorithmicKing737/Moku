@@ -79,7 +79,7 @@ jobs:
           download_suwayomi() {
             local asset="$1" sha="$2" outdir="$3"
             curl -fsSL \
-              "https://github.com/Suwayomi/Suwayomi-Server-preview/releases/download/v2.1.2087/${asset}" \
+              "https://github.com/Suwayomi/Suwayomi-Server-preview/releases/download/v2.2.2196/${asset}" \
               -o "${outdir}.tar.gz"
             echo "${sha}  ${outdir}.tar.gz" | shasum -a 256 -c -
             mkdir -p "${outdir}"
@@ -87,13 +87,13 @@ jobs:
           }
 
           download_suwayomi \
-            "Suwayomi-Server-v2.1.2087-macOS-arm64.tar.gz" \
-            "59f73a53a139d5d843e16cab4f3ac425a410add6bee0a60920fa26eb0a4b8a5c" \
+            "Suwayomi-Server-v2.2.2196-macOS-arm64.tar.gz" \
+            "9e3dbebc7475707e8d11c56a473385c00b09bde0103d013bc1cb3d06c89e5c43" \
             "suwayomi-arm64"
 
           download_suwayomi \
-            "Suwayomi-Server-v2.1.2087-macOS-x64.tar.gz" \
-            "da7e664e4c2615a0b9eac09ee38fe979feee1d6c0b266e19dba1ceea8ae3795c" \
+            "Suwayomi-Server-v2.2.2196-macOS-x64.tar.gz" \
+            "eadee02060b780a5febfb8dada2f89c7bd7db5905cfd20d47eaca02fcde8c9c5" \
             "suwayomi-x64"
 
       - name: Stage Suwayomi sidecars

@@ -146,7 +146,8 @@
   let startAtLastPageRef = { current: false };
   let cleanupScroll: () => void = () => {};
   let stripChaptersRef   = readerState.stripChapters;
-  let tickTimer: ReturnType<typeof setTimeout> | null = null;
+  let tickTimer:     ReturnType<typeof setTimeout> | null = null;
+  let progressTimer: ReturnType<typeof setTimeout> | null = null;
 
   $effect(() => { stripChaptersRef = readerState.stripChapters; });
 
@@ -527,6 +528,14 @@
           readerState.addBookmark({ mangaId, mangaTitle, thumbnailUrl: thumb, chapterId, chapterName, pageNumber: pageNum });
         }
         if (style !== "longstrip" && (settingsState.settings.autoMarkRead ?? true) && atLast) markChapterRead(chapterId, markedRead);
+
+        if (pageNum > 1 && !markedRead.has(chapterId)) {
+          if (progressTimer) clearTimeout(progressTimer);
+          progressTimer = setTimeout(() => {
+            getAdapter().updateChaptersProgress([String(chapterId)], { lastPageRead: pageNum }).catch(console.error);
+            progressTimer = null;
+          }, 2_000);
+        }
       });
     }
   });
@@ -560,6 +569,7 @@
       abortCtrl.current?.abort();
       if (hideTimer) clearTimeout(hideTimer);
       if (roTimer) clearTimeout(roTimer);
+      if (progressTimer) clearTimeout(progressTimer);
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("mousemove", pageViewRef.onInspectMouseMove);
       window.removeEventListener("mouseup",  pageViewRef.onInspectMouseUp);
