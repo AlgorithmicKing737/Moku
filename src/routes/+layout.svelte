@@ -161,11 +161,15 @@
     document.addEventListener('mousemove',   onActivity, true)
     document.addEventListener('keydown',     onActivity, true)
     document.addEventListener('touchstart',  onActivity, true)
+    document.addEventListener('touchmove',   onActivity, true)   // sustained touch-scroll in reader
+    document.addEventListener('wheel',       onActivity, true)   // mouse-wheel / trackpad scroll in reader
     document.addEventListener('click',       onActivity, true)
     return () => {
       document.removeEventListener('mousemove',   onActivity, true)
       document.removeEventListener('keydown',     onActivity, true)
       document.removeEventListener('touchstart',  onActivity, true)
+      document.removeEventListener('touchmove',   onActivity, true)
+      document.removeEventListener('wheel',       onActivity, true)
       document.removeEventListener('click',       onActivity, true)
     }
   })
