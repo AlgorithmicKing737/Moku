@@ -107,13 +107,48 @@ export function buildSettingsBlock(keys: (keyof Settings)[]): string {
     .join('\n')
 }
 
-export function buildIssueUrl(type: ReportType, settingsBlock: string, title: string, serverVersion?: string): string {
-  const base   = 'https://github.com/moku-project/Moku/issues/new'
-  const params = new URLSearchParams({
+export interface BugFields {
+  description: string
+  steps:       string
+  expected:    string
+  actual:      string
+}
+
+export interface FeatureFields {
+  problem:      string
+  solution:     string
+  alternatives: string
+}
+
+export function buildIssueUrl(
+  type:          ReportType,
+  settingsBlock: string,
+  title:         string,
+  fields:        BugFields | FeatureFields,
+  serverVersion?: string,
+): string {
+  const base = 'https://github.com/moku-project/Moku/issues/new'
+
+  const common = {
     template:    type === 'bug' ? 'bug_report.yml' : 'feature_request.yml',
     title,
     environment: buildEnvironmentBlock(serverVersion),
-    settings:    settingsBlock,
-  })
+  }
+
+  const specific = type === 'bug'
+    ? {
+        description: (fields as BugFields).description,
+        steps:       (fields as BugFields).steps,
+        expected:    (fields as BugFields).expected,
+        actual:      (fields as BugFields).actual,
+        settings:    settingsBlock,
+      }
+    : {
+        problem:      (fields as FeatureFields).problem,
+        solution:     (fields as FeatureFields).solution,
+        alternatives: (fields as FeatureFields).alternatives,
+      }
+
+  const params = new URLSearchParams({ ...common, ...specific })
   return `${base}?${params.toString()}`
 }

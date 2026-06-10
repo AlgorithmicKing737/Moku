@@ -10,6 +10,8 @@
     buildSettingsBlock,
     buildIssueUrl,
     type ReportType,
+    type BugFields,
+    type FeatureFields,
   } from './lib/bugReport'
 
   interface Props { onClose: () => void }
@@ -92,7 +94,10 @@
 
   async function handleOpen() {
     const settingsBlock = buildSettingsBlock([...selectedKeys])
-    const url = buildIssueUrl(reportType, settingsBlock, title, serverVersion)
+    const fields: BugFields | FeatureFields = reportType === 'bug'
+      ? { description, steps, expected, actual }
+      : { problem, solution, alternatives }
+    const url = buildIssueUrl(reportType, settingsBlock, title, fields, serverVersion)
     await platformService.openExternal(url)
   }
 
