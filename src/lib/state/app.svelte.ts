@@ -36,6 +36,7 @@ export const appState = $state({
   toasts:        [] as unknown[],
   appDir:        '',
   idleSplash:    false,
+  devSplash:     false,
 })
 
 export function setSettingsOpen(next: boolean)        { app.setSettingsOpen(next) }

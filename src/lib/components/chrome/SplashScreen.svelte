@@ -49,6 +49,7 @@
     notConfigured?: boolean
     showCards?:     boolean
     showFps?:       boolean
+    showDevOverlay?: boolean
     pinLen?:        number
     pinCorrect?:    string
     onReady?:       () => void
@@ -60,7 +61,7 @@
 
   let {
     mode = 'loading', ringFull = false, failed = false,
-    notConfigured = false, showCards = true, showFps = false,
+    notConfigured = false, showCards = true, showFps = false, showDevOverlay = false,
     pinLen = 4, pinCorrect = '',
     onReady, onUnlock, onRetry, onBypass, onDismiss,
   }: Props = $props()
@@ -464,7 +465,7 @@
     {/if}
   {/if}
 
-  {#if isDev && mode === 'idle' && devMetrics}
+  {#if isDev && mode === 'idle' && devMetrics && showDevOverlay}
     <div class="dev-overlay">
       <span class="dev-title">canvas · idle splash</span>
       <div class="dev-grid">

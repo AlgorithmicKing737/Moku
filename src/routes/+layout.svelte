@@ -142,19 +142,37 @@
     if (appState.status === 'booting') splashDismissed = false
   })
 
-  let idleSplashLocked = false
-
-  function showIdleSplash() {
-    if (idleSplashLocked || appState.idleSplash) return
-    appState.idleSplash = true
-  }
+  let idleTimer:       ReturnType<typeof setTimeout> | null = null
+  let idleDismissLock = false
 
   function onIdleDismiss() {
-    if (idleSplashLocked) return
-    idleSplashLocked = true
+    if (idleDismissLock) return
+    idleDismissLock = true
     appState.idleSplash = false
-    setTimeout(() => { idleSplashLocked = false }, 400)
+    setTimeout(() => { idleDismissLock = false }, 400)
   }
+
+  function armIdleTimer() {
+    if (idleTimer !== null) clearTimeout(idleTimer)
+    const mins = settingsState.settings.idleTimeoutMin ?? 5
+    if (mins <= 0) return
+    idleTimer = setTimeout(() => {
+      if (appState.status === 'ready' && !appState.idleSplash) appState.idleSplash = true
+    }, mins * 60_000)
+  }
+
+  $effect(() => {
+    if (appState.status !== 'ready') return
+
+    const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'touchmove', 'wheel', 'click'] as const
+    for (const e of events) document.addEventListener(e, armIdleTimer, { capture: true, passive: true })
+    armIdleTimer()
+
+    return () => {
+      if (idleTimer !== null) { clearTimeout(idleTimer); idleTimer = null }
+      for (const e of events) document.removeEventListener(e, armIdleTimer, { capture: true })
+    }
+  })
 
   function onSplashRetry() {
     import('$lib/state/boot.svelte').then(({ retryBoot }) => {
@@ -185,6 +203,10 @@
 
 {#if appState.idleSplash}
   <SplashScreen mode="idle" showCards={settingsState.settings.splashCards ?? true} onDismiss={onIdleDismiss} />
+{/if}
+
+{#if appState.devSplash}
+  <SplashScreen mode="idle" showDevOverlay onDismiss={() => appState.devSplash = false} />
 {/if}
 
 {#if showApp}
