@@ -9,7 +9,8 @@
   import { get }           from 'svelte/store'
   import Thumbnail         from '$lib/components/shared/manga/Thumbnail.svelte'
   import { resolvedCover } from '$lib/core/cover/coverResolver'
-  import type { MangaPrefs }                                    from '$lib/types/settings'
+  import type { Manga, Chapter, Category } from '$lib/types'
+
   import { seriesState }                                        from '$lib/state/series.svelte'
   import { setPreviewManga }                                    from '$lib/state/series.svelte'
 
@@ -59,6 +60,7 @@
 
   let manageOpen:     boolean = $state(false)
   let genresExpanded: boolean = $state(false)
+  let descExpanded:   boolean = $state(false)
   let altOpen:        boolean = $state(false)
 
   const statusLabel = $derived(
@@ -104,7 +106,7 @@
     </div>
   {:else}
     <div class="meta">
-      <p class="title">{manga?.title}</p>
+      <button class="title" onclick={() => manga && setPreviewManga(manga)} disabled={!manga}>{manga?.title}</button>
 
       {#if manga?.author || manga?.artist}
         <p class="byline">{[manga?.author, manga?.artist].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(' · ')}</p>
@@ -148,8 +150,8 @@
 
       {#if manga?.description}
         <div class="desc-wrap">
-          <p class="desc">{manga.description}</p>
-          <button class="expand-toggle" onclick={() => genresExpanded = !genresExpanded}>Read more</button>
+          <p class="desc" class:desc-open={descExpanded}>{manga.description}</p>
+          <button class="expand-toggle" onclick={() => descExpanded = !descExpanded}>{descExpanded ? 'Show less' : 'Read more'}</button>
         </div>
       {/if}
     </div>
@@ -277,7 +279,11 @@
     font-size: var(--text-base); font-weight: var(--weight-medium);
     color: var(--text-primary); line-height: var(--leading-snug);
     letter-spacing: var(--tracking-tight);
+    background: none; border: none; padding: 0; text-align: left; cursor: pointer;
+    transition: color var(--t-base);
   }
+  .title:hover:not(:disabled) { color: var(--accent-fg); }
+  .title:disabled { cursor: default; }
   .byline { font-size: var(--text-xs); color: var(--text-muted); font-family: var(--font-ui); }
 
   .badges { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
@@ -328,6 +334,7 @@
     font-size: var(--text-xs); color: var(--text-muted); line-height: var(--leading-base);
     display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;
   }
+  .desc.desc-open { display: block; -webkit-line-clamp: unset; overflow: visible; }
   .expand-toggle {
     font-family: var(--font-ui); font-size: var(--text-2xs); color: var(--text-faint);
     letter-spacing: var(--tracking-wide); align-self: flex-start; transition: color var(--t-base);

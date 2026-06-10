@@ -36,6 +36,7 @@
     onClampZoom:          (z: number) => number;
     onApplySettings:      (patch: Partial<ReaderSettings>) => void;
     onSettingsOpen:       () => void;
+    onOpenPreview:        () => void;
     perMangaEnabled:      boolean;
   }
 
@@ -47,7 +48,7 @@
     barPosition, progressBar,
     onCaptureZoomAnchor, onRestoreZoomAnchor,
     onMaybeMarkRead, onToggleBookmark, onCommitMarker, onDeleteMarker,
-    onClampZoom, onApplySettings, onSettingsOpen,
+    onClampZoom, onApplySettings, onSettingsOpen, onOpenPreview,
     perMangaEnabled,
   }: Props = $props();
 
@@ -155,12 +156,12 @@
           <span class="ch-info">&#xE2CE;</span>
         {:else}
           <span class="ch-marquee-track" onwheel={(e) => { e.stopPropagation(); (e.currentTarget as HTMLElement).scrollLeft += e.deltaY; }}>
-            <span class="ch-marquee-content">
-              <span class="ch-title">{readerState.activeManga?.title}</span>
-              <span class="ch-sep">/</span>
-              <span class="ch-name">{displayChapter?.name}</span>
+              <button class="ch-marquee-content ch-preview-btn" onclick={onOpenPreview}>
+                <span class="ch-title">{readerState.activeManga?.title}</span>
+                <span class="ch-sep">/</span>
+                <span class="ch-name">{displayChapter?.name}</span>
+              </button>
             </span>
-          </span>
         {/if}
       </div>
       {#if !isVertical}
@@ -494,6 +495,8 @@
   .ch-marquee-track { overflow-x: auto; min-width: 0; flex: 1; scrollbar-width: none; }
   .ch-marquee-track::-webkit-scrollbar { display: none; }
   .ch-marquee-content { display: inline-flex; align-items: center; gap: var(--sp-2); white-space: nowrap; }
+  .ch-preview-btn { background: none; border: none; cursor: pointer; padding: 0; font-size: inherit; font-family: inherit; border-radius: var(--radius-sm); transition: opacity var(--t-fast); }
+  .ch-preview-btn:hover { opacity: 0.7; }
   .ch-title { color: var(--text-secondary); font-weight: var(--weight-medium); }
   .ch-sep   { color: var(--text-faint); flex-shrink: 0; }
   .ch-name  { color: var(--text-muted); }

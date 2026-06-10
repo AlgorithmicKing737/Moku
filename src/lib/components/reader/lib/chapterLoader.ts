@@ -1,7 +1,7 @@
-import { readerState }                          from "$lib/state/reader.svelte";
-import { fetchPages }                           from "./pageLoader";
-import { cancelQueuedFetches, revokeBlobUrl }   from "$lib/core/cache/imageCache";
-import { clearResolvedUrlCache, clearPageCache } from "$lib/core/cache/pageCache";
+import { readerState }                                          from "$lib/state/reader.svelte";
+import { fetchPages }                                          from "./pageLoader";
+import { cancelQueuedFetches, revokeBlobUrl, preloadBlobUrls } from "$lib/core/cache/imageCache";
+import { clearResolvedUrlCache, clearPageCache }               from "$lib/core/cache/pageCache";
 
 export function scheduleResumeDismiss() {
   setTimeout(() => { readerState.resumeFading = true; }, 1500);
@@ -46,18 +46,23 @@ export async function loadChapter(
   const resumeTo = bookmark ? bookmark.pageNumber : 0;
   readerState.resumePage      = resumeTo > 1 ? resumeTo : 0;
   readerState.resumeDismissed = false;
-  readerState.resumeVisible   = resumeTo > 1;
-  if (resumeTo > 1) scheduleResumeDismiss();
+  readerState.resumeVisible   = false;
 
   readerState.pageNumber = 1;
   try {
     const urls = await fetchPages(id, useBlob, ctrl.signal, resumeTo > 1 ? resumeTo - 1 : 0);
     if (ctrl.signal.aborted) return;
     readerState.pageUrls = urls;
+    if (useBlob && resumeTo > 1) {
+      const lo = Math.max(0, resumeTo - 2);
+      const hi = Math.min(urls.length, resumeTo + 4);
+      preloadBlobUrls(urls.slice(lo, hi), 900);
+    }
     if (startAtLastPage.current)  readerState.pageNumber = urls.length;
     else if (resumeTo > 1)        readerState.pageNumber = Math.min(resumeTo, urls.length || resumeTo);
     readerState.pageReady = true;
     readerState.loading   = false;
+    if (resumeTo > 1) readerState.resumeVisible = true;
     if (adjacent.next) {
       prefetchedChapterId = adjacent.next.id;
       fetchPages(adjacent.next.id, useBlob, ctrl.signal).catch(() => {});

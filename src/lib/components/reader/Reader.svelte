@@ -12,9 +12,10 @@
   import { clampZoom, captureZoomAnchor, restoreZoomAnchor } from "$lib/components/reader/lib/zoomHelpers";
   import { loadChapter, scheduleResumeDismiss }              from "$lib/components/reader/lib/chapterLoader";
   import { historyState }                                    from "$lib/state/history.svelte";
+  import { setPreviewManga }                                 from "$lib/state/series.svelte";
   import { getAdapter }                                      from "$lib/request-manager";
   import { setReading, clearReading }                        from "$lib/core/discord";
-  import { revokeBlobUrl }                                   from "$lib/core/cache/imageCache";
+  import { revokeBlobUrl, cancelQueuedFetches, preloadBlobUrls } from "$lib/core/cache/imageCache";
   import type { ReaderSettings }                             from "$lib/state/reader.svelte";
   import ReaderControls                                      from "$lib/components/reader/ReaderControls.svelte";
   import PageView                                            from "$lib/components/reader/PageView.svelte";
@@ -211,6 +212,36 @@
 
   const startAtLast = () => { startAtLastPageRef.current = true; };
 
+  function flatIndexForPage(page: number): number {
+    const chId = readerState.visibleChapterId ?? readerState.activeChapter?.id;
+    const chunks = readerState.stripChapters;
+    let offset = 0;
+    for (const chunk of chunks) {
+      if (chunk.chapterId === chId) return offset + Math.max(0, page - 1);
+      offset += chunk.urls.length;
+    }
+    return Math.max(0, page - 1);
+  }
+
+  function primedJump(page: number, commit = true) {
+    if (useBlob && commit && style !== "longstrip") {
+      cancelQueuedFetches();
+      const urls = readerState.pageUrls;
+      const lo   = Math.max(0, page - 2);
+      const hi   = Math.min(urls.length, page + 4);
+      preloadBlobUrls(urls.slice(lo, hi), 999);
+    }
+    jumpToPage(
+      page,
+      style,
+      lastPage,
+      style === "longstrip" ? (idx) => pageViewRef.scrollToFlatIndex(idx) : null,
+      stripToRender.reduce((s, c) => s + c.urls.length, 0),
+      readerState.visibleChapterId ?? readerState.activeChapter?.id ?? 0,
+      readerState.stripChapters,
+    );
+  }
+
   const goNext = $derived(rtl
     ? () => goBack(style, adjacent, startAtLast)
     : () => goForward(style, adjacent, lastPage, maybeMarkCurrentRead, startAtLast));
@@ -218,7 +249,6 @@
     ? () => goForward(style, adjacent, lastPage, maybeMarkCurrentRead, startAtLast)
     : () => goBack(style, adjacent, startAtLast));
 
-  // clear Discord presence and free page blob textures before closing
   function handleCloseReader() {
     clearReading().catch(() => {});
     for (const url of readerState.pageUrls) revokeBlobUrl(url);
@@ -232,13 +262,13 @@
     goNext:           () => goNext(),
     goPrev:           () => goPrev(),
     closeReader:      () => handleCloseReader(),
-    goToPage:         (p) => jumpToPage(p, style, lastPage, containerEl),
+    goToPage:         (p) => primedJump(p),
     lastPage:         () => lastPage,
     adjustZoom:       (d) => { captureZoomAnchor(containerEl, style, zoomAnchor); applySettings({ readerZoom: clampZoom(zoom + d) }); restoreZoomAnchor(containerEl, zoomAnchor); },
     resetZoom:        () => { captureZoomAnchor(containerEl, style, zoomAnchor); applySettings({ readerZoom: 1.0 }); restoreZoomAnchor(containerEl, zoomAnchor); },
     cycleStyle:       () => { const idx = PAGE_STYLES.indexOf(style); applySettings({ pageStyle: PAGE_STYLES[(idx + 1) % PAGE_STYLES.length] }); },
     toggleDirection:  () => applySettings({ readingDirection: rtl ? "ltr" : "rtl" }),
-    openSettings: () => { app.setSettingsOpen(true); },
+    openSettings:     () => { app.setSettingsOpen(true); },
     toggleBookmark:   () => toggleBookmark(displayChapter, readerState.pageNumber),
     toggleAutoScroll: () => { if (style === "longstrip") updateSettings({ autoScroll: !(settingsState.settings.autoScroll ?? false) }); },
     toggleMarker:     () => {
@@ -325,7 +355,6 @@
     }
   });
 
-  // Separate from chapter load: also re-fires when idle splash dismisses so presence is restored.
   $effect(() => {
     const ch    = readerState.activeChapter;
     const manga = readerState.activeManga;
@@ -361,26 +390,18 @@
     if (style === "longstrip" && readerState.pageUrls.length && readerState.activeChapter) {
       const ch       = readerState.activeChapter;
       const urls     = readerState.pageUrls;
-      const targetPg = untrack(() => readerState.resumePage);
+      const resumeTo = untrack(() => readerState.resumePage);
       appending                    = false;
       readerState.stripChapters    = [{ chapterId: ch.id, chapterName: ch.name, urls }];
       readerState.visibleChapterId = ch.id;
       tick().then(() => {
         if (!containerEl) return;
-        if (targetPg > 1) {
-          const chId = ch.id;
-          const scrollToResumePage = () => {
-            const target = containerEl!.querySelector<HTMLImageElement>(`img[data-local-page="${targetPg}"][data-chapter="${chId}"]`);
-            if (!target) { requestAnimationFrame(scrollToResumePage); return; }
-            containerEl!.querySelectorAll<HTMLImageElement>(`img[data-chapter="${chId}"]`).forEach((img, i) => { if (i < targetPg) img.loading = "eager"; });
-            const doScroll = () => { target.scrollIntoView({ block: "start" }); readerState.stripResumeReady = true; };
-            if (target.complete && target.naturalHeight > 0) doScroll();
-            else { target.loading = "eager"; target.addEventListener("load", doScroll, { once: true }); }
-          };
-          scrollToResumePage();
+        if (resumeTo > 1) {
+          pageViewRef.scrollToFlatIndex(resumeTo - 1);
+          readerState.stripResumeReady = true;
           return;
         }
-        containerEl!.scrollTop = 0;
+        containerEl.scrollTop = 0;
       });
     }
   });
@@ -430,10 +451,11 @@
     untrack(() => {
       cleanupScroll();
       cleanupScroll = setupScrollTracking(containerEl!, {
-        onPageChange:    (p) => { readerState.pageNumber = p; },
-        onChapterChange: (id) => { readerState.visibleChapterId = id; },
-        onMarkRead:      (id) => markChapterRead(id, markedRead),
-        onAppend:        () => {
+        onPageChange:      (p)   => { readerState.pageNumber = p; },
+        onChapterChange:   (id)  => { readerState.visibleChapterId = id; },
+        onCenterIdxChange: (idx) => { pageViewRef?.notifyScrollCenter(idx); },
+        onMarkRead:        (id)  => markChapterRead(id, markedRead),
+        onAppend: () => {
           if (appending || !readerState.stripChapters.length) return;
           appending = true;
           appendNextChapter(
@@ -628,6 +650,7 @@
     onClampZoom={clampZoom}
     onApplySettings={applySettings}
     onSettingsOpen={() => { app.setSettingsOpen(true); }}
+    onOpenPreview={() => { if (readerState.activeManga) setPreviewManga(readerState.activeManga); }}
     {perMangaEnabled}
   />
 
@@ -688,7 +711,7 @@
       {barPosition}
       onGoPrev={goPrev}
       onGoNext={goNext}
-      onJumpToPage={(p) => jumpToPage(p, style, lastPage, containerEl)}
+      onJumpToPage={(p, commit) => primedJump(p, commit)}
     />
   {/snippet}
 
@@ -702,7 +725,7 @@
       {barPosition}
       onGoPrev={goPrev}
       onGoNext={goNext}
-      onJumpToPage={(p) => jumpToPage(p, style, lastPage, containerEl)}
+      onJumpToPage={(p, commit) => primedJump(p, commit)}
     />
   {/if}
 </div>

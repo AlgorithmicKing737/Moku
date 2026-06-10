@@ -1,10 +1,11 @@
 <script lang="ts">
+  import { tick }               from "svelte";
   import { readerState }        from "$lib/state/reader.svelte";
   import { settingsState }      from "$lib/state/settings.svelte";
   import { createPinchTracker } from "$lib/components/reader/lib/pinchZoom";
   import type { PinchTracker }  from "$lib/components/reader/lib/pinchZoom";
   import type { StripChapter }  from "$lib/components/reader/lib/scrollHandler";
-  
+
   interface Props {
     style:            string;
     imgCls:           string;
@@ -54,11 +55,51 @@
   let resolvedSrc = $state<Record<number, string>>({});
   let revokeQueue: string[] = [];
 
-  let observer: IntersectionObserver | null = null;
-  const elementIndex = new Map<Element, number>();
+  // Aspect ratios (w/h) keyed by flat index, written by the img onload handler.
+  // Retained as a fallback for scrollToFlatIndex when a slot is not yet in DOM.
+  const aspectMap = new Map<number, number>();
 
-  let viewportCenter = $state(0);
+  let currentSrc        = $state<string | null>(null);
+  let currentGroupSrcs  = $state<(string | null)[]>([]);
 
+  let centerIdx = $state(0);
+
+  // ── Non-longstrip page src resolution ────────────────────────────────────
+  $effect(() => {
+    if (style === "longstrip" || !pageReady) return;
+    const pageNum = readerState.pageNumber;
+    const urls    = readerState.pageUrls;
+    const group   = currentGroup;
+    currentSrc       = null;
+    currentGroupSrcs = group.map(() => null);
+    let cancelled = false;
+    if (style === "double") {
+      group.forEach((pg, i) => {
+        const url = urls[pg - 1];
+        if (!url) return;
+        resolveUrl(url, 999).then(src => {
+          if (cancelled) return;
+          currentGroupSrcs = currentGroupSrcs.map((s, j) => j === i ? src : s);
+        });
+      });
+    } else {
+      const url = urls[pageNum - 1];
+      if (url) resolveUrl(url, 999).then(src => { if (!cancelled) currentSrc = src; });
+    }
+    return () => { cancelled = true; };
+  });
+
+  // ── Non-longstrip: scroll to top on every page change ────────────────────
+  // Ported from Suwayomi's useReaderScrollToStartOnPageChange.
+  // Prevents stale pan position carrying over when flipping pages.
+  $effect(() => {
+    void readerState.pageNumber;
+    if (style !== "longstrip" && containerEl) {
+      containerEl.scrollTo(0, 0);
+    }
+  });
+
+  // ── Blob URL revocation ───────────────────────────────────────────────────
   function scheduleRevoke(src: string) {
     if (!src || !src.startsWith("blob:")) return;
     revokeQueue.push(src);
@@ -68,6 +109,7 @@
     });
   }
 
+  // ── Load window management ────────────────────────────────────────────────
   function loadPage(idx: number) {
     if (loadedSet.has(idx)) return;
     const page = flatPages[idx];
@@ -99,62 +141,162 @@
     }
   }
 
-  function recalcWindow() {
-    const center = viewportCenter;
-    const lo     = center - LOAD_RADIUS;
-    const hi     = center + LOAD_RADIUS;
+  function recalcWindow(center: number) {
+    const lo      = center - LOAD_RADIUS;
+    const hi      = center + LOAD_RADIUS;
     const evictLo = center - UNLOAD_RADIUS;
     const evictHi = center + UNLOAD_RADIUS;
     for (let i = 0; i < flatPages.length; i++) {
-      if (i >= lo && i <= hi)           loadPage(i);
-      else if (i < evictLo || i > evictHi) unloadPage(i);
+      if (i >= lo && i <= hi)               loadPage(i);
+      else if (i < evictLo || i > evictHi)  unloadPage(i);
     }
   }
 
-  $effect(() => { void viewportCenter; recalcWindow(); });
-  $effect(() => { void flatPages.length; recalcWindow(); });
+  $effect(() => { recalcWindow(centerIdx); });
+  $effect(() => { void flatPages.length; recalcWindow(centerIdx); });
 
-  function setupObserver(containerEl: HTMLElement) {
-    observer?.disconnect();
-    elementIndex.clear();
-    observer = new IntersectionObserver(
-      (entries) => {
-        let best = -1;
-        let bestRatio = -1;
-        for (const entry of entries) {
-          const idx = elementIndex.get(entry.target);
-          if (idx === undefined) continue;
-          if (entry.isIntersecting && entry.intersectionRatio > bestRatio) {
-            bestRatio = entry.intersectionRatio;
-            best = idx;
-          }
-        }
-        if (best >= 0 && best !== viewportCenter) viewportCenter = best;
-      },
-      { root: containerEl, rootMargin: "0px", threshold: [0, 0.1, 0.5, 1.0] },
-    );
-  }
+  // ── Scroll position preservation on image resize above viewport ───────────
+  // Ported from Suwayomi's usePreserveOnLeadingPageRender.
+  //
+  // Problem: when a placeholder above the current scroll position loads its
+  // real image and changes height, the browser shifts the scroll position
+  // relative to the viewport (layout shift). This corrects for that by:
+  //   1. Tracking the first visible image and its offsetTop at last scroll.
+  //   2. On every ResizeObserver entry for an image above scrollTop, computing
+  //      the delta and applying it as a scroll correction.
+  //
+  // MutationObserver watches for images being added/removed so the
+  // ResizeObserver stays in sync with the actual DOM without needing
+  // querySelectorAll on every scroll tick.
+  $effect(() => {
+    if (style !== "longstrip" || !containerEl) return;
 
-  function observePage(el: HTMLDivElement, idx: number) {
-    elementIndex.set(el, idx);
-    observer?.observe(el);
-    return {
-      update(newIdx: number) { elementIndex.set(el, newIdx); },
-      destroy() { observer?.unobserve(el); elementIndex.delete(el); },
+    let visibleImg: HTMLElement | undefined;
+    let visibleImgTop = 0;
+    let lastScrollTop = 0;
+
+    const onScroll = () => {
+      lastScrollTop = containerEl.scrollTop;
+      if (visibleImg) {
+        visibleImgTop = visibleImg.offsetTop;
+      }
     };
+    containerEl.addEventListener("scroll", onScroll, { passive: true });
+
+    const intersectionObs = new IntersectionObserver((entries) => {
+      const first = entries.find(e => e.isIntersecting);
+      if (first?.target instanceof HTMLElement) {
+        visibleImg    = first.target;
+        visibleImgTop = first.target.offsetTop;
+      }
+    });
+
+    const resizeObs = new ResizeObserver((entries) => {
+      if (!visibleImg) return;
+      const hasEntryBeforeScroll = entries.some(e => {
+        if (!(e.target instanceof HTMLElement)) return false;
+        // Skip zero-size preload placeholders (they are outside the load window)
+        if (!e.target.clientWidth && !e.target.clientHeight) return false;
+        return e.target.offsetTop < lastScrollTop;
+      });
+      if (!hasEntryBeforeScroll) return;
+      const newTop = lastScrollTop - visibleImgTop + visibleImg.offsetTop;
+      containerEl.scrollTo({ top: newTop, behavior: "instant" } as ScrollToOptions);
+    });
+
+    const observe   = (el: Element) => { intersectionObs.observe(el); resizeObs.observe(el); };
+    const unobserve = (el: Element) => { intersectionObs.unobserve(el); resizeObs.unobserve(el); };
+
+    const mutationObs = new MutationObserver((mutations) => {
+      for (const m of mutations) {
+        m.addedNodes.forEach(n => {
+          if (!(n instanceof HTMLElement)) return;
+          const imgs = n instanceof HTMLImageElement ? [n] : Array.from(n.querySelectorAll("img"));
+          imgs.forEach(observe);
+        });
+        m.removedNodes.forEach(n => {
+          if (!(n instanceof HTMLElement)) return;
+          const imgs = n instanceof HTMLImageElement ? [n] : Array.from(n.querySelectorAll("img"));
+          imgs.forEach(unobserve);
+        });
+      }
+    });
+    mutationObs.observe(containerEl, { childList: true, subtree: true });
+
+    // Observe images already in the DOM at setup time
+    containerEl.querySelectorAll("img").forEach(observe);
+
+    return () => {
+      containerEl.removeEventListener("scroll", onScroll);
+      mutationObs.disconnect();
+      resizeObs.disconnect();
+      intersectionObs.disconnect();
+    };
+  });
+
+  // ── Cursor hide on inactivity (longstrip) ─────────────────────────────────
+  // Ported from Suwayomi's useReaderHideCursorOnInactivity.
+  // Hides the cursor after 5 s of mouse inactivity, restores on movement.
+  $effect(() => {
+    if (style !== "longstrip" || !containerEl) return;
+
+    const HIDE_AFTER_MS = 5_000;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const show = () => {
+      containerEl.style.cursor = "";
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => { containerEl.style.cursor = "none"; }, HIDE_AFTER_MS);
+    };
+
+    show(); // start the timer immediately
+    window.addEventListener("mousemove", show, { passive: true });
+
+    return () => {
+      containerEl.style.cursor = "";
+      window.removeEventListener("mousemove", show);
+      if (timer) clearTimeout(timer);
+    };
+  });
+
+  // ── Scroll to target flat index ───────────────────────────────────────────
+  export function notifyScrollCenter(idx: number) {
+    centerIdx = idx;
   }
 
+  export async function scrollToFlatIndex(idx: number) {
+    if (!containerEl || !flatPages.length) return;
+    centerIdx = idx;
+    recalcWindow(idx);
+    // Wait for Svelte to render any newly-in-window slots.
+    await tick();
+    if (!containerEl) return;
+    // Use scrollIntoView — the browser knows the exact element position
+    // regardless of image load state or aspect ratio. This is the same approach
+    // used by Suwayomi's useReaderHandlePageSelection (imageRef.scrollIntoView).
+    const slots = containerEl.querySelectorAll<HTMLElement>(".strip-slot");
+    const slot  = slots[idx];
+    if (slot) {
+      slot.scrollIntoView({ block: "start", behavior: "instant" });
+    } else {
+      // Slot not in DOM — proportional fallback (very unlikely after tick).
+      containerEl.scrollTop = (idx / flatPages.length) * containerEl.scrollHeight;
+    }
+  }
+
+  // ── Reset on chapter change ───────────────────────────────────────────────
   let lastChapterId = 0;
   $effect(() => {
     const chapterId = readerState.activeChapter?.id ?? 0;
     if (chapterId === lastChapterId) return;
     lastChapterId = chapterId;
-    loadedSet      = new Set<number>();
-    resolvedSrc    = {};
-    const resume   = readerState.resumePage;
-    viewportCenter = resume > 1 ? resume - 1 : 0;
+    loadedSet   = new Set<number>();
+    resolvedSrc = {};
+    centerIdx   = 0;
+    aspectMap.clear();
   });
 
+  // ── Inspect / zoom helpers ────────────────────────────────────────────────
   const INSPECT_ZOOM_STEP = 0.15;
   const INSPECT_ZOOM_MAX  = 8;
 
@@ -238,6 +380,11 @@
     return () => cancelAnimationFrame(rafId);
   });
 
+  $effect(() => {
+    if (style !== "longstrip") stopMidScroll();
+  });
+
+  // ── Pinch zoom ────────────────────────────────────────────────────────────
   let pinch: PinchTracker | null = null;
 
   $effect(() => {
@@ -255,6 +402,7 @@
     }
   });
 
+  // ── Pointer / mouse / wheel event handlers ────────────────────────────────
   export function onInspectMouseDown(e: MouseEvent) {
     if ((e.target as Element).closest(".bar")) return;
     if (e.button === 1 && style === "longstrip") {
@@ -388,18 +536,7 @@
   function setContainer(el: HTMLDivElement) {
     containerEl = el;
     bindContainer(el);
-    if (style === "longstrip") setupObserver(el);
   }
-
-  $effect(() => {
-    if (style === "longstrip" && containerEl) {
-      setupObserver(containerEl);
-    } else if (style !== "longstrip") {
-      observer?.disconnect();
-      observer = null;
-      stopMidScroll();
-    }
-  });
 </script>
 
 <div
@@ -459,7 +596,7 @@
     {#each flatPages as page, gi (page.chapterId + ":" + page.localIndex)}
       {@const src = resolvedSrc[gi]}
       {@const isLoaded = loadedSet.has(gi)}
-      <div class="strip-slot" use:observePage={gi}>
+      <div class="strip-slot" data-local-page={page.localIndex + 1} data-chapter={page.chapterId}>
         {#if isLoaded && src}
           <img
             {src}
@@ -475,7 +612,9 @@
               const img  = e.currentTarget as HTMLImageElement;
               const slot = img.closest<HTMLElement>(".strip-slot");
               if (slot && img.naturalWidth > 0) {
-                slot.style.setProperty("--aspect", String(img.naturalWidth / img.naturalHeight));
+                const aspect = img.naturalWidth / img.naturalHeight;
+                slot.style.setProperty("--aspect", String(aspect));
+                aspectMap.set(gi, aspect);
               }
             }}
           />
@@ -490,11 +629,11 @@
 
   {:else if style === "fade" && pageReady}
     <div class="inspect-wrap" style="transform:scale({readerState.inspectScale}) translate({readerState.inspectPanX / readerState.inspectScale}px,{readerState.inspectPanY / readerState.inspectScale}px)">
-      {#await resolveUrl(readerState.pageUrls[readerState.pageNumber - 1], 999)}
+      {#if currentSrc}
+        <img src={currentSrc} alt="Page {readerState.pageNumber}" class={imgCls} decoding="async" style="opacity:{fadingOut ? 0 : 1};transition:opacity 0.1s ease" draggable="false" />
+      {:else}
         <div class="page-loader page-loader-single" aria-hidden="true">{@render skeleton()}</div>
-      {:then src}
-        <img {src} alt="Page {readerState.pageNumber}" class={imgCls} decoding="async" style="opacity:{fadingOut ? 0 : 1};transition:opacity 0.1s ease" draggable="false" />
-      {/await}
+      {/if}
     </div>
 
   {:else if style === "double" && pageReady}
@@ -502,11 +641,11 @@
       {#if pageGroups.length}
         <div class="double-wrap">
           {#each currentGroup as pg, i (pg)}
-            {#await resolveUrl(readerState.pageUrls[pg - 1], 999)}
+            {#if currentGroupSrcs[i]}
+              <img src={currentGroupSrcs[i]} alt="Page {pg}" class="{imgCls} page-half {i === 0 ? 'gap-left' : 'gap-right'}" decoding="async" draggable="false" />
+            {:else}
               <div class="page-loader page-half {i === 0 ? 'gap-left' : 'gap-right'}" aria-hidden="true">{@render skeleton()}</div>
-            {:then src}
-              <img {src} alt="Page {pg}" class="{imgCls} page-half {i === 0 ? 'gap-left' : 'gap-right'}" decoding="async" draggable="false" />
-            {/await}
+            {/if}
           {/each}
         </div>
       {:else}
@@ -518,11 +657,11 @@
 
   {:else if pageReady}
     <div class="inspect-wrap" style="transform:scale({readerState.inspectScale}) translate({readerState.inspectPanX / readerState.inspectScale}px,{readerState.inspectPanY / readerState.inspectScale}px)">
-      {#await resolveUrl(readerState.pageUrls[readerState.pageNumber - 1], 999)}
+      {#if currentSrc}
+        <img src={currentSrc} alt="Page {readerState.pageNumber}" class={imgCls} decoding="async" draggable="false" />
+      {:else}
         <div class="page-loader page-loader-single" aria-hidden="true">{@render skeleton()}</div>
-      {:then src}
-        <img {src} alt="Page {readerState.pageNumber}" class={imgCls} decoding="async" draggable="false" />
-      {/await}
+      {/if}
     </div>
   {/if}
 </div>

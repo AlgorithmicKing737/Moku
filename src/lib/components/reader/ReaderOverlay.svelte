@@ -21,11 +21,27 @@
     readerState.dlOpen = false;
   }
 
+  let bannerMounted = $state(false);
+  let bannerFading  = $state(false);
+
+  $effect(() => {
+    if (showResumeBanner) {
+      bannerMounted = true;
+      bannerFading  = false;
+    } else if (bannerMounted) {
+      bannerFading = true;
+    }
+  });
+
   const queueable = $derived(adjacent.remaining.filter(c => !c.downloaded));
+
+  function onBannerAnimationEnd() {
+    if (bannerFading) { bannerMounted = false; bannerFading = false; }
+  }
 </script>
 
-{#if showResumeBanner}
-  <button class="resume-banner" class:fading={resumeFading} onclick={onDismissResume}>
+{#if bannerMounted}
+  <button class="resume-banner" class:fading={bannerFading} onclick={onDismissResume} onanimationend={onBannerAnimationEnd}>
     Bookmark at page {resumePage}
   </button>
 {/if}

@@ -259,7 +259,7 @@
   function openSeriesDetail() {
     if (!displayManga) return;
     setActiveManga(displayManga);
-    setNavPage(originNavPage);
+    app.setNavPage(originNavPage);
     close();
   }
 

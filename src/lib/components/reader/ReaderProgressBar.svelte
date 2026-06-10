@@ -20,7 +20,7 @@
     barPosition:          "top" | "left" | "right";
     onGoPrev:             () => void;
     onGoNext:             () => void;
-    onJumpToPage:         (page: number) => void;
+    onJumpToPage:         (page: number, commit?: boolean) => void;
   }
 
   const {
@@ -32,12 +32,22 @@
 
   const isVertical = $derived(barPosition === "left" || barPosition === "right");
 
-  const hValue = $derived(rtl ? sliderMax - sliderPage + 1 : sliderPage);
-  const hPct   = $derived(`--pct:${sliderPct}%`);
+  const hPct = $derived(`--pct:${sliderPct}%`);
+
+  function sliderValToPage(raw: number): number {
+    return rtl ? sliderMax - raw + 1 : raw;
+  }
+
+  function pageToSliderVal(page: number): number {
+    return rtl ? sliderMax - page + 1 : page;
+  }
 
   function handleH(e: Event) {
-    const raw = Number((e.target as HTMLInputElement).value);
-    onJumpToPage(rtl ? sliderMax - raw + 1 : raw);
+    onJumpToPage(sliderValToPage(Number((e.target as HTMLInputElement).value)), false);
+  }
+
+  function handleHCommit(e: Event) {
+    onJumpToPage(sliderValToPage(Number((e.target as HTMLInputElement).value)), true);
   }
 
   function markerPct(pageNumber: number, forRtl = false): number {
@@ -46,9 +56,9 @@
     return ((ord - 1) / (sliderMax - 1)) * 100;
   }
 
-  // Custom vertical slider
   let trackEl = $state<HTMLDivElement | null>(null);
   let dragging = $state(false);
+  let pendingPage = 0;
 
   function pctFromPointer(clientY: number): number {
     if (!trackEl) return 0;
@@ -64,22 +74,24 @@
     if (e.button !== 0) return;
     e.preventDefault();
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    dragging = true;
+    dragging    = true;
     readerState.sliderDragging = true;
-    const pct  = pctFromPointer(e.clientY);
-    onJumpToPage(pageFromPct(pct));
+    pendingPage = pageFromPct(pctFromPointer(e.clientY));
+    onJumpToPage(pendingPage, false);
   }
 
   function handleTrackPointerMove(e: PointerEvent) {
     if (!dragging) return;
-    const pct = pctFromPointer(e.clientY);
-    onJumpToPage(pageFromPct(pct));
+    pendingPage = pageFromPct(pctFromPointer(e.clientY));
+    onJumpToPage(pendingPage, false);
   }
 
   function handleTrackPointerUp(e: PointerEvent) {
     if (!dragging) return;
     dragging = false;
     readerState.sliderDragging = false;
+    readerState.sliderHover    = false;
+    onJumpToPage(pendingPage, true);
   }
 </script>
 
@@ -102,8 +114,9 @@
           style={hPct}
           min={1}
           max={sliderMax}
-          value={hValue}
+          value={pageToSliderVal(sliderPage)}
           oninput={handleH}
+          onchange={handleHCommit}
           onmousedown={() => readerState.sliderDragging = true}
           onmouseup={() => readerState.sliderDragging = false}
         />

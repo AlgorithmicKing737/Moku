@@ -7,34 +7,65 @@ export interface StripChapter {
 }
 
 export interface ScrollHandlerCallbacks {
-  onPageChange:     (page: number) => void;
-  onChapterChange:  (chapterId: number) => void;
-  onMarkRead:       (chapterId: number) => void;
-  onAppend:         () => void;
-  getStripChapters: () => StripChapter[];
-  getPageUrls:      () => string[];
-  shouldAutoMark:   () => boolean;
+  onPageChange:        (page: number) => void;
+  onChapterChange:     (chapterId: number) => void;
+  onCenterIdxChange:   (flatIdx: number) => void;
+  onMarkRead:          (chapterId: number) => void;
+  onAppend:            () => void;
+  getStripChapters:    () => StripChapter[];
+  getPageUrls:         () => string[];
+  shouldAutoMark:      () => boolean;
+}
+
+/**
+ * Returns true if the element is considered "at" the read-line.
+ *
+ * Ported from Suwayomi's ReaderPager.utils `isPageInViewport`:
+ *   - If the element's top is above the line AND its bottom is below it → fully covers the line
+ *     (handles a single page that is taller than the viewport).
+ *   - If the element's top is at or below the line AND its bottom is also below it → leading edge
+ *     has crossed the line (normal scroll-past case).
+ *
+ * Using Math.trunc to avoid floating-point jitter from getBoundingClientRect.
+ */
+function isPageAtReadLine(el: HTMLElement, readLineY: number): boolean {
+  const rect   = el.getBoundingClientRect();
+  const top    = Math.trunc(rect.top);
+  const bottom = Math.trunc(rect.bottom);
+  const line   = Math.trunc(readLineY);
+  // Element completely spans the read line (taller than viewport or very tall image)
+  if (top <= line && bottom >= line) return true;
+  // Element's top edge is at or above the line
+  if (top <= line) return true;
+  return false;
 }
 
 export function setupScrollTracking(
   containerEl: HTMLElement,
   callbacks: ScrollHandlerCallbacks,
 ): () => void {
-  const { onPageChange, onChapterChange, onMarkRead, onAppend, getStripChapters, getPageUrls, shouldAutoMark } = callbacks;
+  const {
+    onPageChange, onChapterChange, onCenterIdxChange,
+    onMarkRead, onAppend, getStripChapters, getPageUrls, shouldAutoMark,
+  } = callbacks;
+
   let rafId: number | null = null;
 
   function tick() {
     rafId = null;
     const imgs = containerEl.querySelectorAll<HTMLElement>("img[data-local-page]");
+
     if (!imgs.length) return;
 
-    const containerTop = containerEl.getBoundingClientRect().top;
-    const readLineY    = containerTop + containerEl.clientHeight * READ_LINE_PCT;
+    const containerRect = containerEl.getBoundingClientRect();
+    const readLineY     = containerRect.top + containerEl.clientHeight * READ_LINE_PCT;
 
+    // Find the last image whose top is at or above the read line.
+    // Binary search is still valid here since images are ordered top-to-bottom.
     let lo = 0, hi = imgs.length - 1, best = 0;
     while (lo <= hi) {
       const mid = (lo + hi) >>> 1;
-      if (imgs[mid].getBoundingClientRect().top <= readLineY) { best = mid; lo = mid + 1; }
+      if (isPageAtReadLine(imgs[mid], readLineY)) { best = mid; lo = mid + 1; }
       else hi = mid - 1;
     }
 
@@ -45,10 +76,19 @@ export function setupScrollTracking(
     onPageChange(activePage);
     if (activeChId) onChapterChange(activeChId);
 
+    const chunks   = getStripChapters();
+    let flatOffset = 0;
+    for (const chunk of chunks) {
+      if (chunk.chapterId === activeChId) {
+        onCenterIdxChange(flatOffset + activePage - 1);
+        break;
+      }
+      flatOffset += chunk.urls.length;
+    }
+
     if (shouldAutoMark() && activeChId) {
-      const chunks = getStripChapters();
-      const chunk  = chunks.find(c => c.chapterId === activeChId);
-      const total  = chunk ? chunk.urls.length : getPageUrls().length;
+      const chunk = chunks.find(c => c.chapterId === activeChId);
+      const total = chunk ? chunk.urls.length : getPageUrls().length;
       if (total > 0 && activePage >= total) onMarkRead(activeChId);
 
       const atBottom = containerEl.scrollTop + containerEl.clientHeight >= containerEl.scrollHeight - 40;
@@ -58,8 +98,9 @@ export function setupScrollTracking(
       }
     }
 
-    const pct = (containerEl.scrollTop + containerEl.clientHeight) / containerEl.scrollHeight;
-    if (pct >= 0.80) onAppend();
+    if ((containerEl.scrollTop + containerEl.clientHeight) / containerEl.scrollHeight >= 0.80) {
+      onAppend();
+    }
   }
 
   function onScroll() {

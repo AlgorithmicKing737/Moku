@@ -64,14 +64,30 @@ export function goBack(style: string, adjacent: Adjacent, startAtLastPage: () =>
   } else if (adjacent.prev) { startAtLastPage(); openReader(adjacent.prev, readerState.activeChapterList); }
 }
 
-export function jumpToPage(page: number, style: string, lastPage: number, containerEl: HTMLElement | null) {
+export function jumpToPage(
+  page: number,
+  style: string,
+  lastPage: number,
+  scrollToFlatIndex: ((idx: number) => void) | null,
+  flatPageCount: number,
+  activeChapterId: number,
+  stripChapters: { chapterId: number; urls: string[] }[],
+) {
   if (style === "longstrip") {
-    const chId = readerState.visibleChapterId ?? readerState.activeChapter?.id;
-    containerEl?.querySelector<HTMLImageElement>(`img[data-local-page="${page}"][data-chapter="${chId}"]`)?.scrollIntoView({ block: "start" });
+    if (!scrollToFlatIndex || flatPageCount === 0) return;
+    let offset = 0;
+    for (const chunk of stripChapters) {
+      if (chunk.chapterId === activeChapterId) {
+        scrollToFlatIndex(offset + Math.max(0, page - 1));
+        return;
+      }
+      offset += chunk.urls.length;
+    }
+    scrollToFlatIndex(Math.max(0, page - 1));
     return;
   }
   if (style === "double" && readerState.pageGroups.length) {
-    const group = readerState.pageGroups[page - 1];
+    const group = readerState.pageGroups.find(g => g.includes(page)) ?? readerState.pageGroups.findLast(g => g[0] <= page);
     if (group) readerState.pageNumber = group[0];
   } else {
     readerState.pageNumber = Math.max(1, Math.min(lastPage, page));
