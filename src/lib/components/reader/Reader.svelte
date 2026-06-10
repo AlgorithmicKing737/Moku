@@ -2,7 +2,7 @@
   import { onMount, untrack, tick }        from "svelte";
   import { readerState, PAGE_STYLES }      from "$lib/state/reader.svelte";
   import { settingsState, updateSettings } from "$lib/state/settings.svelte";
-  import { app }                           from "$lib/state/app.svelte";
+  import { app, appState }                 from "$lib/state/app.svelte";
   import { DEFAULT_KEYBINDS }              from "$lib/core/keybinds/defaultBinds";
   import { fetchPages, resolveUrl, preloadImage, measureAspect, buildPageGroups } from "$lib/components/reader/lib/pageLoader";
   import { setupScrollTracking, appendNextChapter }          from "$lib/components/reader/lib/scrollHandler";
@@ -13,6 +13,8 @@
   import { loadChapter, scheduleResumeDismiss }              from "$lib/components/reader/lib/chapterLoader";
   import { historyState }                                    from "$lib/state/history.svelte";
   import { getAdapter }                                      from "$lib/request-manager";
+  import { setReading, clearReading }                        from "$lib/core/discord";
+  import { revokeBlobUrl }                                   from "$lib/core/cache/imageCache";
   import type { ReaderSettings }                             from "$lib/state/reader.svelte";
   import ReaderControls                                      from "$lib/components/reader/ReaderControls.svelte";
   import PageView                                            from "$lib/components/reader/PageView.svelte";
@@ -216,10 +218,20 @@
     ? () => goForward(style, adjacent, lastPage, maybeMarkCurrentRead, startAtLast)
     : () => goBack(style, adjacent, startAtLast));
 
+  // clear Discord presence and free page blob textures before closing
+  function handleCloseReader() {
+    clearReading().catch(() => {});
+    for (const url of readerState.pageUrls) revokeBlobUrl(url);
+    for (const strip of readerState.stripChapters) {
+      for (const url of strip.urls) revokeBlobUrl(url);
+    }
+    readerState.closeReader();
+  }
+
   const onKey = createReaderKeyHandler({
     goNext:           () => goNext(),
     goPrev:           () => goPrev(),
-    closeReader:      () => readerState.closeReader(),
+    closeReader:      () => handleCloseReader(),
     goToPage:         (p) => jumpToPage(p, style, lastPage, containerEl),
     lastPage:         () => lastPage,
     adjustZoom:       (d) => { captureZoomAnchor(containerEl, style, zoomAnchor); applySettings({ readerZoom: clampZoom(zoom + d) }); restoreZoomAnchor(containerEl, zoomAnchor); },
@@ -310,6 +322,16 @@
         );
         loadChapter(ch.id, useBlob, abortCtrl, startAtLastPageRef, markedRead, adjacent);
       });
+    }
+  });
+
+  // Separate from chapter load: also re-fires when idle splash dismisses so presence is restored.
+  $effect(() => {
+    const ch    = readerState.activeChapter;
+    const manga = readerState.activeManga;
+    const idle  = appState.idleSplash;
+    if (ch && manga && !idle) {
+      untrack(() => setReading(manga, ch).catch(() => {}));
     }
   });
 

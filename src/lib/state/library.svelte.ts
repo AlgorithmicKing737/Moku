@@ -204,10 +204,18 @@ class LibraryState {
     this.tabFilters = { ...this.tabFilters, [tab]: {} };
   }
 
-  syncFromSettings(s: { hiddenLibraryTabs?: string[]; libraryPinnedTabOrder?: string[]; defaultLibraryCategoryId?: number | null }) {
-    if (s.hiddenLibraryTabs)      this.hiddenTabs        = new Set(s.hiddenLibraryTabs);
-    if (s.libraryPinnedTabOrder)  this.pinnedTabOrder    = s.libraryPinnedTabOrder;
-    if (s.defaultLibraryCategoryId !== undefined) this.defaultCategoryId = s.defaultLibraryCategoryId ?? null;
+  syncFromSettings(s: {
+    hiddenLibraryTabs?:          string[];
+    libraryPinnedTabOrder?:      string[];
+    defaultLibraryCategoryId?:   number | null;
+    libraryShowAllInSaved?:      boolean;
+    libraryHideCompletedInSaved?: boolean;
+  }) {
+    if (s.hiddenLibraryTabs)                        this.hiddenTabs          = new Set(s.hiddenLibraryTabs);
+    if (s.libraryPinnedTabOrder)                    this.pinnedTabOrder      = s.libraryPinnedTabOrder;
+    if (s.defaultLibraryCategoryId !== undefined)   this.defaultCategoryId   = s.defaultLibraryCategoryId ?? null;
+    if (s.libraryShowAllInSaved !== undefined)       this.showAllInSaved      = s.libraryShowAllInSaved;
+    if (s.libraryHideCompletedInSaved !== undefined) this.hideCompletedInSaved = s.libraryHideCompletedInSaved;
   }
 
   setCategories(cats: Category[]) {

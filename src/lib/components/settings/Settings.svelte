@@ -19,6 +19,7 @@
   import ContentSettings     from './sections/ContentSettings.svelte'
   import AboutSettings       from './sections/AboutSettings.svelte'
   import DevtoolsSettings    from './sections/DevToolsSettings.svelte'
+  import ModalBlur           from '$lib/components/shared/ui/ModalBlur.svelte'
 
   interface Props { onclose?: () => void; onOpenThemeEditor?: (id?: string | null) => void }
   let { onclose, onOpenThemeEditor }: Props = $props()
@@ -111,6 +112,7 @@
   })
 </script>
 
+<ModalBlur />
 <div class="s-backdrop" role="presentation" tabindex="-1"
   onclick={(e) => { if (e.target === e.currentTarget) close() }}
   onkeydown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); close() } }}>

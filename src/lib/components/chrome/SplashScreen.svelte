@@ -1,9 +1,46 @@
+<script module lang="ts">
+  function getLiveSet(): Set<HTMLCanvasElement> {
+    const g = window as any
+    if (!g.__splashCanvasSet) g.__splashCanvasSet = new Set<HTMLCanvasElement>()
+    return g.__splashCanvasSet as Set<HTMLCanvasElement>
+  }
+
+  function pruneSet(set: Set<HTMLCanvasElement>) {
+    for (const el of set) if (!el.isConnected) set.delete(el)
+  }
+
+  export function splashDevRegister(el: HTMLCanvasElement) {
+    const set = getLiveSet()
+    pruneSet(set)
+    set.add(el)
+  }
+
+  export function splashDevUnregister(el: HTMLCanvasElement) {
+    const set = getLiveSet()
+    set.delete(el)
+    pruneSet(set)
+  }
+
+  export function splashDevLiveCount(): number {
+    const set = getLiveSet()
+    pruneSet(set)
+    return set.size
+  }
+
+  export function splashDevNextMount(): number {
+    const g = window as any
+    g.__splashTotalMounts = (g.__splashTotalMounts ?? 0) + 1
+    return g.__splashTotalMounts as number
+  }
+</script>
+
 <script lang="ts">
   import { onMount } from 'svelte'
   import logoUrl     from '$lib/assets/moku-icon-splash.svg'
   import { platformService } from '$lib/platform-service'
 
   const isTauri = platformService.platform === 'tauri'
+  const isDev   = import.meta.env.DEV
 
   interface Props {
     mode?:          'loading' | 'idle' | 'locked'
@@ -12,6 +49,7 @@
     notConfigured?: boolean
     showCards?:     boolean
     showFps?:       boolean
+    showDevOverlay?: boolean
     pinLen?:        number
     pinCorrect?:    string
     onReady?:       () => void
@@ -23,7 +61,7 @@
 
   let {
     mode = 'loading', ringFull = false, failed = false,
-    notConfigured = false, showCards = true, showFps = false,
+    notConfigured = false, showCards = true, showFps = false, showDevOverlay = false,
     pinLen = 4, pinCorrect = '',
     onReady, onUnlock, onRetry, onBypass, onDismiss,
   }: Props = $props()
@@ -80,7 +118,7 @@
 
   $effect(() => {
     if (mode === 'loading' && !failed && !notConfigured && !ringFull) {
-      if (!isTauri) return  // no ring animation on web; probe outcome drives exit
+      if (!isTauri) return
       animStart = null
       animPhase = 1
       animFrame = requestAnimationFrame(animateRing)
@@ -280,22 +318,87 @@
     }
   }
 
+  interface DevMetrics {
+    totalMounts:  number
+    resizeCount:  number
+    stampCount:   number
+    mountedAt:    number
+    lastResizeAt: number | null
+  }
+
+  let devMetrics   = $state<DevMetrics | null>(null)
+  let uptimeSecs   = $state(0)
+  let devLiveCount = $state(0)
+
+  $effect(() => {
+    if (!isDev || mode !== 'idle' || !devMetrics) return
+    const start = Date.now()
+    const iv = setInterval(() => { uptimeSecs = Math.floor((Date.now() - start) / 1000) }, 1000)
+    return () => clearInterval(iv)
+  })
+
+  function fmtUptime(s: number): string {
+    if (s < 60) return `${s}s`
+    return `${Math.floor(s / 60)}m ${s % 60}s`
+  }
+
+  function fmtAgo(ts: number | null): string {
+    if (ts === null) return '—'
+    const s = Math.floor((Date.now() - ts) / 1000)
+    if (s < 60) return `${s}s ago`
+    return `${Math.floor(s / 60)}m ago`
+  }
+
   function mountCanvas(el: HTMLCanvasElement) {
     const ctx = el.getContext('2d')!
     let live: RenderState | null = null
     let lastLogW = 0, lastLogH = 0, lastScale = 0, buildGen = 0
+
+    if (isDev && mode === 'idle') {
+      splashDevRegister(el)
+      devLiveCount = splashDevLiveCount()
+      uptimeSecs   = 0
+      devMetrics   = {
+        totalMounts:  splashDevNextMount(),
+        resizeCount:  0,
+        stampCount:   0,
+        mountedAt:    Date.now(),
+        lastResizeAt: null,
+      }
+    }
+
+    function cleanup() {
+      if (live) {
+        live.stamps.forEach(c => { c.width = 0; c.height = 0 })
+        live.vignette.width = 0
+        live.vignette.height = 0
+        live = null
+      }
+      ctx.clearRect(0, 0, el.width, el.height)
+    }
 
     function applySize(logW: number, logH: number, scale: number) {
       const gen = ++buildGen
       if (logW <= 0 || logH <= 0) return
       if (logW === lastLogW && logH === lastLogH && scale === lastScale) return
       lastLogW = logW; lastLogH = logH; lastScale = scale
+      if (live) cleanup()
       const built  = buildCards(logW, logH)
       const stamps = built.cards.map(c => buildStamp(c, scale))
       const vig    = buildVignette(logW, logH, scale)
       el.width  = Math.round(logW * scale)
       el.height = Math.round(logH * scale)
-      if (gen === buildGen) live = { cards: built.cards, trigs: built.trigs, stamps, vignette: vig, CW: el.width, CH: el.height, scale }
+      if (gen === buildGen) {
+        live = { cards: built.cards, trigs: built.trigs, stamps, vignette: vig, CW: el.width, CH: el.height, scale }
+        if (isDev && mode === 'idle' && devMetrics) {
+          devMetrics = {
+            ...devMetrics,
+            resizeCount:  devMetrics.resizeCount + 1,
+            stampCount:   stamps.length,
+            lastResizeAt: Date.now(),
+          }
+        }
+      }
     }
 
     let extraCleanup: (() => void) | undefined
@@ -343,8 +446,13 @@
     raf = requestAnimationFrame(frame)
     return () => {
       cancelAnimationFrame(raf)
+      cleanup()
       extraCleanup?.()
       document.removeEventListener('visibilitychange', onVis)
+      if (isDev && mode === 'idle') {
+        splashDevUnregister(el)
+        devLiveCount = splashDevLiveCount()
+      }
     }
   }
 </script>
@@ -355,6 +463,20 @@
     {#if showFps}
       <span bind:this={fpsEl} style="position:absolute;top:8px;right:8px;font-family:var(--font-ui);font-size:10px;color:var(--text-faint);z-index:2;pointer-events:none"></span>
     {/if}
+  {/if}
+
+  {#if isDev && mode === 'idle' && devMetrics && showDevOverlay}
+    <div class="dev-overlay">
+      <span class="dev-title">canvas · idle splash</span>
+      <div class="dev-grid">
+        <span class="dev-k">live</span>          <span class="dev-v" class:dev-warn={devLiveCount > 1}>{devLiveCount}</span>
+        <span class="dev-k">total mounts</span>  <span class="dev-v">{devMetrics.totalMounts}</span>
+        <span class="dev-k">stamps</span>        <span class="dev-v">{devMetrics.stampCount}</span>
+        <span class="dev-k">resizes</span>       <span class="dev-v">{devMetrics.resizeCount}</span>
+        <span class="dev-k">uptime</span>        <span class="dev-v">{fmtUptime(uptimeSecs)}</span>
+        <span class="dev-k">last resize</span>   <span class="dev-v">{fmtAgo(devMetrics.lastResizeAt)}</span>
+      </div>
+    </div>
   {/if}
 
   {#if mode === 'idle'}
@@ -449,4 +571,11 @@
   .err-btn:hover { border-color:var(--border-strong); color:var(--text-secondary); }
   .err-btn--primary       { border-color:var(--accent-dim); color:var(--accent-fg); background:var(--accent-muted); }
   .err-btn--primary:hover { border-color:var(--accent); color:var(--accent-bright); }
+
+  .dev-overlay { position:absolute; top:12px; left:12px; z-index:10; background:rgba(0,0,0,0.72); border:1px solid rgba(255,255,255,0.10); border-radius:6px; padding:8px 10px; pointer-events:none; backdrop-filter:blur(6px); }
+  .dev-title   { display:block; font-family:var(--font-ui); font-size:9px; letter-spacing:0.14em; text-transform:uppercase; color:var(--accent); margin-bottom:6px; }
+  .dev-grid    { display:grid; grid-template-columns:auto auto; column-gap:12px; row-gap:2px; }
+  .dev-k       { font-family:var(--font-ui); font-size:10px; color:var(--text-faint); white-space:nowrap; }
+  .dev-v       { font-family:var(--font-ui); font-size:10px; color:var(--text-secondary); text-align:right; white-space:nowrap; }
+  .dev-warn    { color:#f87171; }
 </style>

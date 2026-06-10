@@ -102,9 +102,10 @@
   }
 
   function triggerSplash() {
+    if (appState.devSplash) return
     splashTriggered = true
     setTimeout(() => splashTriggered = false, 200)
-    appState.idleSplash = true
+    appState.devSplash = true
   }
 
   async function testWindowsHello() {

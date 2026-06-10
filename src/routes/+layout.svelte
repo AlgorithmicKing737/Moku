@@ -34,13 +34,12 @@
 
   const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 
-  let _splashDismissed = $state(false)
-  let bypassed         = $state(false)
-  let themeEditorOpen  = $state(false)
-  let themeEditorId    = $state<string | null>(null)
+  let splashDismissed = $state(false)
+  let themeEditorOpen = $state(false)
+  let themeEditorId   = $state<string | null>(null)
 
   const splashVisible = $derived(
-    !_splashDismissed ||
+    !splashDismissed ||
     appState.status === 'booting' ||
     appState.status === 'locked'  ||
     appState.status === 'error'   ||
@@ -48,17 +47,16 @@
   )
 
   const ringFull = $derived(appState.status === 'ready')
+  const showApp  = $derived(!splashVisible)
 
-  const showApp = $derived(
-    !splashVisible && (
-      appState.status === 'ready' ||
-      bypassed
-    )
-  )
-
-  function onSplashReady()  { _splashDismissed = true }
-  function onSplashUnlock() { appState.status = 'ready'; _splashDismissed = true }
-  function onSplashBypass() { bypassed = true; _splashDismissed = true }
+  function onSplashReady()  { splashDismissed = true }
+  function onSplashUnlock() { appState.status = 'ready'; splashDismissed = true }
+  function onSplashBypass() {
+    import('$lib/state/boot.svelte').then(({ bypassBoot }) => {
+      bypassBoot(appState.authMode ?? 'NONE', appState.authUser ?? '', appState.authPass ?? '')
+    })
+    splashDismissed = true
+  }
 
   const isReaderRoute       = $derived($page.url.pathname.startsWith('/reader'))
   const readerContainerized = $derived(settingsState.settings.readerContainerized ?? false)
@@ -141,10 +139,40 @@
   })
 
   $effect(() => {
-    if (appState.status === 'booting') _splashDismissed = false
+    if (appState.status === 'booting') splashDismissed = false
   })
 
-  function onIdleDismiss() { appState.idleSplash = false }
+  let idleTimer:       ReturnType<typeof setTimeout> | null = null
+  let idleDismissLock = false
+
+  function onIdleDismiss() {
+    if (idleDismissLock) return
+    idleDismissLock = true
+    appState.idleSplash = false
+    setTimeout(() => { idleDismissLock = false }, 400)
+  }
+
+  function armIdleTimer() {
+    if (idleTimer !== null) clearTimeout(idleTimer)
+    const mins = settingsState.settings.idleTimeoutMin ?? 5
+    if (mins <= 0) return
+    idleTimer = setTimeout(() => {
+      if (appState.status === 'ready' && !appState.idleSplash) appState.idleSplash = true
+    }, mins * 60_000)
+  }
+
+  $effect(() => {
+    if (appState.status !== 'ready') return
+
+    const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'touchmove', 'wheel', 'click'] as const
+    for (const e of events) document.addEventListener(e, armIdleTimer, { capture: true, passive: true })
+    armIdleTimer()
+
+    return () => {
+      if (idleTimer !== null) { clearTimeout(idleTimer); idleTimer = null }
+      for (const e of events) document.removeEventListener(e, armIdleTimer, { capture: true })
+    }
+  })
 
   function onSplashRetry() {
     import('$lib/state/boot.svelte').then(({ retryBoot }) => {
@@ -174,7 +202,11 @@
 {/if}
 
 {#if appState.idleSplash}
-  <SplashScreen mode="idle" onDismiss={onIdleDismiss} />
+  <SplashScreen mode="idle" showCards={settingsState.settings.splashCards ?? true} onDismiss={onIdleDismiss} />
+{/if}
+
+{#if appState.devSplash}
+  <SplashScreen mode="idle" showDevOverlay onDismiss={() => appState.devSplash = false} />
 {/if}
 
 {#if showApp}

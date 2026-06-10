@@ -80,10 +80,11 @@ class ReaderState {
   get settings() { return settingsState.settings; }
 
   openReader(chapter: Chapter, chapterList: Chapter[], manga?: Manga | null) {
+    const isChapterNav = this.activeChapter !== null;
     this.activeChapter     = chapter;
     this.activeChapterList = chapterList;
     if (manga !== undefined) this.activeManga = manga;
-    goto(`/reader/${this.activeManga!.id}/${chapter.id}`);
+    goto(`/reader/${this.activeManga!.id}/${chapter.id}`, { replaceState: isChapterNav });
   }
 
   closeReader() {

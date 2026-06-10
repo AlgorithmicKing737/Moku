@@ -1,5 +1,5 @@
-import { getBlobUrl, preloadBlobUrls } from "$lib/core/cache/imageCache";
-import { settingsState }               from "$lib/state/settings.svelte";
+import { getBlobUrl, preloadBlobUrls, revokeBlobUrl } from "$lib/core/cache/imageCache";
+import { settingsState }                               from "$lib/state/settings.svelte";
 
 const pageCache        = new Map<number, string[]>();
 const inflight         = new Map<number, Promise<string[]>>();
@@ -90,6 +90,9 @@ export function preloadImage(url: string, useBlob: boolean): void {
 }
 
 export function clearResolvedUrlCache(): void {
+  for (const promise of resolvedUrlCache.values()) {
+    promise.then(blobUrl => { if (blobUrl) revokeBlobUrl(blobUrl); }).catch(() => {});
+  }
   resolvedUrlCache.clear();
   aspectCache.clear();
 }
