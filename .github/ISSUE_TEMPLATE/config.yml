@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Discussions (Questions & Support)
+    url: https://github.com/moku-project/Moku/discussions
+    about: Not a bug? Ask questions and get help here.

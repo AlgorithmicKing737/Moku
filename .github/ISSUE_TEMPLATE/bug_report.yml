@@ -1,0 +1,78 @@
+name: Bug Report
+description: Something isn't working as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. The more detail you include, the faster it gets fixed.
+        You can use the **Report a Bug** button in **Settings → About** to pre-fill most of this automatically.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What's broken? A clear, concise summary.
+      placeholder: "e.g. Library card stats don't appear even with 'Always show' enabled"
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Exact steps to trigger the bug.
+      placeholder: |
+        1. Open Settings → Library
+        2. Enable "Always show card stats"
+        3. Return to Library
+        4. Unread counts are not visible
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      placeholder: "Unread and download counts should be permanently visible on manga cards"
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      placeholder: "Counts only appear on hover, or not at all"
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Copy this from Settings → About → Report a Bug, or fill in manually.
+      placeholder: |
+        - Moku Version: v0.9.4
+        - Platform: Windows / macOS / Linux / Web
+        - OS Version: Windows 11 24H2
+        - Server: Suwayomi v2.2.2196
+        - Server URL: localhost:4567
+    validations:
+      required: true
+
+  - type: textarea
+    id: settings
+    attributes:
+      label: Relevant Settings
+      description: Settings related to the bug (auto-filled by the in-app reporter, or paste manually).
+      placeholder: |
+        libraryStatsAlways: true
+        libraryCropCovers: true
+        libraryPageSize: 48
+      render: yaml
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Screenshots, screen recordings, console errors, anything else helpful.

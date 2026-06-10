@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to build (e.g. 0.4.0)"
+        description: "Version to build (e.g. 0.9.0)"
         required: true
 
 permissions:
@@ -16,28 +16,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: pnpm/action-setup@v4
-        with:
-          version: latest
-
+        with: { version: latest }
       - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build
-        run: pnpm build
-
-      - name: Upload dist
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-dist
-          path: dist/
-          retention-days: 1
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build:static
+      - uses: actions/upload-artifact@v4
+        with: { name: frontend-dist, path: dist/, retention-days: 1 }
 
   tauri:
     name: Tauri (macOS)
@@ -46,149 +32,99 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download frontend dist
-        uses: actions/download-artifact@v4
-        with:
-          name: frontend-dist
-          path: dist/
+      - uses: actions/download-artifact@v4
+        with: { name: frontend-dist, path: dist/ }
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - name: Read versions
+        run: |
+          source .github/read_versions.sh
+          echo "SUWA_VERSION=$SUWA_VERSION"             >> $GITHUB_ENV
+          echo "SUWA_HASH_ARM64=$SUWA_HASH_MACOS_ARM64" >> $GITHUB_ENV
+          echo "SUWA_HASH_X64=$SUWA_HASH_MACOS_X64"     >> $GITHUB_ENV
 
-      - name: Rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
+      - uses: dtolnay/rust-toolchain@stable
+        with: { targets: aarch64-apple-darwin,x86_64-apple-darwin }
+
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: src-tauri }
 
       - uses: pnpm/action-setup@v4
-        with:
-          version: latest
-
+        with: { version: latest }
       - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install JS dependencies
-        run: pnpm install --frozen-lockfile
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
 
       - name: Download Suwayomi binaries
         run: |
-          download_suwayomi() {
+          dl() {
             local asset="$1" sha="$2" outdir="$3"
             curl -fsSL \
-              "https://github.com/Suwayomi/Suwayomi-Server-preview/releases/download/v2.2.2196/${asset}" \
+              "https://github.com/Suwayomi/Suwayomi-Server-preview/releases/download/v${SUWA_VERSION}/${asset}" \
               -o "${outdir}.tar.gz"
             echo "${sha}  ${outdir}.tar.gz" | shasum -a 256 -c -
             mkdir -p "${outdir}"
             tar -xzf "${outdir}.tar.gz" -C "${outdir}" --strip-components=1
           }
-
-          download_suwayomi \
-            "Suwayomi-Server-v2.2.2196-macOS-arm64.tar.gz" \
-            "9e3dbebc7475707e8d11c56a473385c00b09bde0103d013bc1cb3d06c89e5c43" \
-            "suwayomi-arm64"
-
-          download_suwayomi \
-            "Suwayomi-Server-v2.2.2196-macOS-x64.tar.gz" \
-            "eadee02060b780a5febfb8dada2f89c7bd7db5905cfd20d47eaca02fcde8c9c5" \
-            "suwayomi-x64"
+          dl "Suwayomi-Server-v${SUWA_VERSION}-macOS-arm64.tar.gz" "$SUWA_HASH_ARM64" suwayomi-arm64
+          dl "Suwayomi-Server-v${SUWA_VERSION}-macOS-x64.tar.gz"   "$SUWA_HASH_X64"   suwayomi-x64
 
       - name: Stage Suwayomi sidecars
         run: |
           mkdir -p src-tauri/binaries
-
-          stage_arch() {
-            local srcdir="$1"
-            local arch="$2"
-            local sidecar="src-tauri/binaries/suwayomi-server-${arch}"
-            local bundle_dest="src-tauri/binaries/suwayomi-bundle-${arch}"
-
+          stage() {
+            local srcdir="$1" arch="$2"
             JAR=$(find "$srcdir" -name "Suwayomi-Server.jar" | head -1)
             JAVA=$(find "$srcdir" -path "*/jre/bin/java" | head -1)
-
-            if [ -z "$JAR" ]; then
-              echo "ERROR: Suwayomi-Server.jar not found in $srcdir"
-              find "$srcdir" -type f | head -30
-              exit 1
-            fi
-            if [ -z "$JAVA" ]; then
-              echo "ERROR: jre/bin/java not found in $srcdir"
-              find "$srcdir" -type f | head -30
-              exit 1
-            fi
-
-            echo "${arch}: jar=${JAR}  java=${JAVA}"
-
-            cp -r "$srcdir" "$bundle_dest"
-
-            # The launcher script is committed at src-tauri/binaries/suwayomi-launcher.sh
-            # to avoid embedding a heredoc in YAML (which breaks GitHub Actions parsing).
-            cp src-tauri/binaries/suwayomi-launcher.sh "$sidecar"
-            chmod +x "$sidecar"
-            echo "Staged sidecar: $sidecar"
+            [ -z "$JAR"  ] && { echo "ERROR: jar not found in $srcdir";  find "$srcdir" -type f | head -30; exit 1; }
+            [ -z "$JAVA" ] && { echo "ERROR: java not found in $srcdir"; find "$srcdir" -type f | head -30; exit 1; }
+            cp -r "$srcdir" "src-tauri/binaries/suwayomi-bundle-${arch}"
+            cp src-tauri/binaries/suwayomi-launcher.sh "src-tauri/binaries/suwayomi-server-${arch}"
+            chmod +x "src-tauri/binaries/suwayomi-server-${arch}"
           }
-
-          stage_arch suwayomi-arm64 aarch64-apple-darwin
-          stage_arch suwayomi-x64   x86_64-apple-darwin
+          stage suwayomi-arm64 aarch64-apple-darwin
+          stage suwayomi-x64   x86_64-apple-darwin
 
       - name: Patch tauri.conf.json for CI
-        run: |
-          sed -i '' 's/"beforeBuildCommand": "pnpm build"/"beforeBuildCommand": ""/' src-tauri/tauri.conf.json
-
-      - name: Swap bundle for aarch64
-        run: |
-          rm -rf src-tauri/binaries/suwayomi-bundle
-          cp -r src-tauri/binaries/suwayomi-bundle-aarch64-apple-darwin \
-                src-tauri/binaries/suwayomi-bundle
+        run: sed -i '' 's/"beforeBuildCommand": "pnpm build"/"beforeBuildCommand": ""/' src-tauri/tauri.conf.json
 
       - name: Build Tauri app (aarch64)
-        run: pnpm tauri build --target aarch64-apple-darwin --config src-tauri/tauri.macos.conf.json
+        run: |
+          rm -rf src-tauri/binaries/suwayomi-bundle
+          cp -r src-tauri/binaries/suwayomi-bundle-aarch64-apple-darwin src-tauri/binaries/suwayomi-bundle
+          pnpm tauri build --target aarch64-apple-darwin --config src-tauri/tauri.macos.conf.json
         env:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY || '-' }}
 
-      - name: Swap bundle for x86_64
+      - name: Build Tauri app (x86_64)
         run: |
           rm -rf src-tauri/binaries/suwayomi-bundle
-          cp -r src-tauri/binaries/suwayomi-bundle-x86_64-apple-darwin \
-                src-tauri/binaries/suwayomi-bundle
-
-      - name: Build Tauri app (x86_64)
-        run: pnpm tauri build --target x86_64-apple-darwin --config src-tauri/tauri.macos.conf.json
+          cp -r src-tauri/binaries/suwayomi-bundle-x86_64-apple-darwin src-tauri/binaries/suwayomi-bundle
+          pnpm tauri build --target x86_64-apple-darwin --config src-tauri/tauri.macos.conf.json
         env:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY || '-' }}
 
       - name: Upload macOS artifacts to release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ github.event.inputs.version }}
         run: |
-          # Wait for the Windows workflow to have created the draft release
           for i in $(seq 1 12); do
-            RELEASE_ID=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN"               "https://api.github.com/repos/moku-project/Moku/releases"               | jq -r '.[] | select(.tag_name == "v'"$VERSION"'") | .id' | head -1)
-            if [ -n "$RELEASE_ID" ]; then break; fi
-            echo "Waiting for release to exist... attempt $i"
-            sleep 15
+            RELEASE_ID=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
+              "https://api.github.com/repos/moku-project/Moku/releases" \
+              | jq -r '.[] | select(.tag_name == "v${{ github.event.inputs.version }}") | .id' | head -1)
+            [ -n "$RELEASE_ID" ] && break
+            echo "Waiting for release... attempt $i"; sleep 15
           done
+          [ -z "$RELEASE_ID" ] && { echo "ERROR: release not found"; exit 1; }
 
-          if [ -z "$RELEASE_ID" ]; then
-            echo "ERROR: Could not find release for v$VERSION after waiting"
-            exit 1
-          fi
-
-          echo "Found release ID: $RELEASE_ID"
-
-          upload_asset() {
-            local file="$1"
-            local name="$2"
-            echo "Uploading $name..."
-            curl -s -X POST               -H "Authorization: Bearer $GITHUB_TOKEN"               -H "Content-Type: application/octet-stream"               --data-binary @"$file"               "https://uploads.github.com/repos/moku-project/Moku/releases/$RELEASE_ID/assets?name=$name"
+          upload() {
+            curl -s -X POST \
+              -H "Authorization: Bearer $GITHUB_TOKEN" \
+              -H "Content-Type: application/octet-stream" \
+              --data-binary @"$1" \
+              "https://uploads.github.com/repos/moku-project/Moku/releases/$RELEASE_ID/assets?name=$2"
           }
 
-          ARM64_DMG=$(find src-tauri/target/aarch64-apple-darwin/release/bundle/dmg -name "*.dmg" | head -1)
-          X64_DMG=$(find src-tauri/target/x86_64-apple-darwin/release/bundle/dmg -name "*.dmg" | head -1)
-
-          [ -n "$ARM64_DMG" ] && upload_asset "$ARM64_DMG" "moku-macos-arm64-${VERSION}.dmg"
-          [ -n "$X64_DMG"   ] && upload_asset "$X64_DMG"   "moku-macos-x64-${VERSION}.dmg"
+          ARM64=$(find src-tauri/target/aarch64-apple-darwin/release/bundle/dmg -name "*.dmg" | head -1)
+          X64=$(find src-tauri/target/x86_64-apple-darwin/release/bundle/dmg -name "*.dmg" | head -1)
+          [ -n "$ARM64" ] && upload "$ARM64" "moku-macos-arm64-${{ github.event.inputs.version }}.dmg"
+          [ -n "$X64"   ] && upload "$X64"   "moku-macos-x64-${{ github.event.inputs.version }}.dmg"

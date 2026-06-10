@@ -85,17 +85,31 @@ PYEOF
 
       if [[ $# -ge 2 ]]; then
         SUWA_VER="$2"
-        JAR_URL="https://github.com/Suwayomi/Suwayomi-Server-preview/releases/download/v${SUWA_VER}/Suwayomi-Server-v${SUWA_VER}.jar"
+        BASE="https://github.com/Suwayomi/Suwayomi-Server-preview/releases/download/v${SUWA_VER}"
 
-        SUWA_SHA_HEX=$(curl -fsSL "$JAR_URL" | sha256sum | awk '{print $1}')
-        SUWA_SHA_SRI=$(echo "$SUWA_SHA_HEX" | xxd -r -p | base64 -w0 | sed 's/^/sha256-/')
+        echo "Fetching Suwayomi v${SUWA_VER} hashes (5 downloads)..."
 
-        sed -i "s/version = \"[^\"]*\"/version = \"$SUWA_VER\"/" "$VERSIONS"
-        sed -i "s|hash = \"sha256-[^\"]*\"|hash = \"$SUWA_SHA_SRI\"|" "$VERSIONS"
+        sha_of() { curl -fsSL "$1" | sha256sum | awk '{print $1}'; }
+        to_sri()  { echo "$1" | xxd -r -p | base64 -w0 | sed 's/^/sha256-/'; }
+
+        JAR_SHA=$(sha_of    "${BASE}/Suwayomi-Server-v${SUWA_VER}.jar")
+        WIN_SHA=$(sha_of    "${BASE}/Suwayomi-Server-v${SUWA_VER}-windows-x64.zip")
+        LINUX_SHA=$(sha_of  "${BASE}/Suwayomi-Server-v${SUWA_VER}-linux-x64.tar.gz")
+        ARM64_SHA=$(sha_of  "${BASE}/Suwayomi-Server-v${SUWA_VER}-macOS-arm64.tar.gz")
+        X64_SHA=$(sha_of    "${BASE}/Suwayomi-Server-v${SUWA_VER}-macOS-x64.tar.gz")
+
+        JAR_SRI=$(to_sri "$JAR_SHA")
+
+        sed -i "s/version = \"[^\"]*\"/version = \"${SUWA_VER}\"/"         "$VERSIONS"
+        sed -i "s|hash = \"sha256-[^\"]*\"|hash = \"${JAR_SRI}\"|"         "$VERSIONS"
+        sed -i "s|windowsHash = \"[^\"]*\"|windowsHash = \"${WIN_SHA}\"|"   "$VERSIONS"
+        sed -i "s|linuxHash = \"[^\"]*\"|linuxHash = \"${LINUX_SHA}\"|"     "$VERSIONS"
+        sed -i "s|macosArm64Hash = \"[^\"]*\"|macosArm64Hash = \"${ARM64_SHA}\"|" "$VERSIONS"
+        sed -i "s|macosX64Hash = \"[^\"]*\"|macosX64Hash = \"${X64_SHA}\"|" "$VERSIONS"
 
         sed -i "s|Suwayomi-Server-preview/releases/download/v[^/]*/|Suwayomi-Server-preview/releases/download/v${SUWA_VER}/|" "$MANIFEST"
         sed -i "s|Suwayomi-Server-v[0-9.]*\.jar|Suwayomi-Server-v${SUWA_VER}.jar|g" "$MANIFEST"
-        python3 - "$MANIFEST" "$SUWA_SHA_HEX" <<'PYEOF'
+        python3 - "$MANIFEST" "$JAR_SHA" <<'PYEOF'
 import re, sys
 path, sha = sys.argv[1], sys.argv[2]
 text = open(path).read()
@@ -106,6 +120,8 @@ if n == 0:
     sys.exit("ERROR: could not find Suwayomi jar sha256 in manifest")
 open(path, 'w').write(updated)
 PYEOF
+
+        echo "Suwayomi hashes written."
       fi
 
       echo "Done — versions.nix, flatpak manifest, and PKGBUILD patched for v$VERSION"

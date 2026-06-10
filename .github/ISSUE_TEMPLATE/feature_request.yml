@@ -1,0 +1,47 @@
+name: Feature Request
+description: Suggest an improvement or new feature
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Got an idea? Describe what you want and why it would be useful.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / Motivation
+      description: What's the gap or frustration this would address?
+      placeholder: "e.g. There's no way to bulk-mark chapters as read without opening each series"
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: What would you like to see?
+      placeholder: "A 'Mark all read' option in the series long-press context menu"
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Any workarounds you've tried, or other ways this could be solved.
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Optional — useful if this is platform-specific.
+      placeholder: |
+        - Moku Version: v0.9.4
+        - Platform: Windows / macOS / Linux / Web
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Mockups, references, examples from other apps, etc.

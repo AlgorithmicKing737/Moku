@@ -16,152 +16,102 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: pnpm/action-setup@v4
-        with:
-          version: latest
-
+        with: { version: latest }
       - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build
-        run: pnpm build
-
-      - name: Upload dist
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-dist-windows
-          path: dist/
-          retention-days: 1
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build:static
+      - uses: actions/upload-artifact@v4
+        with: { name: frontend-dist-windows, path: dist/, retention-days: 1 }
 
   tauri:
     name: Tauri (Windows x64)
     needs: frontend
     runs-on: windows-latest
-
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download frontend dist
-        uses: actions/download-artifact@v4
-        with:
-          name: frontend-dist-windows
-          path: dist/
+      - uses: actions/download-artifact@v4
+        with: { name: frontend-dist-windows, path: dist/ }
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: x86_64-pc-windows-msvc
+      - name: Read versions
+        shell: bash
+        run: |
+          source .github/read_versions.sh
+          echo "SUWA_VERSION=$SUWA_VERSION"     >> $GITHUB_ENV
+          echo "SUWA_HASH=$SUWA_HASH_WINDOWS"   >> $GITHUB_ENV
 
-      - name: Rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
+      - uses: dtolnay/rust-toolchain@stable
+        with: { targets: x86_64-pc-windows-msvc }
+
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: src-tauri }
 
       - uses: pnpm/action-setup@v4
-        with:
-          version: latest
-
+        with: { version: latest }
       - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install JS dependencies
-        run: pnpm install --frozen-lockfile
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
 
       - name: Download Suwayomi (Windows x64)
         shell: bash
         run: |
           curl -fsSL \
-            "https://github.com/Suwayomi/Suwayomi-Server-preview/releases/download/v2.2.2196/Suwayomi-Server-v2.2.2196-windows-x64.zip" \
+            "https://github.com/Suwayomi/Suwayomi-Server-preview/releases/download/v${SUWA_VERSION}/Suwayomi-Server-v${SUWA_VERSION}-windows-x64.zip" \
             -o suwayomi-windows.zip
-          echo "457ca4a64a57e0d274a87203d25e962103bcb456ee30ada3ea47328a3093329d  suwayomi-windows.zip" | sha256sum -c -
+          echo "${SUWA_HASH}  suwayomi-windows.zip" | sha256sum -c -
           unzip -q suwayomi-windows.zip -d suwayomi-raw
 
-      - name: Extract Suwayomi bundle
+      - name: Stage Suwayomi bundle
         shell: bash
         run: |
           mkdir -p suwayomi-extracted
           TOP_DIRS=$(find suwayomi-raw -mindepth 1 -maxdepth 1 -type d | wc -l)
           TOP_FILES=$(find suwayomi-raw -mindepth 1 -maxdepth 1 -type f | wc -l)
           if [ "$TOP_DIRS" -eq 1 ] && [ "$TOP_FILES" -eq 0 ]; then
-            INNER=$(find suwayomi-raw -mindepth 1 -maxdepth 1 -type d | head -1)
-            cp -r "$INNER"/. suwayomi-extracted/
+            cp -r "$(find suwayomi-raw -mindepth 1 -maxdepth 1 -type d | head -1)"/. suwayomi-extracted/
           else
             cp -r suwayomi-raw/. suwayomi-extracted/
           fi
-
-      - name: Stage Suwayomi bundle
-        shell: bash
-        run: |
           mkdir -p src-tauri/binaries
-          JAVA=$(find suwayomi-extracted -path "*/jre/bin/java.exe" | head -1)
-          JAR=$(find suwayomi-extracted -name "Suwayomi-Server.jar" | head -1)
-          if [ -z "$JAVA" ]; then
-            echo "ERROR: jre/bin/java.exe not found"
-            find suwayomi-extracted -type f | head -50
-            exit 1
-          fi
-          if [ -z "$JAR" ]; then
-            echo "ERROR: Suwayomi-Server.jar not found"
-            find suwayomi-extracted -type f | head -50
-            exit 1
-          fi
+          find suwayomi-extracted -path "*/jre/bin/java.exe" | grep -q . \
+            || { echo "ERROR: java.exe not found"; find suwayomi-extracted -type f | head -50; exit 1; }
+          find suwayomi-extracted -name "Suwayomi-Server.jar" | grep -q . \
+            || { echo "ERROR: Suwayomi-Server.jar not found"; find suwayomi-extracted -type f | head -50; exit 1; }
           cp -r suwayomi-extracted src-tauri/binaries/suwayomi-bundle
-
-      - name: Validate staging
-        shell: bash
-        run: |
-          find src-tauri/binaries/suwayomi-bundle -path "*/jre/bin/java.exe" \
-            | grep -q . || (echo "ERROR: jre/bin/java.exe missing" && exit 1)
-          find src-tauri/binaries/suwayomi-bundle -name "Suwayomi-Server.jar" \
-            | grep -q . || (echo "ERROR: Suwayomi-Server.jar missing" && exit 1)
-          echo "Staging OK"
 
       - name: Patch tauri.conf.json for CI
         shell: bash
-        run: |
-          sed -i 's/"beforeBuildCommand": "pnpm build"/"beforeBuildCommand": ""/' src-tauri/tauri.conf.json
+        run: sed -i 's/"beforeBuildCommand": "pnpm build"/"beforeBuildCommand": ""/' src-tauri/tauri.conf.json
 
-      - name: Delete existing draft release if present
+      - name: Delete existing draft release
         shell: bash
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
         run: |
           RELEASE_ID=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
             "https://api.github.com/repos/moku-project/Moku/releases" \
             | jq -r '.[] | select(.tag_name == "v${{ github.event.inputs.version }}" and .draft == true) | .id')
           if [ -n "$RELEASE_ID" ]; then
-            echo "Deleting existing draft release $RELEASE_ID"
             curl -s -X DELETE -H "Authorization: Bearer $GITHUB_TOKEN" \
               "https://api.github.com/repos/moku-project/Moku/releases/$RELEASE_ID"
             curl -s -X DELETE -H "Authorization: Bearer $GITHUB_TOKEN" \
               "https://api.github.com/repos/moku-project/Moku/git/refs/tags/v${{ github.event.inputs.version }}"
-            echo "Deleted draft release and tag"
-          else
-            echo "No existing draft release found"
           fi
 
       - name: Build Tauri app + create draft release
         uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
         with:
           tagName: v${{ github.event.inputs.version }}
           releaseName: Moku v${{ github.event.inputs.version }}
           releaseBody: |
             Moku v${{ github.event.inputs.version }}
 
-            **Windows:** Download `Moku_${{ github.event.inputs.version }}_x64-setup.exe`
-            **macOS arm64:** Download `moku-macos-arm64-${{ github.event.inputs.version }}.dmg`
-            **macOS x64:** Download `moku-macos-x64-${{ github.event.inputs.version }}.dmg`
-            **Linux:** Download `moku.flatpak`
+            **Windows:** `Moku_${{ github.event.inputs.version }}_x64-setup.exe`
+            **macOS arm64:** `moku-macos-arm64-${{ github.event.inputs.version }}.dmg`
+            **macOS x64:** `moku-macos-x64-${{ github.event.inputs.version }}.dmg`
+            **Linux:** `moku.flatpak`
           releaseDraft: true
           prerelease: false
           args: --target x86_64-pc-windows-msvc --config src-tauri/tauri.windows.conf.json

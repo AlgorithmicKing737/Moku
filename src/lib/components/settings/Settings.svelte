@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte'
-  import { X, Book, Image, Sliders, Info, Keyboard, Gear, HardDrives, FolderSimple, Wrench, PaintBrush, ListChecks, Lock, ShieldCheck, Robot } from 'phosphor-svelte'
+  import { X, Book, Image, Sliders, Info, Keyboard, Gear, HardDrives, FolderSimple, Wrench, PaintBrush, ListChecks, Lock, ShieldCheck, Robot, Bug } from 'phosphor-svelte'
   import { settingsState, updateSettings } from '$lib/state/settings.svelte'
   import { eventToKeybind } from '$lib/core/keybinds/keybindEngine'
   import type { Keybinds } from '$lib/core/keybinds/defaultBinds'
@@ -20,6 +20,7 @@
   import AboutSettings       from './sections/AboutSettings.svelte'
   import DevtoolsSettings    from './sections/DevToolsSettings.svelte'
   import ModalBlur           from '$lib/components/shared/ui/ModalBlur.svelte'
+  import BugReporter         from './BugReporter.svelte'
 
   interface Props { onclose?: () => void; onOpenThemeEditor?: (id?: string | null) => void }
   let { onclose, onOpenThemeEditor }: Props = $props()
@@ -43,11 +44,12 @@
   ]
 
   const anims = $derived(settingsState.settings.qolAnimations ?? true)
-  let tab: Tab      = $state('general')
-  let prevTabIndex  = $state(0)
-  let tabSlideDir   = $state<'up'|'down'>('down')
-  let tabIconKey    = $state(0)
+  let tab: Tab           = $state('general')
+  let prevTabIndex       = $state(0)
+  let tabSlideDir        = $state<'up'|'down'>('down')
+  let tabIconKey         = $state(0)
   let contentBodyEl: HTMLDivElement
+  let bugReporterOpen    = $state(false)
 
   $effect(() => { tab; tick().then(() => contentBodyEl?.scrollTo({ top: 0 })) })
 
@@ -66,7 +68,7 @@
   let listeningKey: keyof Keybinds | null = $state(null)
 
   $effect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !listeningKey) { e.stopPropagation(); close() } }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !listeningKey && !bugReporterOpen) { e.stopPropagation(); close() } }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
   })
@@ -134,6 +136,11 @@
           </button>
         {/each}
       </nav>
+      <div class="s-sidebar-spacer"></div>
+      <button class="s-nav-item s-bug-btn" class:anims onclick={() => (bugReporterOpen = true)}>
+        <Bug size={14} weight="light" />
+        <span>Report an Issue</span>
+      </button>
     </div>
 
     <div class="s-content">
@@ -190,3 +197,17 @@
 
   </div>
 </div>
+
+{#if bugReporterOpen}
+  <BugReporter onClose={() => (bugReporterOpen = false)} />
+{/if}
+
+<style>
+  .s-sidebar-spacer { flex: 1; }
+
+  .s-bug-btn { color: var(--text-faint) !important; }
+  .s-bug-btn:hover {
+    color: var(--color-error) !important;
+    background: var(--color-error-bg) !important;
+  }
+</style>
