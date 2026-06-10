@@ -393,7 +393,7 @@
   {:else}
     <LibraryToolbar
       tab={libraryState.tab}
-      tabSortMode={libraryState.tabSort[libraryState.tab]?.mode ?? 'alphabetical'}
+      tabSortMode={libraryState.tabSort[libraryState.tab]?.mode ?? 'az'}
       tabSortDir={libraryState.tabSort[libraryState.tab]?.dir ?? 'asc'}
       tabStatus={libraryState.tabStatus[libraryState.tab] ?? 'ALL'}
       tabFilters={libraryState.tabFilters[libraryState.tab] ?? {}}
@@ -423,7 +423,6 @@
       onFilterPanelToggle={() => filterPanelOpen = !filterPanelOpen}
       onRefresh={startRefresh}
       onCancelRefresh={cancelRefresh}
-      onRefreshCategory={refreshCategory}
       onOpenDownloadsFolder={openDownloadsFolder}
       onTabDragStart={onTabDragStart}
       onTabDragOver={onTabDragOver}

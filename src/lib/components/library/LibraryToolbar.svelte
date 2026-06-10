@@ -4,21 +4,19 @@
     SortAscending, CaretUp, CaretDown, ArrowsClockwise, Star, X, CheckSquare,
   } from "phosphor-svelte";
   import LibraryFilters from "./LibraryFilters.svelte";
-  import type { Category } from "@types";
-  import type { LibrarySortMode, LibrarySortDir, LibraryStatusFilter, LibraryContentFilter } from "@store/state.svelte";
+  import type { Category } from "$lib/types";
+  import type { LibrarySortOption, LibrarySortDir, LibraryStatusFilter, LibraryContentFilter } from "$lib/state/library.svelte";
 
   interface Props {
     tab:              string;
-    tabSortMode:      LibrarySortMode;
+    tabSortMode:      LibrarySortOption;
     tabSortDir:       LibrarySortDir;
     tabStatus:        LibraryStatusFilter;
     tabFilters:       Partial<Record<LibraryContentFilter, boolean>>;
     hasActiveFilters: boolean;
-    anims:            boolean;
+    anims?:           boolean;
     visibleCategories: Category[];
     visibleTabIds:    string[];
-    virtualTabIds:    string[];
-    folderTabIds:     string[];
     completedCatId:   number | null;
     counts:           Record<string, number>;
     search:           string;
@@ -35,7 +33,7 @@
     tabsEl:           HTMLDivElement;
     onSearchChange:      (v: string) => void;
     onTabChange:         (f: string) => void;
-    onSortChange:        (mode: LibrarySortMode) => void;
+    onSortChange:        (mode: LibrarySortOption) => void;
     onSortDirToggle:     () => void;
     onStatusChange:      (s: LibraryStatusFilter) => void;
     onFilterToggle:      (f: LibraryContentFilter) => void;
@@ -44,7 +42,6 @@
     onFilterPanelToggle: () => void;
     onRefresh:           () => void;
     onCancelRefresh:     () => void;
-    onRefreshCategory:   (catId: number) => void;
     onOpenDownloadsFolder: () => void;
     onTabDragStart:      (e: DragEvent, id: string) => void;
     onTabDragOver:       (e: DragEvent, id: string, idx: number) => void;
@@ -55,13 +52,13 @@
 
   let {
     tab, tabSortMode, tabSortDir, tabStatus, tabFilters, hasActiveFilters,
-    anims, visibleCategories, visibleTabIds, virtualTabIds, folderTabIds, completedCatId,
+    anims = false, visibleCategories, visibleTabIds, completedCatId,
     counts, search, refreshing, refreshProgress, refreshDone, refreshingCatId,
     activeDragKind, dragInsertIdx, dragTabId, dragOverTabId, sortPanelOpen, filterPanelOpen,
     tabsEl = $bindable(),
     onSearchChange, onTabChange, onSortChange, onSortDirToggle, onStatusChange,
     onFilterToggle, onFiltersClear, onSortPanelToggle, onFilterPanelToggle,
-    onRefresh, onCancelRefresh, onRefreshCategory, onOpenDownloadsFolder,
+    onRefresh, onCancelRefresh, onOpenDownloadsFolder,
     onTabDragStart, onTabDragOver, onTabDragLeave, onTabDrop, onTabDragEnd,
   }: Props = $props();
 
@@ -85,18 +82,18 @@
     else if (ol + ow > pl + cw) tabsEl.scrollTo({ left: ol + ow - cw, behavior: "smooth" });
   });
 
-  const SORT_LABELS: Record<LibrarySortMode, string> = {
+  const SORT_LABELS: Record<LibrarySortOption, string> = {
     az:             "A–Z",
     unreadCount:    "Unread chapters",
     totalChapters:  "Total chapters",
-    recentlyAdded:  "Recently added",
-    recentlyRead:   "Recently read",
+    dateAdded:      "Recently added",
+    lastRead:       "Recently read",
     latestFetched:  "Latest fetched chapter",
     latestUploaded: "Latest uploaded chapter",
   };
 
-  const ALL_SORT_MODES: LibrarySortMode[] = [
-    "az", "unreadCount", "totalChapters", "recentlyAdded", "recentlyRead", "latestFetched", "latestUploaded",
+  const ALL_SORT_MODES: LibrarySortOption[] = [
+    "az", "unreadCount", "totalChapters", "dateAdded", "lastRead", "latestFetched", "latestUploaded",
   ];
 </script>
 

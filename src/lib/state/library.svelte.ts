@@ -4,8 +4,8 @@ import type { Category }    from "$lib/types";
 import { settingsState, updateSettings } from "$lib/state/settings.svelte";
 
 export type LibrarySortOption =
-  | "alphabetical"
-  | "unread"
+  | "az"
+  | "unreadCount"
   | "lastRead"
   | "dateAdded"
   | "totalChapters"
@@ -153,11 +153,11 @@ class LibraryState {
     if (f.downloaded) items = items.filter(m => (m.downloadCount ?? 0) > 0);
     if (f.bookmarked) items = items.filter(m => (m.bookmarkCount ?? 0) > 0);
 
-    const { mode, dir } = this.tabSort[tab] ?? { mode: "alphabetical" as LibrarySortOption, dir: "asc" as LibrarySortDir };
+    const { mode, dir } = this.tabSort[tab] ?? { mode: "az" as LibrarySortOption, dir: "asc" as LibrarySortDir };
 
     const sorted = [...items].sort((a, b) => {
       switch (mode) {
-        case "unread":         return (b.unreadCount ?? 0) - (a.unreadCount ?? 0);
+        case "unreadCount":    return (b.unreadCount ?? 0) - (a.unreadCount ?? 0);
         case "lastRead":       return (b.lastReadAt ?? 0) - (a.lastReadAt ?? 0);
         case "dateAdded":      return (b.addedAt ?? 0) - (a.addedAt ?? 0);
         case "totalChapters":  return (b.chapters?.totalCount ?? 0) - (a.chapters?.totalCount ?? 0);
@@ -185,7 +185,7 @@ class LibraryState {
 
   toggleTabSortDir(tab: string) {
     const prev = this.tabSort[tab];
-    const mode = prev?.mode ?? "alphabetical";
+    const mode = prev?.mode ?? "az";
     const dir  = prev?.dir  === "asc" ? "desc" : "asc";
     this.setTabSort(tab, mode, dir);
   }

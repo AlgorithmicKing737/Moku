@@ -1,6 +1,7 @@
 <script lang="ts">
   import { CheckSquare, Trash, Folder } from 'phosphor-svelte'
   import Thumbnail from '$lib/components/shared/manga/Thumbnail.svelte'
+  import { settingsState } from '$lib/state/settings.svelte'
   import type { Manga, Category } from '$lib/types'
 
   interface Props {
@@ -26,6 +27,9 @@
   }: Props = $props()
 
   let movePanelOpen = $state(false)
+
+  const statsAlways = $derived(settingsState.settings.libraryStatsAlways ?? false)
+  const cropCovers  = $derived(settingsState.settings.libraryCropCovers  ?? true)
 
   function onDocDown(e: MouseEvent) {
     if (movePanelOpen && !(e.target as HTMLElement).closest('.move-wrap')) movePanelOpen = false
@@ -114,10 +118,11 @@
           class="card"
           class:card-selected={isSelected}
           class:select-mode={selectMode}
+          class:stats-always={statsAlways}
           onclick={(e) => onCardClick(e, m)}
           oncontextmenu={(e) => onCardContextMenu(e, m)}
         >
-          <div class="cover-wrap" class:completed={isCompleted}>
+          <div class="cover-wrap" class:completed={isCompleted} class:cover-contain={!cropCovers}>
             <Thumbnail src={m.thumbnailUrl} alt={m.title} class="cover" id={m.id} />
             <div class="overlay">
               <div class="badges">
@@ -236,6 +241,7 @@
   .cover-wrap.completed { box-shadow: inset 0 -2px 0 0 var(--accent); }
 
   :global(.cover) { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .cover-contain :global(.cover) { object-fit: contain; }
 
   .overlay {
     position: absolute; bottom: 0; left: 0; right: 0; z-index: 2;
@@ -245,6 +251,7 @@
     transition: opacity 0.18s ease;
   }
   .card:not(.select-mode):hover .overlay { opacity: 1; }
+  .stats-always .overlay { opacity: 1; }
 
   .badges { display: flex; align-items: flex-end; justify-content: space-between; gap: 4px; flex-wrap: wrap; }
   .badge {
