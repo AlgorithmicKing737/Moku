@@ -49,23 +49,27 @@ function buildPresence(manga: Manga, chapter: Chapter, coverUrl: string) {
 
 export async function initRpc(): Promise<void> {
   if (!platformService.isSupported('discord-rpc')) return
+  if (!settingsState.settings.discordRpc) return
   sessionStart = Date.now()
 }
 
 export async function destroyRpc(): Promise<void> {
   if (!platformService.isSupported('discord-rpc')) return
-  sessionStart = null
+  sessionStart  = null
+  activeMangaId = null
+  await platformService.clearDiscordPresence()
 }
 
 export async function setReading(manga: Manga, chapter: Chapter): Promise<void> {
   if (!platformService.isSupported('discord-rpc')) return
-
+  if (!settingsState.settings.discordRpc) return
   activeMangaId = manga.id
   await platformService.setDiscordPresence(buildPresence(manga, chapter, resolveCoverUrl(manga)))
 }
 
 export async function setIdle(): Promise<void> {
   if (!platformService.isSupported('discord-rpc')) return
+  if (!settingsState.settings.discordRpc) return
   await platformService.setDiscordPresence({
     details:    'Browsing',
     timestamps: { start: sessionStart ?? Date.now() },
@@ -76,5 +80,6 @@ export async function setIdle(): Promise<void> {
 
 export async function clearReading(): Promise<void> {
   if (!platformService.isSupported('discord-rpc')) return
+  if (!settingsState.settings.discordRpc) return
   await platformService.clearDiscordPresence()
 }

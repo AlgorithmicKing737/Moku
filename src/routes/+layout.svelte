@@ -105,11 +105,6 @@
       isTauri && settingsState.settings.autoStartServer ? 2000 : 100,
     )
 
-    if (settingsState.settings.discordRpc) {
-      await discord.initRpc()
-      await discord.setIdle()
-    }
-
     polling = true
     pollLoop()
 
@@ -140,6 +135,14 @@
 
   $effect(() => {
     if (appState.status === 'booting') splashDismissed = false
+  })
+
+  $effect(() => {
+    if (settingsState.settings.discordRpc) {
+      discord.initRpc().then(() => discord.setIdle())
+    } else {
+      discord.destroyRpc()
+    }
   })
 
   let idleTimer:       ReturnType<typeof setTimeout> | null = null
