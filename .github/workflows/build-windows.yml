@@ -19,7 +19,9 @@ jobs:
       - uses: pnpm/action-setup@v4
         with: { version: latest }
       - uses: actions/setup-node@v4
-        with: { node-version: 22, cache: pnpm }
+        with:
+          node-version: 22
+          cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build:static
       - uses: actions/upload-artifact@v4
@@ -51,7 +53,9 @@ jobs:
       - uses: pnpm/action-setup@v4
         with: { version: latest }
       - uses: actions/setup-node@v4
-        with: { node-version: 22, cache: pnpm }
+        with:
+          node-version: 22
+          cache: pnpm
       - run: pnpm install --frozen-lockfile
 
       - name: Download Suwayomi (Windows x64)
@@ -87,7 +91,8 @@ jobs:
 
       - name: Delete existing draft release
         shell: bash
-        env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           RELEASE_ID=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
             "https://api.github.com/repos/moku-project/Moku/releases" \
@@ -101,7 +106,8 @@ jobs:
 
       - name: Build Tauri app + create draft release
         uses: tauri-apps/tauri-action@v0
-        env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: v${{ github.event.inputs.version }}
           releaseName: Moku v${{ github.event.inputs.version }}
