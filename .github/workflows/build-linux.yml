@@ -94,7 +94,8 @@ jobs:
           chmod +x src-tauri/binaries/suwayomi-launcher-linux-x86_64-unknown-linux-gnu
 
       - name: Patch tauri.conf.json for CI
-        run: sed -i 's/"beforeBuildCommand": "pnpm build"/"beforeBuildCommand": ""/' src-tauri/tauri.conf.json
+        run: |
+          sed -i 's/"beforeBuildCommand": "pnpm build"/"beforeBuildCommand": ""/' src-tauri/tauri.conf.json
 
       - name: Build Tauri app
         run: pnpm tauri build --target x86_64-unknown-linux-gnu --config src-tauri/tauri.linux.conf.json --verbose
