@@ -10,9 +10,7 @@
 /* ── Backdrop & Modal Shell ───────────────────────────────────────── */
 .s-backdrop {
   position: fixed; inset: 0;
-  background: rgba(0,0,0,0.6);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+
   z-index: var(--z-settings);
   display: flex; align-items: center; justify-content: center;
   animation: s-fade-in 0.14s ease both;
@@ -29,10 +27,7 @@
   overflow: visible;
   position: relative;
   animation: s-scale-in 0.2s cubic-bezier(0.16,1,0.3,1) both;
-  box-shadow:
-    0 0 0 1px rgba(255,255,255,0.04) inset,
-    0 24px 80px rgba(0,0,0,0.7),
-    0 8px 24px rgba(0,0,0,0.4);
+  box-shadow: 0 0 0 1px var(--border-dim), 0 24px 64px rgba(0,0,0,0.6);
 }
 
 
@@ -46,7 +41,7 @@
   display: flex;
   flex-direction: column;
   gap: 1px;
-  overflow-y: auto;
+  overflow-y: hidden;
   border-radius: var(--radius-2xl) 0 0 var(--radius-2xl);
 }
 
@@ -140,7 +135,6 @@
 .s-content-body {
   flex: 1;
   overflow-y: auto;
-  will-change: transform;
 }
 
 

@@ -10,6 +10,7 @@
   import { markManyRead }     from "$lib/request-manager/chapters";
   import type { Tracker, TrackRecord, TrackSearch } from "$lib/types";
   import type { Chapter }     from "$lib/types";
+  import ModalBlur        from '$lib/components/shared/ui/ModalBlur.svelte'
 
   let { mangaId, mangaTitle, onClose }: {
     mangaId:    number;
@@ -250,6 +251,7 @@
   }
 }} />
 
+<ModalBlur blur={4} dim={0.68} />
 <div class="backdrop" role="presentation" onclick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
   <div class="modal" role="dialog" aria-label="Tracking">
 
@@ -497,6 +499,7 @@
 {#if confirmUnbindId !== null}
   {@const rec = records.find(r => r.id === confirmUnbindId)}
   {@const trk = rec ? trackerFor(rec.trackerId) : null}
+  <ModalBlur blur={2} dim={0.45} zIndex="calc(var(--z-settings) + 1)" />
   <div class="confirm-backdrop" role="button" tabindex="-1" aria-label="Cancel"
     onclick={() => confirmUnbindId = null}
     onkeydown={(e) => { if (e.key === "Escape") confirmUnbindId = null; }}>
@@ -515,10 +518,9 @@
 
 <style>
   .backdrop {
-    position: fixed; inset: 0; background: rgba(0,0,0,0.68);
+    position: fixed; inset: 0;
     z-index: var(--z-settings);
     display: flex; align-items: center; justify-content: center;
-    backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
     animation: fadeIn 0.12s ease both;
   }
   .modal {
@@ -646,7 +648,7 @@
   .result-row:hover:not(:disabled) .result-action { color: var(--accent-fg); border-color: var(--accent-dim); background: var(--accent-muted); }
   .result-action-on { color: var(--accent-fg) !important; border-color: var(--accent-dim) !important; background: var(--accent-muted) !important; }
 
-  .confirm-backdrop { position: fixed; inset: 0; z-index: calc(var(--z-settings) + 1); background: rgba(0,0,0,0.45); backdrop-filter: blur(2px); display: flex; align-items: center; justify-content: center; animation: fadeIn 0.1s ease both; }
+  .confirm-backdrop { position: fixed; inset: 0; z-index: calc(var(--z-settings) + 1); display: flex; align-items: center; justify-content: center; animation: fadeIn 0.1s ease both; }
   .confirm-modal { background: var(--bg-surface); border: 1px solid var(--border-dim); border-radius: var(--radius-xl); padding: var(--sp-5); width: 260px; display: flex; flex-direction: column; gap: var(--sp-3); box-shadow: 0 16px 48px rgba(0,0,0,0.5); animation: scaleIn 0.15s ease both; }
   .confirm-title { font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--text-primary); margin: 0; }
   .confirm-body  { font-family: var(--font-ui); font-size: var(--text-xs); color: var(--text-faint); line-height: 1.5; margin: 0; letter-spacing: var(--tracking-wide); }

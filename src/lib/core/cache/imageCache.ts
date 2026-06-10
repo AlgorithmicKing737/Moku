@@ -5,9 +5,9 @@ import { getUIAccessToken }   from "$lib/core/auth";
 const cache    = new Map<string, string>();
 const inflight = new Map<string, Promise<string>>();
 const MAX_CONCURRENT = 6;
-let   active   = 0;
+let   active         = 0;
 let   drainScheduled = false;
-let   clearing = false;
+let   generation     = 0;
 
 interface QueueEntry {
   url:      string;
@@ -32,10 +32,11 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
   return {};
 }
 
-async function doFetch(url: string): Promise<string> {
+async function doFetch(url: string, gen: number): Promise<string> {
   const headers = await getAuthHeaders();
-  const blob = await platformService.fetchImage(url, headers);
-  if (clearing) throw new DOMException("Cancelled", "AbortError");
+  if (gen !== generation) throw new DOMException("Cancelled", "AbortError");
+  const blob    = await platformService.fetchImage(url, headers);
+  if (gen !== generation) throw new DOMException("Cancelled", "AbortError");
   const blobUrl = URL.createObjectURL(blob);
   cache.set(url, blobUrl);
   return blobUrl;
@@ -55,8 +56,9 @@ function drain() {
   drainScheduled = false;
   while (active < MAX_CONCURRENT && queue.length > 0) {
     const entry = queue.shift()!;
+    const gen   = generation;
     active++;
-    doFetch(entry.url)
+    doFetch(entry.url, gen)
       .then(entry.resolve, entry.reject)
       .finally(() => { active--; drain(); });
   }
@@ -107,6 +109,7 @@ export function preloadBlobUrls(urls: string[], basePriority = 0): void {
 export function revokeBlobUrl(url: string): void {
   const blob = cache.get(url);
   if (blob) { URL.revokeObjectURL(blob); cache.delete(url); }
+  inflight.delete(url);
 }
 
 export function deprioritizeQueue(): void {
@@ -123,10 +126,9 @@ export function cancelQueuedFetches(): void {
 }
 
 export function clearBlobCache(): void {
-  clearing = true;
+  generation++;
   cancelQueuedFetches();
+  inflight.clear();
   cache.forEach(blob => URL.revokeObjectURL(blob));
   cache.clear();
-  inflight.clear();
-  clearing = false;
 }

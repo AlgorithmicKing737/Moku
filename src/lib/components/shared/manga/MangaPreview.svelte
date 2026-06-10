@@ -20,6 +20,7 @@
   } from "$lib/state/series.svelte";
   import { app } from "$lib/state/app.svelte";
   import type { Manga, Chapter, Category } from "$lib/types";
+  import ModalBlur        from '$lib/components/shared/ui/ModalBlur.svelte'
 
 
   let manga: Manga | null         = $state(null);
@@ -353,6 +354,7 @@
 </script>
 
 {#if seriesState.previewManga}
+<ModalBlur blur={4} dim={0.72} />
 <div
   class="backdrop"
   role="button"
@@ -679,10 +681,8 @@
 <style>
   .backdrop {
     position: fixed; inset: 0;
-    background: rgba(0,0,0,0.72);
     z-index: var(--z-settings);
     display: flex; align-items: center; justify-content: center;
-    backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
     animation: fadeIn 0.12s ease both;
   }
   .modal {

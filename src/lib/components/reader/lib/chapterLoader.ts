@@ -1,12 +1,14 @@
 import { readerState }                          from "$lib/state/reader.svelte";
 import { fetchPages }                           from "./pageLoader";
 import { cancelQueuedFetches, revokeBlobUrl }   from "$lib/core/cache/imageCache";
-import { clearResolvedUrlCache }                from "$lib/core/cache/pageCache";
+import { clearResolvedUrlCache, clearPageCache } from "$lib/core/cache/pageCache";
 
 export function scheduleResumeDismiss() {
   setTimeout(() => { readerState.resumeFading = true; }, 1500);
   setTimeout(() => { readerState.resumeVisible = false; readerState.resumeFading = false; }, 2500);
 }
+
+let prefetchedChapterId: number | null = null;
 
 export async function loadChapter(
   id: number,
@@ -23,11 +25,16 @@ export async function loadChapter(
   cancelQueuedFetches();
   if (useBlob) {
     clearResolvedUrlCache();
-    // revoke blob URLs for all loaded pages so the GPU can release their textures
     for (const url of readerState.pageUrls) revokeBlobUrl(url);
     for (const strip of readerState.stripChapters) {
       for (const url of strip.urls) revokeBlobUrl(url);
     }
+    if (prefetchedChapterId !== null && prefetchedChapterId !== id) {
+      const prefetchedUrls = await fetchPages(prefetchedChapterId, false).catch(() => [] as string[]);
+      for (const url of prefetchedUrls) revokeBlobUrl(url);
+      clearPageCache(prefetchedChapterId);
+    }
+    prefetchedChapterId = null;
   }
 
   startAtLastPage.current = false;
@@ -51,7 +58,10 @@ export async function loadChapter(
     else if (resumeTo > 1)        readerState.pageNumber = Math.min(resumeTo, urls.length || resumeTo);
     readerState.pageReady = true;
     readerState.loading   = false;
-    if (adjacent.next) fetchPages(adjacent.next.id, useBlob, ctrl.signal).catch(() => {});
+    if (adjacent.next) {
+      prefetchedChapterId = adjacent.next.id;
+      fetchPages(adjacent.next.id, useBlob, ctrl.signal).catch(() => {});
+    }
   } catch (e: unknown) {
     if (ctrl.signal.aborted) return;
     readerState.error   = e instanceof Error ? e.message : String(e);
