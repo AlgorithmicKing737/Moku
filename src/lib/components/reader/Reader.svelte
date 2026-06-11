@@ -14,7 +14,7 @@
   import { historyState }                                    from "$lib/state/history.svelte";
   import { setPreviewManga }                                 from "$lib/state/series.svelte";
   import { getAdapter }                                      from "$lib/request-manager";
-  import { setReading, clearReading }                        from "$lib/core/discord";
+  import { setReading }                                      from "$lib/core/discord";
   import { revokeBlobUrl, cancelQueuedFetches, preloadBlobUrls } from "$lib/core/cache/imageCache";
   import type { ReaderSettings }                             from "$lib/state/reader.svelte";
   import ReaderControls                                      from "$lib/components/reader/ReaderControls.svelte";
@@ -250,7 +250,6 @@
     : () => goBack(style, adjacent, startAtLast));
 
   function handleCloseReader() {
-    clearReading().catch(() => {});
     for (const url of readerState.pageUrls) revokeBlobUrl(url);
     for (const strip of readerState.stripChapters) {
       for (const url of strip.urls) revokeBlobUrl(url);
