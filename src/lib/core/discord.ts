@@ -14,8 +14,11 @@ const FALLBACK_IMAGE = 'moku_logo'
 
 let sessionStart:  number | null = null
 let activeMangaId: number | null = null
-// bumped on every setReading; a late cover lookup only publishes if its epoch is still current
+
+// Every command supersedes any in-flight one,
+// so a slow cover lookup from setReading can't stop a later idle/clear that ran while it was still resolving.
 let presenceEpoch = 0
+const supersede = () => ++presenceEpoch
 
 function trunc(s: string, max = 128): string {
   return s.length <= max ? s : `${s.slice(0, max - 1)}…`
@@ -71,6 +74,7 @@ export async function destroyRpc(): Promise<void> {
   if (!platformService.isSupported('discord-rpc')) return
   sessionStart  = null
   activeMangaId = null
+  supersede()
   await platformService.clearDiscordPresence()
 }
 
@@ -78,7 +82,7 @@ export async function setReading(manga: Manga, chapter: Chapter): Promise<void> 
   if (!platformService.isSupported('discord-rpc')) return
   if (!settingsState.settings.discordRpc) return
   activeMangaId = manga.id
-  const epoch   = ++presenceEpoch
+  const epoch   = supersede()
 
   const cover = await resolveCover(manga)
   if (epoch !== presenceEpoch) return // a newer setReading superseded us while resolving
@@ -89,6 +93,7 @@ export async function setReading(manga: Manga, chapter: Chapter): Promise<void> 
 export async function setIdle(): Promise<void> {
   if (!platformService.isSupported('discord-rpc')) return
   if (!settingsState.settings.discordRpc) return
+  supersede()
   await platformService.setDiscordPresence({
     details:    'Browsing',
     timestamps: { start: sessionStart ?? Date.now() },
@@ -100,5 +105,6 @@ export async function setIdle(): Promise<void> {
 export async function clearReading(): Promise<void> {
   if (!platformService.isSupported('discord-rpc')) return
   if (!settingsState.settings.discordRpc) return
+  supersede()
   await platformService.clearDiscordPresence()
 }
