@@ -139,9 +139,9 @@
 
   $effect(() => {
     if (settingsState.settings.discordRpc) {
-      discord.initRpc().then(() => discord.setIdle())
+      discord.initRpc().then(() => discord.setIdle()).catch(() => {})
     } else {
-      discord.destroyRpc()
+      discord.destroyRpc().catch(() => {})
     }
   })
 

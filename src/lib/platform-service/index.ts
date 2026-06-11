@@ -18,7 +18,9 @@ function get(): PlatformAdapter {
 export const platformService = {
   get platform()                                            { return get().platform },
 
-  isSupported: (f: PlatformFeature)                        => get().isSupported(f),
+  // The readiness gate every feature checks first — must never throw before the adapter is wired
+  // up, so report "unsupported" (rather than going through get()) until it exists.
+  isSupported: (f: PlatformFeature)                        => adapter?.isSupported(f) ?? false,
   init:        ()                                          => get().init(),
   destroy:     ()                                          => get().destroy(),
 
