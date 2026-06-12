@@ -134,9 +134,9 @@ export const CREATE_CATEGORY = `
 `
 
 export const UPDATE_CATEGORY = `
-  mutation UpdateCategory($id: Int!, $name: String) {
-    updateCategory(input: { id: $id, patch: { name: $name } }) {
-      category { id name order }
+  mutation UpdateCategory($id: Int!, $name: String, $includeInUpdate: IncludeOrExclude, $includeInDownload: IncludeOrExclude) {
+    updateCategory(input: { id: $id, patch: { name: $name, includeInUpdate: $includeInUpdate, includeInDownload: $includeInDownload } }) {
+      category { id name order includeInUpdate includeInDownload }
     }
   }
 `

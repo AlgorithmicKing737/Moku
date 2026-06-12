@@ -19,8 +19,6 @@
     sortMode:                ChapterSortMode
     sortDir:                 ChapterSortDir
     viewMode:                'list' | 'grid'
-    chapterPage:             number
-    totalPages:              number
     downloadedCount:         number
     totalCount:              number
     deletingAll:             boolean
@@ -57,7 +55,7 @@
 
   let {
     chapters, sortedChapters, sortMode, sortDir, viewMode,
-    chapterPage, totalPages, downloadedCount, totalCount, deletingAll,
+    downloadedCount, totalCount, deletingAll,
     hasSelection, selectedCount, continueChapter,
     availableScanlators, scanlatorFilter, scanlatorBlacklist, scanlatorForce,
     allCategories, mangaCategories, catsLoading, refreshing,
@@ -277,9 +275,11 @@
       <ArrowsClockwise size={14} weight="light" class={refreshing ? 'anim-spin' : ''} />
     </button>
 
-    <button class="icon-btn" onclick={onOpenFolder} title="Open manga folder">
-      <FolderOpen size={14} weight="light" />
-    </button>
+    {#if downloadedCount > 0}
+      <button class="icon-btn" onclick={onOpenFolder} title="Open manga folder">
+        <FolderOpen size={14} weight="light" />
+      </button>
+    {/if}
 
     <div class="fp-wrap" bind:this={folderPickerRef}>
       <button class="icon-btn" class:active={hasFolders} onclick={() => folderPickerOpen = !folderPickerOpen}>
@@ -377,13 +377,6 @@
       </div>
     {/if}
 
-    {#if totalPages > 1}
-      <div class="pagination">
-        <button class="page-btn" onclick={() => onPageChange(Math.max(1, chapterPage - 1))} disabled={chapterPage === 1}>←</button>
-        <span class="page-num">{chapterPage} / {totalPages}</span>
-        <button class="page-btn" onclick={() => onPageChange(Math.min(totalPages, chapterPage + 1))} disabled={chapterPage === totalPages}>→</button>
-      </div>
-    {/if}
   </div>
 </div>
 
@@ -571,17 +564,6 @@
   .dl-unified-btn.dl-has-count .dl-unified-count { color: var(--accent-fg); opacity: 0.8; }
   .dl-unified-btn.dl-has-count:hover { background: var(--accent-muted); border-color: var(--accent); opacity: 0.9; }
   .dl-unified-btn.active { color: var(--accent-fg); border-color: var(--accent-dim); background: var(--accent-muted); }
-
-  .pagination { display: flex; align-items: center; gap: var(--sp-2); }
-  .page-btn {
-    font-family: var(--font-ui); font-size: var(--text-xs); letter-spacing: var(--tracking-wide);
-    padding: 4px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-dim);
-    color: var(--text-faint); background: none; cursor: pointer;
-    transition: color var(--t-base), border-color var(--t-base);
-  }
-  .page-btn:hover:not(:disabled) { color: var(--text-muted); border-color: var(--border-strong); }
-  .page-btn:disabled { opacity: 0.3; cursor: default; }
-  .page-num { font-family: var(--font-ui); font-size: var(--text-xs); color: var(--text-faint); letter-spacing: var(--tracking-wide); }
 
   .sel-count {
     font-family: var(--font-ui); font-size: var(--text-xs); color: var(--text-muted);

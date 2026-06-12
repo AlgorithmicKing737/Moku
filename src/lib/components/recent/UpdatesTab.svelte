@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { BookOpen, CircleNotch } from 'phosphor-svelte'
+  import { BookOpen, CircleNotch, Download, Trash } from 'phosphor-svelte'
   import Thumbnail from '$lib/components/shared/manga/Thumbnail.svelte'
   import type { RecentUpdate, UpdateGroup } from './lib/recentUpdates'
 
@@ -10,17 +10,20 @@
     updatesSearch:        string
     totalCount:           number
     openingId:            number | null
+    enqueueing:           Set<number>
     updaterRunning:       boolean
     lastUpdatedLabel:     string | null
     updaterProgressLabel: string | null
     onOpenUpdate:         (item: RecentUpdate) => void
     onOpenSeries:         (item: RecentUpdate) => void
+    onEnqueue:            (item: RecentUpdate) => void
+    onDeleteDownload:     (item: RecentUpdate) => void
   }
 
   let {
-    loading, error, groups, updatesSearch, totalCount, openingId,
+    loading, error, groups, updatesSearch, totalCount, openingId, enqueueing,
     updaterRunning, lastUpdatedLabel, updaterProgressLabel,
-    onOpenUpdate, onOpenSeries,
+    onOpenUpdate, onOpenSeries, onEnqueue, onDeleteDownload,
   }: Props = $props()
 
   const filteredGroups = $derived(updatesSearch.trim()
@@ -63,7 +66,7 @@
           <div class="bar-sep"></div>
         {/if}
         {#if !loading && totalCount > 0}
-          <span class="status-count">{totalCount} chapter{totalCount === 1 ? '' : 's'}</span>
+          <span class="status-count">{totalCount} unread</span>
         {/if}
       </div>
     </div>
@@ -138,7 +141,7 @@
                   <div class="update-info">
                     <div class="title-row">
                       <span class="series-title">{item.manga?.title ?? 'Unknown series'}</span>
-                      {#if !item.isRead}<span class="pill">Unread</span>{/if}
+                      {#if !item.isRead}<span class="pill" title="Unread"></span>{/if}
                     </div>
                     <span class="chapter-title">{chapterLabel(item)}</span>
                     {#if (item.lastPageRead ?? 0) > 0 && !item.isRead}
@@ -146,6 +149,17 @@
                     {/if}
                   </div>
                   <div class="row-end">
+                    {#if enqueueing.has(item.id)}
+                      <CircleNotch size={14} weight="light" class="anim-spin" />
+                    {:else if item.isDownloaded}
+                      <button class="dl-btn dl-btn-delete" onclick={(e) => { e.stopPropagation(); onDeleteDownload(item) }} title="Delete download">
+                        <Trash size={13} weight="light" />
+                      </button>
+                    {:else}
+                      <button class="dl-btn" onclick={(e) => { e.stopPropagation(); onEnqueue(item) }} title="Download">
+                        <Download size={13} weight="light" />
+                      </button>
+                    {/if}
                     {#if openingId === item.id}
                       <CircleNotch size={14} weight="light" class="anim-spin" />
                     {:else}
@@ -258,12 +272,20 @@
   .chapter-title { font-family: var(--font-ui); font-size: var(--text-xs); color: var(--text-muted); }
   .meta-row { font-family: var(--font-ui); font-size: var(--text-2xs); color: var(--text-faint); letter-spacing: var(--tracking-wide); }
   .pill {
-    padding: 2px 6px; border-radius: var(--radius-full);
-    background: var(--accent-muted); color: var(--accent-fg);
-    font-family: var(--font-ui); font-size: var(--text-2xs);
-    letter-spacing: var(--tracking-wide); text-transform: uppercase; flex-shrink: 0;
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--color-success, #22c55e); flex-shrink: 0;
   }
-  .row-end { color: var(--text-faint); display: flex; align-items: center; justify-content: center; width: 24px; flex-shrink: 0; }
+  .row-end { color: var(--text-faint); display: flex; align-items: center; gap: var(--sp-1); justify-content: center; flex-shrink: 0; }
+
+  .dl-btn {
+    display: flex; align-items: center; justify-content: center;
+    width: 24px; height: 24px; border-radius: var(--radius-sm);
+    border: none; background: none; color: var(--text-faint); cursor: pointer;
+    transition: color var(--t-base), background var(--t-base);
+  }
+  .dl-btn:hover { color: var(--text-muted); background: var(--bg-overlay); }
+  .dl-btn-delete { color: var(--color-error); }
+  .dl-btn-delete:hover { background: var(--color-error-bg); }
 
   .empty {
     flex: 1; display: flex; flex-direction: column; align-items: center;

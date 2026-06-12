@@ -1,12 +1,13 @@
-import { detectAdapter }                              from '$lib/platform-adapters'
-import { initPlatformService }                        from '$lib/platform-service'
-import { initRequestManager }                         from '$lib/request-manager'
-import { appState }                                   from '$lib/state/app.svelte'
-import { configureAuth, probeServer }                 from '$lib/core/auth'
-import { loadSettings, loadLibrary, loadUpdates }     from '$lib/core/persistence/persist'
-import { loadSettingsIntoState }                      from '$lib/state/settings.svelte'
-import { historyState }                               from '$lib/state/history.svelte'
-import { readerState }                                from '$lib/state/reader.svelte'
+import { detectAdapter }                          from '$lib/platform-adapters'
+import { initPlatformService }                    from '$lib/platform-service'
+import { initRequestManager }                     from '$lib/request-manager'
+import { appState }                               from '$lib/state/app.svelte'
+import { configureAuth, probeServer }             from '$lib/core/auth'
+import { loadSettings, loadLibrary }              from '$lib/core/persistence/persist'
+import { loadSettingsIntoState, settingsState }   from '$lib/state/settings.svelte'
+import { historyState }                           from '$lib/state/history.svelte'
+import { readerState }                            from '$lib/state/reader.svelte'
+import { seriesState }                            from '$lib/state/series.svelte'
 
 const KEY_URL  = 'moku_server_url'
 const KEY_AUTH = 'moku_auth_config'
@@ -34,12 +35,11 @@ async function boot() {
     const [settingsData, libraryData] = await Promise.all([
       loadSettings(),
       loadLibrary(),
-      loadUpdates(),
     ])
 
     await loadSettingsIntoState(settingsData.settings)
 
-    readerState.bookmarks = libraryData.bookmarks
+    seriesState.bookmarks = libraryData.bookmarks
     readerState.markers   = libraryData.markers
     historyState.load(libraryData.sessions, libraryData.dailyReadCounts)
 
@@ -49,8 +49,6 @@ async function boot() {
 
     appState.serverUrl = savedUrl
     appState.authMode  = savedAuth.mode
-    appState.authUser  = savedAuth.user ?? ''
-    appState.authPass  = savedAuth.pass ?? ''
 
     configureAuth(savedUrl, savedAuth.mode, savedAuth.user, savedAuth.pass)
 
@@ -63,7 +61,7 @@ async function boot() {
     })
 
     const isTauri         = platformAdapter.platform === 'tauri'
-    const autoStartServer = settingsData.settings.autoStartServer ?? false
+    const autoStartServer = settingsState.settings.autoStartServer
 
     if (isTauri && autoStartServer) {
       appState.status = 'booting'

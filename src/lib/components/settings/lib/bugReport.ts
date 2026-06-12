@@ -149,6 +149,10 @@ export function buildIssueUrl(
         alternatives: (fields as FeatureFields).alternatives,
       }
 
-  const params = new URLSearchParams({ ...common, ...specific })
+  const merged: Record<string, string> = {}
+  for (const [k, v] of Object.entries({ ...common, ...specific })) {
+    if (v !== undefined) merged[k] = v
+  }
+  const params = new URLSearchParams(merged)
   return `${base}?${params.toString()}`
 }

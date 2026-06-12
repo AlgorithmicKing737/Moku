@@ -188,7 +188,7 @@ class HistoryStore {
   }
 
   private async _persist() {
-    const bookmarks = (await import('$lib/state/reader.svelte')).readerState.bookmarks
+    const bookmarks = (await import('$lib/state/series.svelte')).seriesState.bookmarks
     const markers   = (await import('$lib/state/reader.svelte')).readerState.markers
     await saveLibrary({
       sessions:        this.sessions,

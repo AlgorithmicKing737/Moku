@@ -112,12 +112,10 @@
     for (let i = 0; i < entries.length; i++) {
       entries[i] = { ...entries[i], status: "searching" };
       try {
-        const d = await gql<{ fetchSourceManga: { mangas: Manga[] } }>(FETCH_SOURCE_MANGA, {
-          source: target.id, type: "SEARCH", page: 1, query: entries[i].manga.title,
-        });
-        const results = d.fetchSourceManga.mangas
-          .map(m => ({ manga: m, similarity: titleSimilarity(entries[i].manga.title, m.title) }))
-          .sort((a, b) => b.similarity - a.similarity);
+        const mangas = await getAdapter().searchManga(entries[i].manga.title, target.id);
+        const results = mangas
+          .map((m: Manga) => ({ manga: m, similarity: titleSimilarity(entries[i].manga.title, m.title) }))
+          .sort((a: { manga: Manga; similarity: number }, b: { manga: Manga; similarity: number }) => b.similarity - a.similarity);
 
         if (results.length > 0 && results[0].similarity > 0.3) {
           entries[i] = { ...entries[i], match: results[0].manga, similarity: results[0].similarity, status: "found" };
@@ -147,17 +145,15 @@
     for (const entry of toMigrate) {
       const idx = entries.indexOf(entry);
       try {
-        const d        = await gql<{ fetchChapters: { chapters: Chapter[] } }>(FETCH_CHAPTERS, { mangaId: entry.match!.id });
-        const newChaps = d.fetchChapters.chapters;
+        const newChaps = await getAdapter().fetchChapters(String(entry.match!.id));
 
-        const toMarkRead:       number[] = [];
-        const toMarkBookmarked: number[] = [];
+        const toMarkRead: number[] = [];
 
-        for (const nc of newChaps) {
-          const oldIdx = entries[idx].manga;
-          if (oldIdx) {
-            toMarkRead.push(nc.id);
-          }
+        // LibraryManga has no chapter detail — use unreadCount as a proxy:
+        // if unreadCount < total fetched, the user had read some, so carry them all over.
+        const hadReads = entries[idx].manga.unreadCount < newChaps.length;
+        if (hadReads) {
+          for (const nc of newChaps) toMarkRead.push(nc.id);
         }
 
         if (toMarkRead.length)
@@ -183,7 +179,7 @@
   }
 </script>
 
-<div class="overlay" onclick={(e) => { if (e.target === e.currentTarget && phase !== "migrating") onClose(); }}>
+<div class="overlay" role="presentation" onclick={(e) => { if (e.target === e.currentTarget && phase !== "migrating") onClose(); }} onkeydown={(e) => { if (e.key === "Escape" && phase !== "migrating") onClose(); }}>
   <div class="modal">
 
     <div class="modal-header">

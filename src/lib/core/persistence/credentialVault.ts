@@ -17,8 +17,9 @@ interface StoredVault {
   data: string
 }
 
-function toB64(buf: ArrayBuffer): string {
-  return btoa(String.fromCharCode(...new Uint8Array(buf)))
+function toB64(buf: ArrayBuffer | Uint8Array): string {
+  const bytes = buf instanceof Uint8Array ? buf : new Uint8Array(buf)
+  return btoa(String.fromCharCode(...bytes))
 }
 
 function fromB64(s: string): Uint8Array {
@@ -29,7 +30,7 @@ async function deriveKey(pin: string, salt: Uint8Array): Promise<CryptoKey> {
   const enc    = new TextEncoder()
   const keyMat = await crypto.subtle.importKey('raw', enc.encode(pin), 'PBKDF2', false, ['deriveKey'])
   return crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt, iterations: SALT_ITERATIONS, hash: 'SHA-256' },
+    { name: 'PBKDF2', salt: salt.slice(), iterations: SALT_ITERATIONS, hash: 'SHA-256' },
     keyMat,
     { name: 'AES-GCM', length: 256 },
     false,
@@ -74,11 +75,11 @@ export async function unlockVault(pin: string): Promise<VaultPayload | null> {
   if (!stored) return null
 
   try {
-    const key   = await deriveKey(pin, fromB64(stored.salt))
+    const key   = await deriveKey(pin, fromB64(stored.salt).slice())
     const plain = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: fromB64(stored.iv) },
+      { name: 'AES-GCM', iv: fromB64(stored.iv).slice() },
       key,
-      fromB64(stored.data),
+      fromB64(stored.data).slice(),
     )
     return JSON.parse(new TextDecoder().decode(plain)) as VaultPayload
   } catch {

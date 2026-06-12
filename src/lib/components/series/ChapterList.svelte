@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Download, CheckCircle, Circle, CircleNotch, Trash } from 'phosphor-svelte'
+  import { Download, CheckSquare, Square, CircleNotch, Trash } from 'phosphor-svelte'
   import ContextMenu from '$lib/components/shared/ui/ContextMenu.svelte'
   import type { MenuEntry } from '$lib/components/shared/ui/ContextMenu.svelte'
   import { longPress } from '$lib/core/ui/touchscreen'
@@ -14,26 +14,38 @@
     enqueueing:      Set<number>
     chapterPage:     number
     totalPages:      number
-    scrollEl?:       HTMLDivElement | null
     onOpen:          (ch: Chapter, inProgress: boolean) => void
     onToggleSelect:  (id: number, e: MouseEvent | KeyboardEvent) => void
     onEnqueue:       (ch: Chapter, e: MouseEvent) => void
     onDeleteDownload:(id: number) => void
     onPageChange:    (page: number) => void
+    onPageSizeChange:(n: number) => void
     buildCtxItems:   (ch: Chapter, idx: number) => MenuEntry[]
   }
 
   let {
     pageChapters, sortedChapters, viewMode, loadingChapters,
     selectedIds, enqueueing, chapterPage, totalPages,
-    scrollEl = $bindable(null),
     onOpen, onToggleSelect, onEnqueue, onDeleteDownload,
-    onPageChange, buildCtxItems,
+    onPageChange, onPageSizeChange, buildCtxItems,
   }: Props = $props()
 
   let ctx: { x: number; y: number; chapter: Chapter; idx: number } | null = $state(null)
+  let listEl: HTMLDivElement | null = $state(null)
 
   const hasSelection = $derived(selectedIds.size > 0)
+
+  $effect(() => {
+    if (!listEl || viewMode !== 'list') return
+    const ro = new ResizeObserver(([entry]) => {
+      const firstRow = listEl!.querySelector('.ch-row') as HTMLElement | null
+      const rowH = firstRow ? firstRow.offsetHeight : 37
+      const n = Math.max(1, Math.floor(entry.contentRect.height / rowH))
+      onPageSizeChange(n)
+    })
+    ro.observe(listEl)
+    return () => ro.disconnect()
+  })
 
   function chapterLongPress(node: HTMLElement, param: [Chapter, number]) {
     const [ch, idx] = param
@@ -50,7 +62,7 @@
   }
 </script>
 
-<div class={viewMode === 'grid' ? 'ch-grid' : 'ch-list'} bind:this={scrollEl}>
+<div class={viewMode === 'grid' ? 'ch-grid' : 'ch-list'} bind:this={listEl}>
   {#if loadingChapters && sortedChapters.length === 0}
     {#if viewMode === 'grid'}
       {#each Array(24) as _}<div class="grid-cell-skeleton skeleton"></div>{/each}
@@ -100,7 +112,7 @@
         oncontextmenu={(e) => { e.preventDefault(); ctx = { x: e.clientX, y: e.clientY, chapter: ch, idx: idxInSorted } }}
       >
         <button class="ch-check" class:ch-check-visible={hasSelection} onclick={(e) => onToggleSelect(ch.id, e)} title="Select">
-          {#if isSelected}<CheckCircle size={15} weight="fill" />{:else}<Circle size={15} weight="light" />{/if}
+          {#if isSelected}<CheckSquare size={15} weight="fill" />{:else}<Square size={15} weight="light" />{/if}
         </button>
         <div class="ch-left">
           <span class="ch-name">{ch.name}</span>
@@ -111,7 +123,7 @@
           </div>
         </div>
         <div class="ch-right">
-          {#if ch.read}<CheckCircle size={14} weight="light" class="read-icon" />{/if}
+          {#if ch.read}<CheckSquare size={14} weight="light" class="read-icon" />{/if}
           {#if ch.downloaded}
             <div class="ch-dl-wrap">
               <Download size={13} weight="fill" class="ch-dl-icon" />
@@ -145,38 +157,42 @@
 {/if}
 
 <style>
-  .ch-list  { flex: 1; overflow-y: auto; }
-  .ch-grid  { flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(42px, 1fr)); gap: 4px; padding: var(--sp-3); align-content: start; }
+  .ch-list  { flex: 1; overflow: hidden; }
+  .ch-grid  { flex: 1; overflow: hidden; display: grid; grid-template-columns: repeat(auto-fill, minmax(42px, 1fr)); gap: 4px; padding: var(--sp-3); align-content: start; }
 
-  .ch-row { display: flex; align-items: center; padding: 10px var(--sp-4); border-bottom: 1px solid var(--border-dim); cursor: pointer; transition: background var(--t-fast); gap: var(--sp-3); }
+  .ch-row { display: flex; align-items: center; padding: 8px var(--sp-4); border-bottom: 1px solid var(--border-dim); cursor: pointer; transition: background var(--t-fast); gap: var(--sp-3); }
   .ch-row:hover { background: var(--bg-raised); }
-  .ch-row.read { opacity: 0.45; }
-  .ch-left  { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .ch-row.read { opacity: 0.5; }
+  .ch-left  { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
   .ch-name  { font-size: var(--text-sm); color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .ch-meta  { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+  .ch-meta  { display: flex; align-items: center; gap: var(--sp-2); }
   .ch-meta-item { font-family: var(--font-ui); font-size: var(--text-2xs); color: var(--text-faint); letter-spacing: var(--tracking-wide); }
   .ch-right { display: flex; align-items: center; gap: var(--sp-1); flex-shrink: 0; }
   :global(.read-icon)    { color: var(--text-faint); }
   :global(.enqueue-icon) { color: var(--text-faint); }
 
-  .dl-btn { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: var(--radius-sm); color: var(--text-faint); transition: color var(--t-base), background var(--t-base); opacity: 0; }
-  .ch-row:hover .dl-btn { opacity: 1; }
+  .dl-btn { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: var(--radius-sm); color: var(--text-faint); transition: color var(--t-base), background var(--t-base); }
   .dl-btn:hover { color: var(--text-muted); background: var(--bg-overlay); }
-  .dl-btn-delete { color: var(--color-error) !important; opacity: 0; }
-  .ch-row:hover .dl-btn-delete { opacity: 1; }
+  .dl-btn-delete { color: var(--color-error) !important; }
   .dl-btn-delete:hover { background: var(--color-error-bg) !important; }
 
-  .ch-dl-wrap { position: relative; display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; }
-  :global(.ch-dl-icon) { color: var(--text-faint); transition: opacity var(--t-fast); }
-  .ch-row:hover .ch-dl-wrap :global(.ch-dl-icon) { opacity: 0; }
-  .ch-dl-wrap .dl-btn-delete { position: absolute; inset: 0; opacity: 0; }
-  .ch-row:hover .ch-dl-wrap .dl-btn-delete { opacity: 1; }
+  .ch-dl-wrap { display: flex; align-items: center; gap: var(--sp-1); }
+  :global(.ch-dl-icon) { color: var(--text-faint); }
 
-  .ch-check { display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; flex-shrink: 0; border-radius: var(--radius-sm); border: none; background: none; color: var(--text-faint); cursor: pointer; opacity: 0; transition: opacity var(--t-fast), color var(--t-fast); padding: 0; }
-  .ch-row:hover .ch-check { opacity: 1; }
-  .ch-check-visible { opacity: 1 !important; }
+  .ch-check {
+    display: flex; align-items: center; justify-content: center;
+    width: 20px; height: 20px; flex-shrink: 0;
+    border-radius: var(--radius-sm); border: none; background: none;
+    color: var(--text-faint); cursor: pointer; padding: 0;
+    opacity: 0;
+    transform: translateX(-6px);
+    transition: opacity var(--t-fast), transform var(--t-fast), color var(--t-fast);
+    margin-right: -20px;
+  }
+  .ch-row:hover .ch-check { opacity: 1; transform: translateX(0); margin-right: 0; }
+  .ch-check-visible { opacity: 1 !important; transform: translateX(0) !important; margin-right: 0 !important; }
+  .ch-selected .ch-check { color: var(--accent-fg); }
   .ch-selected { background: color-mix(in srgb, var(--accent) 8%, transparent) !important; }
-  .ch-selected .ch-check { color: var(--accent-fg); opacity: 1; }
 
   .row-skeleton { display: flex; flex-direction: column; gap: var(--sp-2); padding: 12px var(--sp-4); border-bottom: 1px solid var(--border-dim); }
 
@@ -184,8 +200,8 @@
   .grid-cell:hover { background: var(--bg-overlay); border-color: var(--border-strong); }
   .grid-cell.read { background: var(--color-read); color: var(--text-faint); border-color: transparent; }
   .grid-cell-num { font-size: 10px; }
-  .grid-cell-dot { position: absolute; bottom: 3px; right: 3px; width: 4px; height: 4px; border-radius: 50%; background: var(--text-faint); }
-  .grid-cell-dl  { position: absolute; top: 3px; left: 3px; width: 4px; height: 4px; border-radius: 50%; background: var(--accent-fg); }
+  .grid-cell-dot { position: absolute; bottom: 3px; right: 3px; width: 4px; height: 4px; border-radius: var(--radius-sm); background: var(--text-faint); }
+  .grid-cell-dl  { position: absolute; top: 3px; left: 3px; width: 4px; height: 4px; border-radius: var(--radius-sm); background: var(--accent-fg); }
   .grid-cell-spinner { position: absolute; top: 2px; right: 2px; }
   .grid-cell-skeleton { aspect-ratio: 1; border-radius: var(--radius-sm); }
   .grid-selected { background: var(--accent-muted) !important; border-color: var(--accent-dim) !important; }

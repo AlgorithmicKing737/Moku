@@ -17,7 +17,7 @@ export type SourceNode = {
   id: string;
   displayName: string;
   isConfigurable: boolean;
-  extension: { pkgName: string };
+  extension?: { pkgName: string };
 };
 
 export function libraryByExtension(

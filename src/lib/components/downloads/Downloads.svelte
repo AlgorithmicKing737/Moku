@@ -165,10 +165,8 @@
       isRunning={downloadStore.isRunning}
       dequeueing={downloadStore.dequeueing}
       selected={downloadStore.selected}
-      onRemove={(id) => downloadStore.dequeue(id)}
-      onRetry={(id) => downloadStore.retryOne(id)}
-      onReorder={(id, dir) => downloadStore.reorder(id, dir)}
-      onReorderEdge={(id, edge) => downloadStore.reorderToEdge(id, edge)}
+      onRemove={(id: number) => downloadStore.dequeue(id)}
+      onRetry={(id: number) => downloadStore.retryOne(id)}
       onSelect={handleSelect}
     />
   </div>
@@ -219,7 +217,7 @@
   .move-step { display: flex; align-items: center; border: 1px solid var(--border-dim); border-radius: var(--radius-sm); overflow: hidden; }
   .move-step .sel-action-btn { border: none; border-radius: 0; background: none; padding: 3px 6px; }
   .move-step .sel-action-btn:hover:not(:disabled) { background: var(--bg-overlay); border-color: transparent; }
-  .move-input { width: 28px; background: none; border: none; border-left: 1px solid var(--border-dim); border-right: 1px solid var(--border-dim); color: var(--text-muted); font-family: var(--font-ui); font-size: var(--text-xs); text-align: center; padding: 2px 0; outline: none; -moz-appearance: textfield; }
+  .move-input { width: 28px; background: none; border: none; border-left: 1px solid var(--border-dim); border-right: 1px solid var(--border-dim); color: var(--text-muted); font-family: var(--font-ui); font-size: var(--text-xs); text-align: center; padding: 2px 0; outline: none; -moz-appearance: textfield; appearance: textfield; }
   .move-input::-webkit-outer-spin-button, .move-input::-webkit-inner-spin-button { -webkit-appearance: none; }
   .move-input:focus { color: var(--text-primary); }
 

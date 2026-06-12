@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { CircleNotch, ArrowClockwise, X } from "phosphor-svelte";
+  import { CircleNotchIcon, ArrowClockwiseIcon, XIcon } from "phosphor-svelte";
   import Thumbnail    from "$lib/components/shared/manga/Thumbnail.svelte";
   import { longPress } from "$lib/core/ui/touchscreen";
   import type { DownloadQueueItem } from "$lib/types/api";
@@ -78,12 +78,12 @@
     <div class="actions">
       {#if isError}
         <button class="action-btn retry" onclick={(e) => { e.stopPropagation(); onRetry(item.chapter.id); }} disabled={isRemoving} title="Retry">
-          {#if isRemoving}<CircleNotch size={11} weight="light" class="anim-spin" />{:else}<ArrowClockwise size={11} weight="bold" />{/if}
+          {#if isRemoving}<CircleNotchIcon size={11} weight="light" class="anim-spin" />{:else}<ArrowClockwiseIcon size={11} weight="bold" />{/if}
         </button>
       {/if}
       {#if !isActive}
         <button class="action-btn remove" onclick={(e) => { e.stopPropagation(); onRemove(item.chapter.id); }} disabled={isRemoving} title="Remove">
-          {#if isRemoving}<CircleNotch size={11} weight="light" class="anim-spin" />{:else}<X size={12} weight="light" />{/if}
+          {#if isRemoving}<CircleNotchIcon size={11} weight="light" class="anim-spin" />{:else}<XIcon size={12} weight="light" />{/if}
         </button>
       {/if}
     </div>

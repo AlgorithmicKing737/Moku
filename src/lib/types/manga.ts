@@ -49,5 +49,8 @@ export interface Manga {
   firstUnreadChapter?:    ChapterRef | null
   highestNumberedChapter?: ChapterRef | null
 
-  source?: { id: string; name: string; displayName: string } | null
+  source?: { id: string; name: string; displayName: string; isNsfw?: boolean } | null
+  chapters?: { totalCount: number }
 }
+
+export type MangaDetail = Manga

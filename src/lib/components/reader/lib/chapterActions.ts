@@ -19,7 +19,7 @@ export function markChapterRead(id: number, markedRead: Set<number>) {
   const manga   = readerState.activeManga;
 
   if (manga && chapter) {
-    readerState.addBookmark({
+    seriesState.setBookmark({
       mangaId:      manga.id,
       mangaTitle:   manga.title,
       thumbnailUrl: manga.thumbnailUrl,
@@ -86,9 +86,7 @@ export function toggleBookmark(chapter: typeof readerState.activeChapter, pageNu
   if (existing) {
     seriesState.removeBookmark(chapter.id);
   } else {
-    const other = seriesState.bookmarks.find(b => b.mangaId === manga.id && b.chapterId !== chapter.id);
-    if (other) seriesState.removeBookmark(other.chapterId);
-    seriesState.addBookmark({
+    seriesState.setBookmark({
       mangaId:      manga.id,
       mangaTitle:   manga.title,
       thumbnailUrl: manga.thumbnailUrl,

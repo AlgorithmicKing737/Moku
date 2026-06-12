@@ -43,20 +43,20 @@
   const isDev   = import.meta.env.DEV
 
   interface Props {
-    mode?:          'loading' | 'idle' | 'locked'
-    ringFull?:      boolean
-    failed?:        boolean
-    notConfigured?: boolean
-    showCards?:     boolean
-    showFps?:       boolean
+    mode?:           'loading' | 'idle' | 'locked'
+    ringFull?:       boolean
+    failed?:         boolean
+    notConfigured?:  boolean
+    showCards?:      boolean
+    showFps?:        boolean
     showDevOverlay?: boolean
-    pinLen?:        number
-    pinCorrect?:    string
-    onReady?:       () => void
-    onUnlock?:      () => void
-    onRetry?:       () => void
-    onBypass?:      () => void
-    onDismiss?:     () => void
+    pinLen?:         number
+    pinCorrect?:     string
+    onReady?:        () => void
+    onUnlock?:       () => void
+    onRetry?:        () => void
+    onBypass?:       () => void
+    onDismiss?:      () => void
   }
 
   let {
@@ -97,7 +97,7 @@
     setTimeout(() => cb?.(), EXIT_MS)
   }
 
-  let animFrame: number
+  let animFrame = 0
   let animStart: number | null = null
   let animPhase = 1
 
@@ -117,19 +117,18 @@
   }
 
   $effect(() => {
-    if (mode === 'loading' && !failed && !notConfigured && !ringFull) {
-      if (!isTauri) return
-      animStart = null
-      animPhase = 1
-      animFrame = requestAnimationFrame(animateRing)
-      return () => cancelAnimationFrame(animFrame)
-    }
+    if (mode !== 'loading' || failed || notConfigured || ringFull || !isTauri) return
+    animStart = null
+    animPhase = 1
+    animFrame = requestAnimationFrame(animateRing)
+    return () => cancelAnimationFrame(animFrame)
   })
 
   $effect(() => {
     if (!ringFull || mode === 'locked') { exitLock = false; exiting = false; return }
     cancelAnimationFrame(animFrame)
-    ringProg = 1
+    animFrame = 0
+    ringProg  = 1
     setTimeout(() => triggerExit(onReady), 650)
   })
 
@@ -179,6 +178,7 @@
         window.removeEventListener('touchstart', handler)
       }
     }
+
     return () => clearInterval(iv)
   })
 
@@ -212,7 +212,7 @@
         const speed = cfg.speedMin + hash(seed + 5) * (cfg.speedMax - cfg.speedMin)
         const travel = vh + h + BUF
         cards.push({
-          cx: (col + 0.5) * laneW + (hash(seed + 2) * 2 - 1) * Math.max(0, (laneW - w) / 2 - 2),
+          cx:         (col + 0.5) * laneW + (hash(seed + 2) * 2 - 1) * Math.max(0, (laneW - w) / 2 - 2),
           w, h,
           lines:      1 + Math.floor(hash(seed + 7) * 3),
           alpha:      cfg.alpha,
@@ -307,11 +307,12 @@
     ctx.drawImage(vignette, 0, 0, cw, ch)
   }
 
-  let fps = 0, fpsFrames = 0, fpsLast = 0
+  let fpsFrames = 0, fpsLast = -1
   function tickFps(now: number) {
+    if (fpsLast < 0) { fpsLast = now; return }
     fpsFrames++
     if (now - fpsLast >= 500) {
-      fps       = Math.round(fpsFrames / ((now - fpsLast) / 1000))
+      const fps = Math.round(fpsFrames / ((now - fpsLast) / 1000))
       fpsFrames = 0
       fpsLast   = now
       if (fpsEl) fpsEl.textContent = `${fps} fps`
@@ -370,7 +371,7 @@
     function cleanup() {
       if (live) {
         live.stamps.forEach(c => { c.width = 0; c.height = 0 })
-        live.vignette.width = 0
+        live.vignette.width  = 0
         live.vignette.height = 0
         live = null
       }
@@ -444,14 +445,17 @@
 
     document.addEventListener('visibilitychange', onVis)
     raf = requestAnimationFrame(frame)
-    return () => {
-      cancelAnimationFrame(raf)
-      cleanup()
-      extraCleanup?.()
-      document.removeEventListener('visibilitychange', onVis)
-      if (isDev && mode === 'idle') {
-        splashDevUnregister(el)
-        devLiveCount = splashDevLiveCount()
+
+    return {
+      destroy() {
+        cancelAnimationFrame(raf)
+        cleanup()
+        extraCleanup?.()
+        document.removeEventListener('visibilitychange', onVis)
+        if (isDev && mode === 'idle') {
+          splashDevUnregister(el)
+          devLiveCount = splashDevLiveCount()
+        }
       }
     }
   }
@@ -548,7 +552,7 @@
 
   .logo-wrap { position:relative; width:72px; height:72px; display:flex; align-items:center; justify-content:center; }
 
-  .pin-card         { z-index:1; width:min(280px,calc(100vw - 48px)); background:var(--bg-surface); border:1px solid var(--border-base); border-radius:var(--radius-xl); padding:var(--sp-6) var(--sp-5); display:flex; flex-direction:column; align-items:center; gap:var(--sp-3); box-shadow:0 32px 80px rgba(0,0,0,0.75); animation:cardIn 0.38s cubic-bezier(0.22,1,0.36,1) 0.06s both; }
+  .pin-card          { z-index:1; width:min(280px,calc(100vw - 48px)); background:var(--bg-surface); border:1px solid var(--border-base); border-radius:var(--radius-xl); padding:var(--sp-6) var(--sp-5); display:flex; flex-direction:column; align-items:center; gap:var(--sp-3); box-shadow:0 32px 80px rgba(0,0,0,0.75); animation:cardIn 0.38s cubic-bezier(0.22,1,0.36,1) 0.06s both; }
   .pin-card--leaving { animation:cardOut 0.28s cubic-bezier(0.4,0,1,1) both; }
 
   .pin-label { font-family:var(--font-ui); font-size:var(--text-xs); color:var(--text-faint); letter-spacing:var(--tracking-wider); text-transform:uppercase; margin:0; }

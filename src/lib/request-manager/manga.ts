@@ -3,7 +3,7 @@ import { libraryState } from "$lib/state/library.svelte";
 import { addToast }     from "$lib/state/notifications.svelte";
 import { seriesState }  from "$lib/state/series.svelte";
 import type { MangaFilters, MangaMeta } from "$lib/server-adapters/types";
-import type { Manga, Chapter, Category } from "$lib/types";
+import type { Manga, Category } from "$lib/types";
 
 export async function loadLibrary(filters: MangaFilters = { inLibrary: true }) {
   libraryState.loading = true;
@@ -36,28 +36,12 @@ export async function updateManga(id: number, patch: { inLibrary?: boolean }): P
   if (patch.inLibrary === false) await getAdapter().removeFromLibrary(String(id));
 }
 
-export async function loadManga(id: string) {
-  seriesState.loading = true;
-  seriesState.error   = null;
-  try {
-    seriesState.current = await getAdapter().getManga(id);
-  } catch (e) {
-    seriesState.error = String(e);
-  } finally {
-    seriesState.loading = false;
-  }
+export async function loadManga(id: string): Promise<Manga> {
+  return getAdapter().getManga(id);
 }
 
-export async function fetchManga(id: string) {
-  seriesState.loading = true;
-  seriesState.error   = null;
-  try {
-    seriesState.current = await getAdapter().fetchManga(id);
-  } catch (e) {
-    seriesState.error = String(e);
-  } finally {
-    seriesState.loading = false;
-  }
+export async function fetchManga(id: string): Promise<Manga> {
+  return getAdapter().fetchManga(id);
 }
 
 export async function searchManga(query: string, sourceId?: string) {
@@ -84,12 +68,12 @@ export async function removeFromLibrary(mangaId: string) {
 
 export async function updateMangaMeta(id: string, meta: Partial<MangaMeta>) {
   await getAdapter().updateMangaMeta(id, meta);
-  if (String(seriesState.current?.id) === id) await loadManga(id);
+  if (String(seriesState.activeManga?.id) === id) seriesState.setActiveManga(await getAdapter().getManga(id));
 }
 
 export async function deleteMangaMeta(id: string, key: string) {
   await getAdapter().deleteMangaMeta(id, key);
-  if (String(seriesState.current?.id) === id) await loadManga(id);
+  if (String(seriesState.activeManga?.id) === id) seriesState.setActiveManga(await getAdapter().getManga(id));
 }
 
 export async function refreshLibrary() {

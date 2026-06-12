@@ -19,8 +19,10 @@
   }
 
   let {
-    tab, historySearch, updatesSearch, historyConfirmClear, hasHistory, updatesLoading,
-    onTabChange, onHistorySearchChange, onUpdatesSearchChange, onHistoryClear, onRefreshUpdates,
+    tab, historySearch, updatesSearch, historyConfirmClear, hasHistory,
+    updatesLoading,
+    onTabChange, onHistorySearchChange, onUpdatesSearchChange,
+    onHistoryClear, onRefreshUpdates,
   }: Props = $props()
 </script>
 
@@ -57,7 +59,7 @@
         class="icon-btn"
         onclick={onRefreshUpdates}
         disabled={updatesLoading}
-        title="Refresh updates"
+        title="Reload update list"
       >
         {#if updatesLoading}
           <CircleNotch size={14} weight="light" class="anim-spin" />
@@ -78,19 +80,6 @@
           <button class="search-clear" onclick={() => onHistorySearchChange('')}>×</button>
         {/if}
       </div>
-
-      <button
-        class="icon-btn"
-        onclick={onRefreshUpdates}
-        disabled={updatesLoading}
-        title="Refresh library"
-      >
-        {#if updatesLoading}
-          <CircleNotch size={14} weight="light" class="anim-spin" />
-        {:else}
-          <ArrowsClockwise size={14} weight="bold" />
-        {/if}
-      </button>
 
       {#if hasHistory}
         <button
@@ -155,6 +144,8 @@
   }
   .icon-btn:hover:not(:disabled) { color: var(--text-primary); border-color: var(--border-strong); }
   .icon-btn:disabled { opacity: 0.45; cursor: default; }
+  .icon-btn.running { color: var(--color-error); border-color: color-mix(in srgb, var(--color-error) 30%, transparent); background: var(--color-error-bg); }
+  .icon-btn.running:hover { color: var(--color-error); border-color: var(--color-error); }
 
   .search-wrap { position: relative; display: flex; align-items: center; }
   .search-wrap :global(.search-icon) { position: absolute; left: 8px; color: var(--text-faint); pointer-events: none; }

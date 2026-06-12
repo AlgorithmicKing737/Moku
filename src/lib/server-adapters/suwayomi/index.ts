@@ -270,9 +270,9 @@ export class SuwayomiAdapter implements ServerAdapter {
     await this.gql(DELETE_MANGA_META, { mangaId: Number(id), key })
   }
 
-  async getChapters(mangaId: string): Promise<Chapter[]> {
+  async getChapters(mangaId: string, signal?: AbortSignal): Promise<Chapter[]> {
     const data = await this.gql<{ chapters: { nodes: Record<string, unknown>[] } }>(
-      GET_CHAPTERS, { mangaId: Number(mangaId) }
+      GET_CHAPTERS, { mangaId: Number(mangaId) }, signal
     )
     return data.chapters.nodes.map(mapChapter)
   }
@@ -291,9 +291,9 @@ export class SuwayomiAdapter implements ServerAdapter {
     return data.fetchChapterPages.pages.map((url, index) => ({ index, url }))
   }
 
-  async fetchChapters(mangaId: string): Promise<Chapter[]> {
+  async fetchChapters(mangaId: string, signal?: AbortSignal): Promise<Chapter[]> {
     const data = await this.gql<{ fetchChapters: { chapters: Record<string, unknown>[] } }>(
-      FETCH_CHAPTERS, { mangaId: Number(mangaId) }
+      FETCH_CHAPTERS, { mangaId: Number(mangaId) }, signal
     )
     return data.fetchChapters.chapters.map(mapChapter)
   }
@@ -491,6 +491,21 @@ export class SuwayomiAdapter implements ServerAdapter {
     await this.gql(DELETE_CATEGORY, { id })
   }
 
+  async updateCategory(id: number, patch: { name?: string; includeInUpdate?: string; includeInDownload?: string }): Promise<Category> {
+    const data = await this.gql<{ updateCategory: { category: Record<string, unknown> } }>(
+      UPDATE_CATEGORY, { id, ...patch }
+    )
+    return mapCategory(data.updateCategory.category)
+  }
+
+  async updateCategories(
+    ids:   number[],
+    patch: { includeInUpdate?: 'INCLUDE' | 'EXCLUDE'; includeInDownload?: 'INCLUDE' | 'EXCLUDE' },
+  ): Promise<void> {
+    // Suwayomi has no bulk-category-patch mutation; fan out individually.
+    await Promise.all(ids.map(id => this.gql(UPDATE_CATEGORY, { id, ...patch })))
+  }
+
   async updateCategoryOrder(id: number, position: number): Promise<Category[]> {
     const data = await this.gql<{ updateCategoryOrder: { categories: Record<string, unknown>[] } }>(
       UPDATE_CATEGORY_ORDER, { id, position }
@@ -685,9 +700,11 @@ export class SuwayomiAdapter implements ServerAdapter {
       libraryUpdateStatus: {
         jobsInfo: { isRunning: boolean; finishedJobs: number; totalJobs: number }
       }
+      lastUpdateTimestamp: { timestamp: string } | null
     }>(LIBRARY_UPDATE_STATUS)
     const { isRunning, finishedJobs, totalJobs } = data.libraryUpdateStatus.jobsInfo
-    return { isRunning, finishedJobs, totalJobs }
+    const lastUpdated = data.lastUpdateTimestamp ? Number(data.lastUpdateTimestamp.timestamp) : undefined
+    return { isRunning, finishedJobs, totalJobs, lastUpdated }
   }
 
   clearPageCache(chapterId?: number): void {

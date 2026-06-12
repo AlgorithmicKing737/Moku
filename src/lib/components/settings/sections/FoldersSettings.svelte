@@ -54,7 +54,7 @@
     const name = newFolderName.trim()
     if (!name) return
     try {
-      const cat = await getAdapter().createCategory({ name })
+      const cat = await getAdapter().createCategory(name)
       categories = [...categories, cat]
       newFolderName = ''
     } catch (e: any) { catsError = e?.message ?? 'Failed to create folder' }
@@ -65,7 +65,7 @@
   async function commitEdit() {
     if (editingId !== null && editingName.trim()) {
       try {
-        await getAdapter().updateCategory({ id: editingId, name: editingName.trim() })
+        await (getAdapter() as any).updateCategory(editingId, { name: editingName.trim() })
         categories = categories.map(c => c.id === editingId ? { ...c, name: editingName.trim() } : c)
       } catch (e: any) { catsError = e?.message ?? 'Failed to rename' }
     }
@@ -74,7 +74,7 @@
 
   async function deleteFolder(id: number) {
     try {
-      await getAdapter().deleteCategory({ id })
+      await getAdapter().deleteCategory(id)
       categories = categories.filter(c => c.id !== id)
     } catch (e: any) { catsError = e?.message ?? 'Failed to delete folder' }
   }
@@ -85,7 +85,7 @@
     const next = !cat[flag]
     categories = categories.map(c => c.id === id ? { ...c, [flag]: next } : c)
     try {
-      await getAdapter().updateCategories({ ids: [id], patch: { [flag]: next ? 'INCLUDE' : 'EXCLUDE' } })
+      await (getAdapter() as any).updateCategories([id], { [flag]: next ? 'INCLUDE' : 'EXCLUDE' })
     } catch (e: any) {
       categories = categories.map(c => c.id === id ? { ...c, [flag]: !next } : c)
       catsError = e?.message ?? 'Failed to update folder'
@@ -117,7 +117,7 @@
         const optimistic = [...zeroCat, ...reordered.map((c, i) => ({ ...c, order: i + 1 }))]
         categories = optimistic
         const serverPosition = sToIdx + 1
-        getAdapter().updateCategoryOrder({ id: fromNumId, position: serverPosition })
+        getAdapter().updateCategoryOrder(fromNumId, serverPosition)
           .then((updated: Category[]) => {
             categories = [
               ...zeroCat,
@@ -189,6 +189,7 @@
             {#if isBuiltin || cat}
               <div
                 class="s-folder-row"
+                role="listitem"
                 class:dragging={dragStrId === id}
                 class:drop-above={dragOverStrId === id && dragStrId !== id && dropPosition === 'above'}
                 class:drop-below={dragOverStrId === id && dragStrId !== id && dropPosition === 'below'}
@@ -205,7 +206,7 @@
                     <DotsSixVertical size={14} weight="bold" />
                   </span>
                   <span class="s-folder-name">{cat?.name ?? 'Completed'}</span>
-                  <span class="s-folder-count">{cat?.mangas?.nodes?.length ?? 0} manga</span>
+                  <span class="s-folder-count">{cat?.mangas?.length ?? 0} manga</span>
                   <span class="s-folder-badge">built-in</span>
                   <div class="s-folder-actions">
                     <button class="s-btn-icon" class:muted={hidden} onclick={() => toggleHidden(id)} title={hidden ? 'Show tab in library' : 'Hide tab from library'}>
@@ -235,16 +236,17 @@
                       onblur={commitEdit} use:focusInput />
                     <button class="s-btn-icon" onclick={commitEdit} title="Save">✓</button>
                   {:else}
-                    <div class="s-folder-identity" draggable="true"
+                    <div class="s-folder-identity" role="button" tabindex="0" draggable="true"
                       ondragstart={(e) => onDragStart(e, id)}
-                      ondragend={onDragEnd}>
+                      ondragend={onDragEnd}
+                      onkeydown={(e) => e.key === 'Enter' && startEdit(cat.id, cat.name)}>
                       <span class="s-folder-icon">
                         <FolderSimple size={14} weight="light" />
                         <DotsSixVertical size={14} weight="bold" />
                       </span>
-                      <span class="s-folder-name" onclick={(e) => { e.stopPropagation(); startEdit(cat.id, cat.name) }} title="Click to rename">{cat.name}</span>
+                      <button class="s-folder-name" onclick={(e) => { e.stopPropagation(); startEdit(cat.id, cat.name) }} title="Click to rename">{cat.name}</button>
                     </div>
-                    <span class="s-folder-count">{cat.mangas?.nodes.length ?? 0} manga</span>
+                    <span class="s-folder-count">{cat.mangas?.length ?? 0} manga</span>
                     <div class="s-folder-actions">
                       <button class="s-btn-icon"
                         class:active={(settingsState.settings.defaultLibraryCategoryId ?? null) === cat.id}
@@ -332,6 +334,8 @@
   .s-folder-icon {
     display: grid;
     flex-shrink: 0;
+    overflow: visible;
+    padding: 1px;
   }
   .s-folder-icon > :global(*) { grid-area: 1 / 1; transition: opacity 0.12s; }
   .s-folder-icon > :global(*:last-child) { opacity: 0; }
