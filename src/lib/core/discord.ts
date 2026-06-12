@@ -12,8 +12,13 @@ const APP_BUTTONS = [
 
 const FALLBACK_IMAGE = 'moku_logo'
 
-let sessionStart:  number | null = null
-let activeMangaId: number | null = null
+// Discord activity type 3 = "Watching"; status-display 2 = use `details` as the member-list
+// headline. Together they make reading presence read "Watching <manga title>" (Discord has no
+// "Reading" type, so Watching is the closest fit).
+const ACTIVITY_WATCHING      = 3
+const STATUS_DISPLAY_DETAILS = 2
+
+let sessionStart: number | null = null
 
 // Every command supersedes any in-flight one,
 // so a slow cover lookup from setReading can't stop a later idle/clear that ran while it was still resolving.
@@ -61,6 +66,8 @@ function buildReadingPresence(manga: Manga, chapter: Chapter, cover: string) {
       largeImage: cover,
       largeText:  trunc(manga.title),
     },
+    activityType:      ACTIVITY_WATCHING,
+    statusDisplayType: STATUS_DISPLAY_DETAILS,
   }
 }
 
@@ -72,8 +79,7 @@ export async function initRpc(): Promise<void> {
 
 export async function destroyRpc(): Promise<void> {
   if (!platformService.isSupported('discord-rpc')) return
-  sessionStart  = null
-  activeMangaId = null
+  sessionStart = null
   supersede()
   await platformService.clearDiscordPresence()
 }
@@ -81,8 +87,7 @@ export async function destroyRpc(): Promise<void> {
 export async function setReading(manga: Manga, chapter: Chapter): Promise<void> {
   if (!platformService.isSupported('discord-rpc')) return
   if (!settingsState.settings.discordRpc) return
-  activeMangaId = manga.id
-  const epoch   = supersede()
+  const epoch = supersede()
 
   const cover = await resolveCover(manga)
   if (epoch !== presenceEpoch) return // a newer setReading superseded us while resolving
@@ -99,6 +104,9 @@ export async function setIdle(): Promise<void> {
     timestamps: { start: sessionStart ?? Date.now() },
     assets: { largeImage: FALLBACK_IMAGE, largeText: 'Moku' },
     buttons: APP_BUTTONS,
+    // Keep the verb consistent with reading ("Watching"): no statusDisplayType here, so the
+    // member-list headline stays the app name → "Watching Moku" while browsing.
+    activityType: ACTIVITY_WATCHING,
   })
 }
 
