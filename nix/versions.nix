@@ -11,7 +11,7 @@
   };
 
   frontend = {
-    pnpmHash   = "sha256-18twdFhprV9v9hzvqxuVDHD6Tm4zHNDJs7s6l/7ClBo=";
+    pnpmHash   = "sha256-fBkNpQXEeGZNbrpx7+0xVYYtQ6dGvpgRflCGPoxvnVY=";
     distHash   = "7db288b4b54277aa82b6ec5b21fc31a1e71f8246c50a74777500083b806c1fa5";
     distHashSri = "sha256-Z27CJz/9mmkkiEnF1R3E1ZpdW2j7unpP5+e1cqXyXxQ=";
   };
@@ -21,5 +21,5 @@
   };
 
   gitCommit  = "239960683b6c7f1347e1798b0e179a8a46628728";
-  tarballHash = "";
+  tarballHash = "589b389b356a48d54ad4022e68eaac165a1de654d0b98edec79ebbab2c4a1275";
 }
