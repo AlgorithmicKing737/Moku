@@ -34,12 +34,11 @@ jobs:
           path: ~/.local/share/flatpak
           key: flatpak-runtimes-gnome48-rust-stable
 
-      - name: Install runtime, SDK and rust-stable extension
+      - name: Install runtime and SDK
         run: |
           flatpak --user install -y --noninteractive flathub \
             org.gnome.Platform//48 \
-            org.gnome.Sdk//48 \
-            org.freedesktop.Sdk.Extension.rust-stable//48
+            org.gnome.Sdk//48
 
       - name: Build flatpak
         run: |
