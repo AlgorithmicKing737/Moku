@@ -354,8 +354,11 @@
     }
   });
 
+  // Track the *visible* chapter, not activeChapter: in longstrip, chapters are appended and only
+  // visibleChapterId (→ displayChapter) advances as you scroll, so activeChapter stays pinned to
+  // whatever you opened — which is why Discord kept showing the wrong chapter.
   $effect(() => {
-    const ch    = readerState.activeChapter;
+    const ch    = displayChapter;
     const manga = readerState.activeManga;
     const idle  = appState.idleSplash;
     if (ch && manga && !idle) {
