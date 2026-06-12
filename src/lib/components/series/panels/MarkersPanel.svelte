@@ -1,6 +1,6 @@
 <script lang="ts">
   import { X, MapPin, Trash, PencilSimple, Check }          from "phosphor-svelte";
-  import { seriesState, updateMarker, removeMarker, openReader } from "$lib/state/series.svelte";
+  import { seriesState, updateMarker, removeMarker, openReaderForChapter } from "$lib/state/series.svelte";
   import type { MarkerEntry, MarkerColor }                   from "$lib/types/history";
   import type { Chapter }                                    from "$lib/types";
 
@@ -58,7 +58,7 @@
     const chapter = chapters.find(c => c.id === m.chapterId);
     if (!chapter) return;
     const chaptersAsc = [...chapters].sort((a, b) => a.sourceOrder - b.sourceOrder);
-    openReader(chapter, chaptersAsc);
+    openReaderForChapter(chapter);
   }
 
   function formatDate(ts: number): string {

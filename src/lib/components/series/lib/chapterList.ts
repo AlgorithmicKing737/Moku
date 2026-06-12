@@ -65,15 +65,3 @@ export function buildChapterList(chapters: Chapter[], prefs: ChapterDisplayPrefs
 export function chaptersAscending(chapters: Chapter[]): Chapter[] {
   return [...chapters].sort((a, b) => a.sourceOrder - b.sourceOrder)
 }
-
-export function buildReaderChapterList(
-  chapters: Chapter[],
-  prefs:    Pick<ChapterDisplayPrefs, 'preferredScanlator' | 'scanlatorFilter'> | undefined,
-): Chapter[] {
-  return buildChapterList(chapters, {
-    sortMode:           'source',
-    sortDir:            'asc',
-    preferredScanlator: prefs?.preferredScanlator,
-    scanlatorFilter:    prefs?.scanlatorFilter,
-  })
-}

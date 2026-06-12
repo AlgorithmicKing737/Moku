@@ -5,7 +5,6 @@
   import { app, appState }                 from "$lib/state/app.svelte";
   import { DEFAULT_KEYBINDS }              from "$lib/core/keybinds/defaultBinds";
   import { fetchPages, resolveUrl, preloadImage, measureAspect, buildPageGroups } from "$lib/components/reader/lib/pageLoader";
-  import { setupScrollTracking, appendNextChapter }          from "$lib/components/reader/lib/scrollHandler";
   import { createReaderKeyHandler }                          from "$lib/components/reader/lib/readerKeybinds";
   import { markChapterRead, getMangaPrefs, toggleBookmark }  from "$lib/components/reader/lib/chapterActions";
   import { goForward, goBack, jumpToPage }                   from "$lib/components/reader/lib/navigation";
@@ -46,9 +45,11 @@
   const pinchZoomEnabled = $derived(settingsState.settings.pinchZoom ?? false);
   const containerized  = $derived(settingsState.settings.readerContainerized ?? false);
 
+  let visibleChapterId = $state<number | null>(null);
+
   const displayChapter = $derived(
-    style === "longstrip" && readerState.visibleChapterId
-      ? (readerState.activeChapterList.find(c => c.id === readerState.visibleChapterId) ?? readerState.activeChapter)
+    style === "longstrip" && visibleChapterId
+      ? (readerState.activeChapterList.find(c => c.id === visibleChapterId) ?? readerState.activeChapter)
       : readerState.activeChapter
   );
 
@@ -71,7 +72,7 @@
 
   const showResumeBanner = $derived(
     readerState.resumeVisible && readerState.resumePage > 1 &&
-    (style === "longstrip" ? readerState.stripResumeReady : readerState.pageNumber === readerState.resumePage)
+    readerState.pageNumber === readerState.resumePage
   );
 
   const adjacent = $derived.by(() => {
@@ -87,9 +88,9 @@
 
   const visibleChunkLastPage = $derived.by(() => {
     if (style !== "longstrip") return lastPage;
-    const chId  = readerState.visibleChapterId ?? readerState.activeChapter?.id;
-    const chunk = readerState.stripChapters.find(c => c.chapterId === chId);
-    return chunk?.urls.length ?? lastPage;
+    const chunks = pageViewRef?.getStripChunks() ?? [];
+    const chId   = visibleChapterId ?? readerState.activeChapter?.id;
+    return chunks.find(c => c.chapterId === chId)?.urls.length ?? lastPage;
   });
 
   const imgCls = $derived([
@@ -100,14 +101,6 @@
     fit === "original" && "fit-original",
     effectiveReaderSettings.optimizeContrast && "optimize-contrast",
   ].filter(Boolean).join(" "));
-
-  const stripToRender = $derived(
-    style === "longstrip"
-      ? (readerState.stripChapters.length > 0
-          ? readerState.stripChapters
-          : [{ chapterId: readerState.activeChapter?.id ?? 0, chapterName: readerState.activeChapter?.name ?? "", urls: readerState.pageUrls }])
-      : []
-  );
 
   const currentGroup = $derived.by(() => {
     const group = style === "double" && readerState.pageGroups.length
@@ -145,12 +138,8 @@
   let abortCtrl          = { current: null as AbortController | null };
   let hasNavigated       = false;
   let startAtLastPageRef = { current: false };
-  let cleanupScroll: () => void = () => {};
-  let stripChaptersRef   = readerState.stripChapters;
   let tickTimer:     ReturnType<typeof setTimeout> | null = null;
   let progressTimer: ReturnType<typeof setTimeout> | null = null;
-
-  $effect(() => { stripChaptersRef = readerState.stripChapters; });
 
   function maybeMarkCurrentRead() {
     const ch = displayChapter ?? readerState.activeChapter;
@@ -212,17 +201,6 @@
 
   const startAtLast = () => { startAtLastPageRef.current = true; };
 
-  function flatIndexForPage(page: number): number {
-    const chId = readerState.visibleChapterId ?? readerState.activeChapter?.id;
-    const chunks = readerState.stripChapters;
-    let offset = 0;
-    for (const chunk of chunks) {
-      if (chunk.chapterId === chId) return offset + Math.max(0, page - 1);
-      offset += chunk.urls.length;
-    }
-    return Math.max(0, page - 1);
-  }
-
   function primedJump(page: number, commit = true) {
     if (useBlob && commit && style !== "longstrip") {
       cancelQueuedFetches();
@@ -236,9 +214,8 @@
       style,
       lastPage,
       style === "longstrip" ? (idx) => pageViewRef.scrollToFlatIndex(idx) : null,
-      stripToRender.reduce((s, c) => s + c.urls.length, 0),
-      readerState.visibleChapterId ?? readerState.activeChapter?.id ?? 0,
-      readerState.stripChapters,
+      visibleChapterId ?? readerState.activeChapter?.id ?? 0,
+      pageViewRef?.getStripChunks() ?? [],
     );
   }
 
@@ -251,9 +228,6 @@
 
   function handleCloseReader() {
     for (const url of readerState.pageUrls) revokeBlobUrl(url);
-    for (const strip of readerState.stripChapters) {
-      for (const url of strip.urls) revokeBlobUrl(url);
-    }
     readerState.closeReader();
   }
 
@@ -341,10 +315,11 @@
   }
 
   $effect(() => {
-    const ch    = readerState.activeChapter;
-    const manga = readerState.activeManga;
-    if (ch && manga) {
+    const ch = readerState.activeChapter;
+    if (ch) {
       untrack(() => {
+        const manga = readerState.activeManga;
+        if (!manga) return;
         historyState.openSession(
           manga.id, manga.title, manga.thumbnailUrl,
           ch.id, ch.name, readerState.pageNumber,
@@ -369,7 +344,7 @@
   $effect(() => {
     const page   = readerState.pageNumber;
     const chId   = style === "longstrip"
-      ? (readerState.visibleChapterId ?? readerState.activeChapter?.id)
+      ? (visibleChapterId ?? readerState.activeChapter?.id)
       : readerState.activeChapter?.id;
     const chName = style === "longstrip"
       ? (readerState.activeChapterList.find(c => c.id === chId)?.name ?? readerState.activeChapter?.name ?? "")
@@ -393,99 +368,33 @@
       const ch       = readerState.activeChapter;
       const urls     = readerState.pageUrls;
       const resumeTo = untrack(() => readerState.resumePage);
-      appending                    = false;
-      readerState.stripChapters    = [{ chapterId: ch.id, chapterName: ch.name, urls }];
-      readerState.visibleChapterId = ch.id;
-      tick().then(() => {
-        if (!containerEl) return;
-        if (resumeTo > 1) {
-          pageViewRef.scrollToFlatIndex(resumeTo - 1);
-          readerState.stripResumeReady = true;
-          return;
-        }
-        containerEl.scrollTop = 0;
-      });
+      visibleChapterId = ch.id;
+      appending        = false;
+      pageViewRef.loadStrip(ch.id, ch.name, urls, resumeTo);
     }
   });
 
   $effect(() => { if (style !== "longstrip") readerState.resetInspect(); });
 
   $effect(() => {
-    const chId = readerState.visibleChapterId;
+    const chId = visibleChapterId;
     if (!chId || style !== "longstrip") return;
     if (chId === readerState.activeChapter?.id) return;
-    const wasAppended = untrack(() => readerState.stripChapters.findIndex(c => c.chapterId === chId)) > 0;
-    if (wasAppended) {
-      untrack(() => {
-        readerState.resumePage    = 0;
-        readerState.resumeVisible = false;
-        const prefs = getMangaPrefs(chId);
-        if (prefs.downloadAhead > 0) {
-          const list = readerState.activeChapterList;
-          const idx  = list.findIndex(c => c.id === chId);
-          if (idx >= 0) {
-            const toQueue = list.slice(idx + 1, idx + 1 + prefs.downloadAhead)
-              .filter(c => !c.downloaded && !c.read)
-              .map(c => c.id);
-            if (toQueue.length) getAdapter().enqueueDownloads(toQueue.map(String)).catch(console.error);
-          }
-        }
-      });
-      return;
-    }
-    const bookmark = readerState.bookmarks.find(b => b.chapterId === chId);
-    if (bookmark && bookmark.pageNumber > 1) {
-      untrack(() => {
-        readerState.resumePage       = bookmark.pageNumber;
-        readerState.resumeDismissed  = false;
-        readerState.resumeVisible    = true;
-        readerState.stripResumeReady = true;
-        scheduleResumeDismiss();
-      });
-    } else {
-      untrack(() => readerState.resetResume());
-    }
-  });
-
-  $effect(() => {
-    void style;
-    if (!containerEl) return;
     untrack(() => {
-      cleanupScroll();
-      cleanupScroll = setupScrollTracking(containerEl!, {
-        onPageChange:      (p)   => { readerState.pageNumber = p; },
-        onChapterChange:   (id)  => { readerState.visibleChapterId = id; },
-        onCenterIdxChange: (idx) => { pageViewRef?.notifyScrollCenter(idx); },
-        onMarkRead:        (id)  => markChapterRead(id, markedRead),
-        onAppend: () => {
-          if (appending || !readerState.stripChapters.length) return;
-          appending = true;
-          appendNextChapter(
-            stripChaptersRef,
-            readerState.activeChapterList,
-            (id) => fetchPages(id, useBlob),
-            (url) => preloadImage(url, useBlob),
-            (next) => { readerState.stripChapters = [...readerState.stripChapters, next]; appending = false; },
-            () => { appending = false; },
-          );
-        },
-        getStripChapters: () => stripChaptersRef,
-        getPageUrls:      () => readerState.pageUrls,
-        shouldAutoMark:   () => settingsState.settings.autoMarkRead ?? true,
-      });
-    });
-  });
-
-  $effect(() => {
-    if (readerState.activeChapter && readerState.activeChapterList.length) {
-      const idx = readerState.activeChapterList.findIndex(c => c.id === readerState.activeChapter!.id);
-      if (idx >= 0) {
-        const next = readerState.activeChapterList[idx + 1];
-        const prev = readerState.activeChapterList[idx - 1];
-        if (next) fetchPages(next.id, useBlob).then(urls => urls.slice(0, 8).forEach(u => preloadImage(u, useBlob))).catch(() => {});
-        if (prev) fetchPages(prev.id, useBlob).then(urls => urls.slice(0, 2).forEach(u => preloadImage(u, useBlob))).catch(() => {});
+      readerState.resumePage    = 0;
+      readerState.resumeVisible = false;
+      const prefs = getMangaPrefs(chId);
+      if (prefs.downloadAhead > 0) {
+        const list = readerState.activeChapterList;
+        const idx  = list.findIndex(c => c.id === chId);
+        if (idx >= 0) {
+          const toQueue = list.slice(idx + 1, idx + 1 + prefs.downloadAhead)
+            .filter(c => !c.downloaded && !c.read)
+            .map(c => c.id);
+          if (toQueue.length) getAdapter().enqueueDownloads(toQueue.map(String)).catch(console.error);
+        }
       }
-    }
+    });
   });
 
   $effect(() => {
@@ -554,7 +463,7 @@
       if (pageNum > 1) hasNavigated = true;
       untrack(() => {
         if (!hasNavigated) return;
-        if (style === "longstrip" && readerState.visibleChapterId && chapterId !== readerState.visibleChapterId) return;
+        if (style === "longstrip" && visibleChapterId && chapterId !== visibleChapterId) return;
         if (settingsState.settings.autoBookmark ?? true) {
           const existing = readerState.bookmarks.find(b => b.mangaId === mangaId && b.chapterId !== chapterId);
           if (existing) readerState.removeBookmark(existing.chapterId);
@@ -608,7 +517,6 @@
       window.removeEventListener("mouseup",  pageViewRef.onInspectMouseUp);
       window.removeEventListener("pointermove", pageViewRef.onPointerMove);
       window.removeEventListener("pointerup",   pageViewRef.onPointerUp);
-      cleanupScroll();
       ro.disconnect();
     };
   });
@@ -689,10 +597,11 @@
     error={readerState.error}
     pageReady={readerState.pageReady}
     pageGroups={readerState.pageGroups}
-    {currentGroup} {stripToRender}
+    {currentGroup}
     fadingOut={readerState.fadingOut}
     {tapToToggleBar}
     {pinchZoomEnabled}
+    {useBlob}
     {barPosition}
     onGetZoom={() => zoom}
     onSetZoom={(z) => { captureZoomAnchor(containerEl, style, zoomAnchor); applySettings({ readerZoom: z }); restoreZoomAnchor(containerEl, zoomAnchor); }}
@@ -701,6 +610,28 @@
     onWheel={handleWheel}
     onToggleUi={toggleUiVisibility}
     {bindContainer}
+    onPageChange={(p) => { readerState.pageNumber = p; }}
+    onChapterChange={(id) => { visibleChapterId = id; }}
+    onCenterIdxChange={(idx) => { pageViewRef?.notifyScrollCenter(idx); }}
+    onMarkRead={(id) => markChapterRead(id, markedRead)}
+    onAppend={() => {
+      if (appending) return;
+      const chunks    = pageViewRef?.getStripChunks() ?? [];
+      if (!chunks.length) return;
+      const lastChunk = chunks[chunks.length - 1];
+      const list      = readerState.activeChapterList;
+      const lastIdx   = list.findIndex(c => c.id === lastChunk.chapterId);
+      if (lastIdx < 0 || lastIdx >= list.length - 1) return;
+      const next = list[lastIdx + 1];
+      if (!next || chunks.some(c => c.chapterId === next.id)) return;
+      appending = true;
+      fetchPages(next.id, useBlob)
+        .then(urls => {
+          urls.slice(0, 6).forEach(url => preloadImage(url, useBlob));
+          return pageViewRef.appendStripChunk(next.id, next.name, urls);
+        })
+        .finally(() => { appending = false; });
+    }}
   />
 
   {#snippet progressBarSnippet()}

@@ -1,10 +1,26 @@
 <script lang="ts">
-  import { tick }               from "svelte";
   import { readerState }        from "$lib/state/reader.svelte";
-  import { settingsState }      from "$lib/state/settings.svelte";
   import { createPinchTracker } from "$lib/components/reader/lib/pinchZoom";
   import type { PinchTracker }  from "$lib/components/reader/lib/pinchZoom";
-  import type { StripChapter }  from "$lib/components/reader/lib/scrollHandler";
+  import { READ_LINE_PCT }      from "$lib/components/reader/lib/scrollHandler";
+  import { settingsState }      from "$lib/state/settings.svelte";
+  import LongstripViewer        from "$lib/components/reader/viewer/LongstripViewer.svelte";
+  import SingleViewer           from "$lib/components/reader/viewer/SingleViewer.svelte";
+  import DoubleViewer           from "$lib/components/reader/viewer/DoubleViewer.svelte";
+
+  export interface StripChapter {
+    chapterId:   number;
+    chapterName: string;
+    urls:        string[];
+  }
+
+  type FlatPage = {
+    chapterId:   number;
+    chapterName: string;
+    localIndex:  number;
+    url:         string;
+    total:       number;
+  };
 
   interface Props {
     style:            string;
@@ -15,10 +31,10 @@
     pageReady:        boolean;
     pageGroups:       number[][];
     currentGroup:     number[];
-    stripToRender:    StripChapter[];
     fadingOut:        boolean;
     tapToToggleBar:   boolean;
     pinchZoomEnabled: boolean;
+    useBlob:          boolean;
     barPosition:      "top" | "left" | "right";
     onGetZoom:        () => number;
     onSetZoom:        (z: number) => void;
@@ -27,44 +43,58 @@
     onWheel:          (e: WheelEvent) => void;
     onToggleUi:       () => void;
     bindContainer:    (el: HTMLDivElement) => void;
+    onPageChange:     (page: number) => void;
+    onChapterChange:  (chapterId: number) => void;
+    onCenterIdxChange:(flatIdx: number) => void;
+    onMarkRead:       (chapterId: number) => void;
+    onAppend:         () => void;
   }
 
   const {
     style, imgCls, effectiveWidth, loading, error, pageReady,
-    pageGroups, currentGroup, stripToRender, fadingOut,
-    tapToToggleBar, pinchZoomEnabled, barPosition,
+    pageGroups, currentGroup, fadingOut,
+    tapToToggleBar, pinchZoomEnabled, useBlob, barPosition,
     onGetZoom, onSetZoom, resolveUrl, onTap, onWheel, onToggleUi, bindContainer,
+    onPageChange, onChapterChange, onCenterIdxChange, onMarkRead, onAppend,
   }: Props = $props();
 
-  const LOAD_RADIUS   = 5;
-  const UNLOAD_RADIUS = 10;
+  let stripChunks = $state<StripChapter[]>([]);
 
-  type FlatPage = { chapterId: number; chapterName: string; localIndex: number; url: string; total: number };
+  export function loadStrip(chapterId: number, chapterName: string, urls: string[], resumeTo = 0) {
+    stripChunks = [{ chapterId, chapterName, urls }];
+    if (resumeTo > 1) {
+      setTimeout(() => scrollToFlatIndex(resumeTo - 1), 0);
+    }
+  }
+
+  export async function appendStripChunk(chapterId: number, chapterName: string, urls: string[]) {
+    if (stripChunks.some(c => c.chapterId === chapterId)) return;
+    stripChunks = [...stripChunks, { chapterId, chapterName, urls }];
+  }
+
+  export function getStripChunks(): StripChapter[] {
+    return stripChunks;
+  }
 
   const flatPages = $derived.by<FlatPage[]>(() => {
     const out: FlatPage[] = [];
-    for (const chunk of stripToRender) {
+    for (const chunk of stripChunks) {
       for (let i = 0; i < chunk.urls.length; i++) {
-        out.push({ chapterId: chunk.chapterId, chapterName: chunk.chapterName, localIndex: i, url: chunk.urls[i], total: chunk.urls.length });
+        out.push({
+          chapterId:   chunk.chapterId,
+          chapterName: chunk.chapterName,
+          localIndex:  i,
+          url:         chunk.urls[i],
+          total:       chunk.urls.length,
+        });
       }
     }
     return out;
   });
 
-  let loadedSet   = $state(new Set<number>());
-  let resolvedSrc = $state<Record<number, string>>({});
-  let revokeQueue: string[] = [];
+  let currentSrc       = $state<string | null>(null);
+  let currentGroupSrcs = $state<(string | null)[]>([]);
 
-  // Aspect ratios (w/h) keyed by flat index, written by the img onload handler.
-  // Retained as a fallback for scrollToFlatIndex when a slot is not yet in DOM.
-  const aspectMap = new Map<number, number>();
-
-  let currentSrc        = $state<string | null>(null);
-  let currentGroupSrcs  = $state<(string | null)[]>([]);
-
-  let centerIdx = $state(0);
-
-  // ── Non-longstrip page src resolution ────────────────────────────────────
   $effect(() => {
     if (style === "longstrip" || !pageReady) return;
     const pageNum = readerState.pageNumber;
@@ -89,218 +119,75 @@
     return () => { cancelled = true; };
   });
 
-  // ── Non-longstrip: scroll to top on every page change ────────────────────
-  // Ported from Suwayomi's useReaderScrollToStartOnPageChange.
-  // Prevents stale pan position carrying over when flipping pages.
   $effect(() => {
     void readerState.pageNumber;
-    if (style !== "longstrip" && containerEl) {
-      containerEl.scrollTo(0, 0);
-    }
+    if (style !== "longstrip" && containerEl) containerEl.scrollTo(0, 0);
   });
 
-  // ── Blob URL revocation ───────────────────────────────────────────────────
-  function scheduleRevoke(src: string) {
-    if (!src || !src.startsWith("blob:")) return;
-    revokeQueue.push(src);
-    requestAnimationFrame(() => {
-      const url = revokeQueue.shift();
-      if (url) { try { URL.revokeObjectURL(url); } catch {} }
-    });
-  }
+  let lastTrackedPage    = 0;
+  let lastTrackedChapter = 0;
 
-  // ── Load window management ────────────────────────────────────────────────
-  function loadPage(idx: number) {
-    if (loadedSet.has(idx)) return;
-    const page = flatPages[idx];
-    if (!page) return;
-    const newSet = new Set(loadedSet);
-    newSet.add(idx);
-    loadedSet = newSet;
-    const priority = (page.localIndex < 8 && page.chapterId === flatPages[0]?.chapterId) ? 8 - page.localIndex : 0;
-    resolveUrl(page.url, priority).then(src => {
-      if (loadedSet.has(idx)) {
-        resolvedSrc = { ...resolvedSrc, [idx]: src };
-      } else {
-        scheduleRevoke(src);
-      }
-    });
-  }
+  function handleScroll() {
+    if (style !== "longstrip" || !containerEl || !flatPages.length) return;
 
-  function unloadPage(idx: number) {
-    if (!loadedSet.has(idx)) return;
-    const newSet = new Set(loadedSet);
-    newSet.delete(idx);
-    loadedSet = newSet;
-    const oldSrc = resolvedSrc[idx];
-    if (oldSrc) {
-      const next = { ...resolvedSrc };
-      delete next[idx];
-      resolvedSrc = next;
-      scheduleRevoke(oldSrc);
-    }
-  }
+    const containerRect = containerEl.getBoundingClientRect();
+    const readY         = containerRect.top + containerEl.clientHeight * READ_LINE_PCT;
 
-  function recalcWindow(center: number) {
-    const lo      = center - LOAD_RADIUS;
-    const hi      = center + LOAD_RADIUS;
-    const evictLo = center - UNLOAD_RADIUS;
-    const evictHi = center + UNLOAD_RADIUS;
-    for (let i = 0; i < flatPages.length; i++) {
-      if (i >= lo && i <= hi)               loadPage(i);
-      else if (i < evictLo || i > evictHi)  unloadPage(i);
-    }
-  }
-
-  $effect(() => { recalcWindow(centerIdx); });
-  $effect(() => { void flatPages.length; recalcWindow(centerIdx); });
-
-  // ── Scroll position preservation on image resize above viewport ───────────
-  // Ported from Suwayomi's usePreserveOnLeadingPageRender.
-  //
-  // Problem: when a placeholder above the current scroll position loads its
-  // real image and changes height, the browser shifts the scroll position
-  // relative to the viewport (layout shift). This corrects for that by:
-  //   1. Tracking the first visible image and its offsetTop at last scroll.
-  //   2. On every ResizeObserver entry for an image above scrollTop, computing
-  //      the delta and applying it as a scroll correction.
-  //
-  // MutationObserver watches for images being added/removed so the
-  // ResizeObserver stays in sync with the actual DOM without needing
-  // querySelectorAll on every scroll tick.
-  $effect(() => {
-    if (style !== "longstrip" || !containerEl) return;
-
-    let visibleImg: HTMLElement | undefined;
-    let visibleImgTop = 0;
-    let lastScrollTop = 0;
-
-    const onScroll = () => {
-      lastScrollTop = containerEl.scrollTop;
-      if (visibleImg) {
-        visibleImgTop = visibleImg.offsetTop;
-      }
-    };
-    containerEl.addEventListener("scroll", onScroll, { passive: true });
-
-    const intersectionObs = new IntersectionObserver((entries) => {
-      const first = entries.find(e => e.isIntersecting);
-      if (first?.target instanceof HTMLElement) {
-        visibleImg    = first.target;
-        visibleImgTop = first.target.offsetTop;
-      }
-    });
-
-    const resizeObs = new ResizeObserver((entries) => {
-      if (!visibleImg) return;
-      const hasEntryBeforeScroll = entries.some(e => {
-        if (!(e.target instanceof HTMLElement)) return false;
-        // Skip zero-size preload placeholders (they are outside the load window)
-        if (!e.target.clientWidth && !e.target.clientHeight) return false;
-        return e.target.offsetTop < lastScrollTop;
-      });
-      if (!hasEntryBeforeScroll) return;
-      const newTop = lastScrollTop - visibleImgTop + visibleImg.offsetTop;
-      containerEl.scrollTo({ top: newTop, behavior: "instant" } as ScrollToOptions);
-    });
-
-    const observe   = (el: Element) => { intersectionObs.observe(el); resizeObs.observe(el); };
-    const unobserve = (el: Element) => { intersectionObs.unobserve(el); resizeObs.unobserve(el); };
-
-    const mutationObs = new MutationObserver((mutations) => {
-      for (const m of mutations) {
-        m.addedNodes.forEach(n => {
-          if (!(n instanceof HTMLElement)) return;
-          const imgs = n instanceof HTMLImageElement ? [n] : Array.from(n.querySelectorAll("img"));
-          imgs.forEach(observe);
-        });
-        m.removedNodes.forEach(n => {
-          if (!(n instanceof HTMLElement)) return;
-          const imgs = n instanceof HTMLImageElement ? [n] : Array.from(n.querySelectorAll("img"));
-          imgs.forEach(unobserve);
-        });
-      }
-    });
-    mutationObs.observe(containerEl, { childList: true, subtree: true });
-
-    // Observe images already in the DOM at setup time
-    containerEl.querySelectorAll("img").forEach(observe);
-
-    return () => {
-      containerEl.removeEventListener("scroll", onScroll);
-      mutationObs.disconnect();
-      resizeObs.disconnect();
-      intersectionObs.disconnect();
-    };
-  });
-
-  // ── Cursor hide on inactivity (longstrip) ─────────────────────────────────
-  // Ported from Suwayomi's useReaderHideCursorOnInactivity.
-  // Hides the cursor after 5 s of mouse inactivity, restores on movement.
-  $effect(() => {
-    if (style !== "longstrip" || !containerEl) return;
-
-    const HIDE_AFTER_MS = 5_000;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-
-    const show = () => {
-      containerEl.style.cursor = "";
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(() => { containerEl.style.cursor = "none"; }, HIDE_AFTER_MS);
-    };
-
-    show(); // start the timer immediately
-    window.addEventListener("mousemove", show, { passive: true });
-
-    return () => {
-      containerEl.style.cursor = "";
-      window.removeEventListener("mousemove", show);
-      if (timer) clearTimeout(timer);
-    };
-  });
-
-  // ── Scroll to target flat index ───────────────────────────────────────────
-  export function notifyScrollCenter(idx: number) {
-    centerIdx = idx;
-  }
-
-  export async function scrollToFlatIndex(idx: number) {
-    if (!containerEl || !flatPages.length) return;
-    centerIdx = idx;
-    recalcWindow(idx);
-    // Wait for Svelte to render any newly-in-window slots.
-    await tick();
-    if (!containerEl) return;
-    // Use scrollIntoView — the browser knows the exact element position
-    // regardless of image load state or aspect ratio. This is the same approach
-    // used by Suwayomi's useReaderHandlePageSelection (imageRef.scrollIntoView).
     const slots = containerEl.querySelectorAll<HTMLElement>(".strip-slot");
-    const slot  = slots[idx];
-    if (slot) {
-      slot.scrollIntoView({ block: "start", behavior: "instant" });
-    } else {
-      // Slot not in DOM — proportional fallback (very unlikely after tick).
-      containerEl.scrollTop = (idx / flatPages.length) * containerEl.scrollHeight;
+    let centerFlatIdx = 0;
+    let bestDist      = Infinity;
+
+    slots.forEach((slot, idx) => {
+      const rect = slot.getBoundingClientRect();
+      const mid  = (rect.top + rect.bottom) / 2;
+      const dist = Math.abs(mid - readY);
+      if (dist < bestDist) { bestDist = dist; centerFlatIdx = idx; }
+    });
+
+    onCenterIdxChange(centerFlatIdx);
+
+    const page = flatPages[centerFlatIdx];
+    if (!page) return;
+
+    const localPage = page.localIndex + 1;
+    if (localPage !== lastTrackedPage || page.chapterId !== lastTrackedChapter) {
+      lastTrackedPage    = localPage;
+      lastTrackedChapter = page.chapterId;
+      onPageChange(localPage);
+      onChapterChange(page.chapterId);
     }
+
+    for (const chunk of stripChunks) {
+      const lastLocalIdx = chunk.urls.length - 1;
+      let flatLastIdx = -1;
+      for (let i = 0; i < flatPages.length; i++) {
+        if (flatPages[i].chapterId === chunk.chapterId && flatPages[i].localIndex === lastLocalIdx) {
+          flatLastIdx = i;
+          break;
+        }
+      }
+      if (flatLastIdx < 0) continue;
+      const lastSlot = slots[flatLastIdx];
+      if (!lastSlot) continue;
+      const lastRect = lastSlot.getBoundingClientRect();
+      if (lastRect.bottom < readY) onMarkRead(chunk.chapterId);
+    }
+
+    const scrollBottom = containerEl.scrollTop + containerEl.clientHeight;
+    const scrollTotal  = containerEl.scrollHeight;
+    if (scrollTotal - scrollBottom < containerEl.clientHeight * 1.5) onAppend();
   }
 
-  // ── Reset on chapter change ───────────────────────────────────────────────
-  let lastChapterId = 0;
-  $effect(() => {
-    const chapterId = readerState.activeChapter?.id ?? 0;
-    if (chapterId === lastChapterId) return;
-    lastChapterId = chapterId;
-    loadedSet   = new Set<number>();
-    resolvedSrc = {};
-    centerIdx   = 0;
-    aspectMap.clear();
-  });
-
-  // ── Inspect / zoom helpers ────────────────────────────────────────────────
   const INSPECT_ZOOM_STEP = 0.15;
   const INSPECT_ZOOM_MAX  = 8;
 
-  let containerEl: HTMLDivElement;
+  let containerEl = $state<HTMLDivElement | undefined>();
+  let stripRef: LongstripViewer | undefined = $state();
+
+  export function captureAnchor()              { stripRef?.captureAnchor(); }
+  export function restoreAnchor()              { stripRef?.restoreAnchor(); }
+  export function notifyScrollCenter(idx: number)        { stripRef?.notifyScrollCenter(idx); }
+  export async function scrollToFlatIndex(idx: number)   { await stripRef?.scrollToFlatIndex(idx); }
 
   function getInspectImageEl(): HTMLElement | null {
     if (!containerEl) return null;
@@ -325,66 +212,6 @@
   let inspectPanStartX  = 0;
   let inspectPanStartY  = 0;
 
-  let stripDragging    = $state(false);
-  let stripDragMoved   = false;
-  let stripDragStartY  = 0;
-  let stripScrollStart = 0;
-
-  let autoScrollPaused     = false;
-  let autoScrollPauseTimer: ReturnType<typeof setTimeout> | null = null;
-
-  let midScrollActive       = $state(false);
-  let midScrollOriginY      = $state(0);
-  let midScrollCurrentY     = 0;
-  let midScrollDisplayLevel = $state(0);
-  let midScrollRaf: number | null = null;
-
-  function startMidScroll(originY: number) {
-    midScrollActive       = true;
-    midScrollOriginY      = originY;
-    midScrollDisplayLevel = 0;
-    if (midScrollRaf) cancelAnimationFrame(midScrollRaf);
-    const tick = () => {
-      if (!midScrollActive || !containerEl) return;
-      const dy      = midScrollCurrentY - midScrollOriginY;
-      const deadZone = 24;
-      const excess  = Math.max(0, Math.abs(dy) - deadZone);
-      const speed   = Math.sign(dy) * excess * 0.12;
-      containerEl.scrollTop += speed;
-      midScrollDisplayLevel = Math.sign(dy) * Math.min(5, Math.floor(excess / 30));
-      midScrollRaf = requestAnimationFrame(tick);
-    };
-    midScrollRaf = requestAnimationFrame(tick);
-  }
-
-  function stopMidScroll() {
-    midScrollActive       = false;
-    midScrollDisplayLevel = 0;
-    if (midScrollRaf) { cancelAnimationFrame(midScrollRaf); midScrollRaf = null; }
-  }
-
-  function pauseAutoScroll() {
-    autoScrollPaused = true;
-    if (autoScrollPauseTimer) clearTimeout(autoScrollPauseTimer);
-    autoScrollPauseTimer = setTimeout(() => { autoScrollPaused = false; }, 2500);
-  }
-
-  $effect(() => {
-    if (style !== "longstrip" || !settingsState.settings.autoScroll) return;
-    let rafId: number;
-    const tick = () => {
-      if (!autoScrollPaused && containerEl) containerEl.scrollTop += (settingsState.settings.autoScrollSpeed ?? 5) * 0.5;
-      rafId = requestAnimationFrame(tick);
-    };
-    rafId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafId);
-  });
-
-  $effect(() => {
-    if (style !== "longstrip") stopMidScroll();
-  });
-
-  // ── Pinch zoom ────────────────────────────────────────────────────────────
   let pinch: PinchTracker | null = null;
 
   $effect(() => {
@@ -402,28 +229,11 @@
     }
   });
 
-  // ── Pointer / mouse / wheel event handlers ────────────────────────────────
+  $effect(() => { if (style !== "longstrip") readerState.resetInspect(); });
+
   export function onInspectMouseDown(e: MouseEvent) {
     if ((e.target as Element).closest(".bar")) return;
-    if (e.button === 1 && style === "longstrip") {
-      e.preventDefault();
-      if (midScrollActive) {
-        stopMidScroll();
-      } else {
-        settingsState.settings.autoScroll = false;
-        startMidScroll(e.clientY);
-      }
-      return;
-    }
-    if (style === "longstrip") {
-      stripDragging    = true;
-      stripDragMoved   = false;
-      stripDragStartY  = e.clientY;
-      stripScrollStart = containerEl?.scrollTop ?? 0;
-      pauseAutoScroll();
-      e.preventDefault();
-      return;
-    }
+    if (style === "longstrip") { stripRef?.onMouseDown(e); return; }
     if (readerState.inspectScale <= 1) return;
     inspectDragging   = true;
     inspectDragMoved  = false;
@@ -435,13 +245,7 @@
   }
 
   export function onInspectMouseMove(e: MouseEvent) {
-    midScrollCurrentY = e.clientY;
-    if (stripDragging) {
-      const dy = e.clientY - stripDragStartY;
-      if (!stripDragMoved && Math.abs(dy) > 4) stripDragMoved = true;
-      if (containerEl) containerEl.scrollTop = stripScrollStart - dy;
-      return;
-    }
+    if (style === "longstrip") { stripRef?.onMouseMove(e); return; }
     if (!inspectDragging) return;
     if (!inspectDragMoved && Math.abs(e.clientX - inspectDragStartX) + Math.abs(e.clientY - inspectDragStartY) > 4) inspectDragMoved = true;
     const rawX = inspectPanStartX + (e.clientX - inspectDragStartX);
@@ -452,22 +256,19 @@
   }
 
   export function onInspectMouseUp() {
-    stripDragging   = false;
+    if (style === "longstrip") { stripRef?.onMouseUp(); return; }
     inspectDragging = false;
   }
 
   export function onPointerDown(e: PointerEvent) {
     if ((e.target as Element).closest(".bar")) return;
     pinch?.onPointerDown(e);
+    if (style === "longstrip") stripRef?.onPointerDown(e);
   }
 
   export function onPointerMove(e: PointerEvent) {
     if (pinch?.isPinching()) { pinch.onPointerMove(e); return; }
-    if (stripDragging) {
-      const dy = e.clientY - stripDragStartY;
-      if (!stripDragMoved && Math.abs(dy) > 4) stripDragMoved = true;
-      if (containerEl) containerEl.scrollTop = stripScrollStart - dy;
-    }
+    if (style === "longstrip") { stripRef?.onPointerMove(e); return; }
     if (inspectDragging) {
       if (!inspectDragMoved && Math.abs(e.clientX - inspectDragStartX) + Math.abs(e.clientY - inspectDragStartY) > 4) inspectDragMoved = true;
       const rawX = inspectPanStartX + (e.clientX - inspectDragStartX);
@@ -480,13 +281,16 @@
 
   export function onPointerUp(e: PointerEvent) {
     pinch?.onPointerUp(e);
-    if (!pinch?.isPinching()) { stripDragging = false; inspectDragging = false; }
+    if (!pinch?.isPinching()) {
+      if (style === "longstrip") stripRef?.onPointerUp();
+      else inspectDragging = false;
+    }
   }
 
   export function handleWheel(e: WheelEvent) {
     if (style === "longstrip") {
-      if (e.ctrlKey) { onWheel(e); }
-      else pauseAutoScroll();
+      if (e.ctrlKey) onWheel(e);
+      else stripRef?.onWheel(e);
       return;
     }
     if (!e.ctrlKey) { onWheel(e); return; }
@@ -496,14 +300,12 @@
     if (next === readerState.inspectScale) return;
     if (next === 1) { readerState.inspectScale = 1; readerState.inspectPanX = 0; readerState.inspectPanY = 0; return; }
     const img    = getInspectImageEl();
-    const anchor = img ?? containerEl;
+    const anchor = img ?? containerEl ?? null;
     const rect   = anchor?.getBoundingClientRect();
     const cx     = rect ? e.clientX - rect.left - rect.width  / 2 : 0;
     const cy     = rect ? e.clientY - rect.top  - rect.height / 2 : 0;
     const ratio  = next / readerState.inspectScale;
-    const rawPanX = cx + (readerState.inspectPanX - cx) * ratio;
-    const rawPanY = cy + (readerState.inspectPanY - cy) * ratio;
-    const [clampedX, clampedY] = clampInspectPan(next, rawPanX, rawPanY);
+    const [clampedX, clampedY] = clampInspectPan(next, cx + (readerState.inspectPanX - cx) * ratio, cy + (readerState.inspectPanY - cy) * ratio);
     readerState.inspectScale = next;
     readerState.inspectPanX  = clampedX;
     readerState.inspectPanY  = clampedY;
@@ -513,11 +315,10 @@
 
   function handleTap(e: MouseEvent) {
     if (style === "longstrip") {
-      if (stripDragMoved) { stripDragMoved = false; return; }
+      if (stripRef?.consumeTap()) return;
       return;
     }
     if (inspectDragMoved) { inspectDragMoved = false; return; }
-    if (stripDragMoved)   { stripDragMoved   = false; return; }
     if (tapToToggleBar) {
       if (tapTimer) { clearTimeout(tapTimer); tapTimer = null; return; }
       tapTimer = setTimeout(() => { tapTimer = null; onTap(e); }, 220);
@@ -550,10 +351,10 @@
   onclick={handleTap}
   onauxclick={(e) => { if (e.button === 1 && style === "longstrip") e.preventDefault(); }}
   ondblclick={handleDblClick}
+  onscroll={style === "longstrip" ? handleScroll : undefined}
   onmousedown={onInspectMouseDown}
   onpointerdown={pinchZoomEnabled ? onPointerDown : undefined}
   onwheel={(e) => { if (e.ctrlKey || style !== "longstrip") e.preventDefault(); }}
-  style:cursor={style === "longstrip" ? (stripDragging ? "grabbing" : "grab") : undefined}
   onkeydown={(e) => {
     if (e.key === " " && style === "longstrip") {
       e.preventDefault();
@@ -563,28 +364,9 @@
     if ((e.key === "ArrowLeft" || e.key === "ArrowRight" || e.key === "ArrowUp" || e.key === "ArrowDown") && style !== "longstrip") e.preventDefault();
   }}
 >
-  {#if midScrollActive}
-    <div class="midscroll-bar" class:midscroll-bar-right={barPosition !== "right"} class:midscroll-bar-left={barPosition === "right"}>
-      <div class="midscroll-segments">
-        {#each [5,4,3,2,1] as n}
-          <div class="midscroll-seg" class:midscroll-seg-lit={midScrollDisplayLevel < 0 && -midScrollDisplayLevel >= n}></div>
-        {/each}
-        <div class="midscroll-origin-dot"></div>
-        {#each [1,2,3,4,5] as n}
-          <div class="midscroll-seg" class:midscroll-seg-lit={midScrollDisplayLevel > 0 && midScrollDisplayLevel >= n}></div>
-        {/each}
-      </div>
-      <button class="midscroll-stop" onclick={stopMidScroll} title="Stop (middle click)">
-        <svg width="8" height="8" viewBox="0 0 8 8"><rect x="0" y="0" width="8" height="8" rx="1" fill="currentColor"/></svg>
-      </button>
-    </div>
-  {/if}
-
   {#if loading}
     <div class="center-overlay">
-      <div class="page-loader page-loader-single" aria-hidden="true">
-        {@render skeleton()}
-      </div>
+      <div class="page-loader page-loader-single" aria-hidden="true">{@render skeleton()}</div>
     </div>
   {/if}
 
@@ -593,76 +375,21 @@
   {/if}
 
   {#if style === "longstrip"}
-    {#each flatPages as page, gi (page.chapterId + ":" + page.localIndex)}
-      {@const src = resolvedSrc[gi]}
-      {@const isLoaded = loadedSet.has(gi)}
-      <div class="strip-slot" data-local-page={page.localIndex + 1} data-chapter={page.chapterId}>
-        {#if isLoaded && src}
-          <img
-            {src}
-            alt="{page.chapterName} – Page {page.localIndex + 1}"
-            data-local-page={page.localIndex + 1}
-            data-chapter={page.chapterId}
-            data-total={page.total}
-            class="{imgCls}{settingsState.settings.pageGap ? ' strip-gap' : ''}"
-            loading="eager"
-            decoding="async"
-            draggable="false"
-            onload={(e) => {
-              const img  = e.currentTarget as HTMLImageElement;
-              const slot = img.closest<HTMLElement>(".strip-slot");
-              if (slot && img.naturalWidth > 0) {
-                const aspect = img.naturalWidth / img.naturalHeight;
-                slot.style.setProperty("--aspect", String(aspect));
-                aspectMap.set(gi, aspect);
-              }
-            }}
-          />
-        {:else}
-          <div class="strip-placeholder" aria-hidden="true">
-            {@render skeleton()}
-          </div>
-        {/if}
-      </div>
-    {/each}
-    <div style="height:1px;flex-shrink:0"></div>
-
-  {:else if style === "fade" && pageReady}
-    <div class="inspect-wrap" style="transform:scale({readerState.inspectScale}) translate({readerState.inspectPanX / readerState.inspectScale}px,{readerState.inspectPanY / readerState.inspectScale}px)">
-      {#if currentSrc}
-        <img src={currentSrc} alt="Page {readerState.pageNumber}" class={imgCls} decoding="async" style="opacity:{fadingOut ? 0 : 1};transition:opacity 0.1s ease" draggable="false" />
-      {:else}
-        <div class="page-loader page-loader-single" aria-hidden="true">{@render skeleton()}</div>
-      {/if}
-    </div>
+    <LongstripViewer
+      bind:this={stripRef}
+      {containerEl}
+      {flatPages}
+      {imgCls}
+      {effectiveWidth}
+      {resolveUrl}
+      {barPosition}
+    />
 
   {:else if style === "double" && pageReady}
-    <div class="inspect-wrap" style="transform:scale({readerState.inspectScale}) translate({readerState.inspectPanX / readerState.inspectScale}px,{readerState.inspectPanY / readerState.inspectScale}px)">
-      {#if pageGroups.length}
-        <div class="double-wrap">
-          {#each currentGroup as pg, i (pg)}
-            {#if currentGroupSrcs[i]}
-              <img src={currentGroupSrcs[i]} alt="Page {pg}" class="{imgCls} page-half {i === 0 ? 'gap-left' : 'gap-right'}" decoding="async" draggable="false" />
-            {:else}
-              <div class="page-loader page-half {i === 0 ? 'gap-left' : 'gap-right'}" aria-hidden="true">{@render skeleton()}</div>
-            {/if}
-          {/each}
-        </div>
-      {:else}
-        <div class="center-overlay">
-          <div class="page-loader page-loader-single" aria-hidden="true">{@render skeleton()}</div>
-        </div>
-      {/if}
-    </div>
+    <DoubleViewer {imgCls} {currentGroup} srcs={currentGroupSrcs} {pageGroups} />
 
   {:else if pageReady}
-    <div class="inspect-wrap" style="transform:scale({readerState.inspectScale}) translate({readerState.inspectPanX / readerState.inspectScale}px,{readerState.inspectPanY / readerState.inspectScale}px)">
-      {#if currentSrc}
-        <img src={currentSrc} alt="Page {readerState.pageNumber}" class={imgCls} decoding="async" draggable="false" />
-      {:else}
-        <div class="page-loader page-loader-single" aria-hidden="true">{@render skeleton()}</div>
-      {/if}
-    </div>
+    <SingleViewer {imgCls} src={currentSrc} {fadingOut} isFade={style === "fade"} />
   {/if}
 </div>
 
@@ -684,19 +411,6 @@
   .viewer.inspect-active:active { cursor: grabbing; }
 
   :global(.pinch-active) .viewer { touch-action: none; }
-
-  .inspect-wrap { display: flex; align-items: center; justify-content: center; transform-origin: center center; will-change: transform; }
-
-  .strip-slot { width: 100%; display: flex; flex-direction: column; align-items: center; }
-
-  .strip-placeholder {
-    width: var(--effective-width, 100%);
-    max-width: var(--effective-width, 100%);
-    aspect-ratio: var(--aspect, 0.667);
-    border-radius: var(--radius-sm);
-    display: flex;
-    align-items: stretch;
-  }
 
   .page-loader { border-radius: var(--radius-sm); display: flex; align-items: stretch; }
   .page-loader-single {
@@ -728,47 +442,14 @@
     100% { stroke-dashoffset: -400; opacity: 0.25; }
   }
 
-  .img { display: block; user-select: none; image-rendering: auto; }
-  .img:global(.optimize-contrast) { image-rendering: -webkit-optimize-contrast; }
+  :global(.img) { display: block; user-select: none; image-rendering: auto; }
+  :global(.img.optimize-contrast) { image-rendering: -webkit-optimize-contrast; }
   :global(.fit-width)    { max-width: var(--effective-width, 100%); width: 100%; height: auto; }
   :global(.fit-height)   { max-height: calc(var(--visual-vh, 100vh) - 80px); width: auto; max-width: var(--effective-width, 100%); height: auto; }
   :global(.fit-screen)   { max-width: var(--effective-width, 100%); max-height: calc(var(--visual-vh, 100vh) - 80px); object-fit: contain; height: auto; }
   :global(.fit-original) { max-width: 100%; width: auto; height: auto; }
   :global(.strip-gap)    { margin-bottom: 8px; }
 
-  .double-wrap { display: flex; align-items: flex-start; justify-content: center; max-width: calc(var(--effective-width, 100%) * 2); width: 100%; }
-  .page-half   { flex: 1; min-width: 0; object-fit: contain; }
-  .gap-left    { margin-right: 2px; }
-  .gap-right   { margin-left: 2px; }
-
   .center-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
   .error-msg      { color: var(--color-error); font-size: var(--text-base); }
-
-  .midscroll-bar {
-    position: fixed;
-    top: 50%;
-    transform: translateY(-50%);
-    z-index: 200;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 6px;
-    background: color-mix(in srgb, var(--bg-raised) 92%, transparent);
-    border: 1px solid var(--border-base);
-    border-radius: 10px;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.45);
-    pointer-events: auto;
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
-  }
-  .midscroll-bar-right { right: 8px; }
-  .midscroll-bar-left  { left: 8px; }
-
-  .midscroll-segments { display: flex; flex-direction: column; align-items: center; gap: 3px; }
-  .midscroll-origin-dot { width: 6px; height: 6px; border-radius: 50%; border: 1.5px solid var(--accent-fg); opacity: 0.6; flex-shrink: 0; margin: 2px 0; }
-  .midscroll-seg { width: 4px; height: 14px; border-radius: 2px; background: var(--border-strong); transition: background 0.06s ease; flex-shrink: 0; }
-  .midscroll-seg-lit { background: var(--accent-fg); }
-  .midscroll-stop { width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: var(--radius-sm); border: 1px solid var(--border-dim); background: none; color: var(--text-faint); cursor: pointer; transition: color var(--t-fast), background var(--t-fast), border-color var(--t-fast); flex-shrink: 0; }
-  .midscroll-stop:hover { color: var(--text-primary); background: var(--bg-overlay); border-color: var(--border-strong); }
 </style>

@@ -2,6 +2,7 @@ import type { Manga, Chapter }      from "$lib/types";
 import type { BookmarkEntry, MarkerEntry, MarkerColor } from "$lib/types/history";
 import type { MangaPrefs, ReaderSettings, ReaderPreset } from "$lib/types/settings";
 import { settingsState, updateSettings }                 from "$lib/state/settings.svelte";
+import { seriesState }                                   from "$lib/state/series.svelte";
 import { goto }                                          from "$app/navigation";
 
 export const PAGE_STYLES   = ["single", "fade", "double", "longstrip"] as const;
@@ -30,9 +31,12 @@ export interface StripChapter {
 }
 
 class ReaderState {
-  activeManga       = $state<Manga | null>(null);
-  activeChapter     = $state<Chapter | null>(null);
-  activeChapterList = $state<Chapter[]>([]);
+  get activeManga()                   { return seriesState.activeManga; }
+  set activeManga(v: Manga | null)    { seriesState.activeManga = v; }
+
+  get activeChapter()                 { return seriesState.activeChapter; }
+  set activeChapter(v: Chapter | null){ seriesState.activeChapter = v; }
+
   pageUrls          = $state<string[]>([]);
   pageNumber        = $state(1);
   bookmarks         = $state<BookmarkEntry[]>([]);
@@ -77,19 +81,19 @@ class ReaderState {
 
   containerWidth   = $state(0);
 
+  readonly activeChapterList = $derived(seriesState.readerChapterList);
+
   get settings() { return settingsState.settings; }
 
-  openReader(chapter: Chapter, chapterList: Chapter[], manga?: Manga | null) {
+  openReader(chapter: Chapter, manga?: Manga | null) {
     const isChapterNav = this.activeChapter !== null;
-    this.activeChapter     = chapter;
-    this.activeChapterList = chapterList;
+    this.activeChapter = chapter;
     if (manga !== undefined) this.activeManga = manga;
     goto(`/reader/${this.activeManga!.id}/${chapter.id}`, { replaceState: isChapterNav });
   }
 
   closeReader() {
-    this.activeChapter     = null;
-    this.activeChapterList = [];
+    this.activeChapter = null;
     history.back();
   }
 
@@ -224,5 +228,5 @@ export const DEFAULT_MANGA_PREFS: MangaPrefs = {
 
 export const readerState = new ReaderState();
 
-export function openReader(ch: Chapter, list: Chapter[], manga?: Manga | null)  { readerState.openReader(ch, list, manga); }
-export function closeReader()                                                     { readerState.closeReader(); }
+export function openReader(ch: Chapter, manga?: Manga | null)  { readerState.openReader(ch, manga); }
+export function closeReader()                                   { readerState.closeReader(); }

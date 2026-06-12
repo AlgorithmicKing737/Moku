@@ -4,9 +4,8 @@
   import { cache, CACHE_KEYS, CACHE_GROUPS } from '$lib/core/cache/queryCache'
   import { homeState, clearHistory } from '$lib/state/home.svelte'
   import { historyState }            from '$lib/state/history.svelte'
-  import { setActiveManga, openReader, setPreviewManga } from '$lib/state/series.svelte'
+  import { setActiveManga, openReaderForChapter, setPreviewManga } from '$lib/state/series.svelte'
   import { addToast }           from '$lib/state/notifications.svelte'
-  import { buildChapterList }   from '$lib/components/series/lib/chapterList'
   import { groupByDay }                                from './lib/recentHistory'
   import { fetchedAtMs, parseServerTimestamp, groupUpdatesByDay } from './lib/recentUpdates'
   import RecentToolbar  from './RecentToolbar.svelte'
@@ -168,13 +167,11 @@
     const manga = mangaStub(item)
     try {
       const chapters = await getAdapter().getChapters(String(item.mangaId))
-      const sorted   = [...chapters].sort((a, b) => a.sourceOrder - b.sourceOrder)
-      const list     = buildChapterList(sorted, {})
-      const target   = list.find(ch => ch.id === item.id)
-      if (target) { setActiveManga(manga); openReader(target, list) }
-      else          setActiveManga(manga)
+      const target   = chapters.find(ch => ch.id === item.id)
+      if (target) openReaderForChapter(target, manga)
+      else        setPreviewManga(manga)
     } catch {
-      setActiveManga(manga)
+      setPreviewManga(manga)
       addToast({ kind: 'error', title: "Couldn't open chapter", body: 'Opened the series instead.' })
     } finally {
       openingId = null

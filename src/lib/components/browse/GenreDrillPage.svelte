@@ -6,13 +6,24 @@
   import { dedupeMangaById, shouldHideNsfw } from "$lib/core/util";
   import Thumbnail               from "$lib/components/shared/manga/Thumbnail.svelte";
   import ContextMenu             from "$lib/components/shared/ui/ContextMenu.svelte";
-  import { ArrowLeft, BookmarkSimple, FolderSimplePlus, Folder, CircleNotch } from "phosphor-svelte";
+  import { ArrowLeftIcon, BookmarkSimpleIcon, FolderSimplePlusIcon, FolderIcon, CircleNotchIcon } from "phosphor-svelte";
   import type { Manga, Source, Category } from "$lib/types";
-  import type { MenuEntry } from "$lib/components/shared/ui/ContextMenu.svelte";
   import {
     PAGE_SIZE, INITIAL_PAGES, MAX_SOURCES,
     parseTags, tagsLabel, matchesAllTags, runConcurrent,
   } from "$lib/components/browse/lib/searchFilter";
+
+  interface MenuItem {
+    label:      string;
+    icon?:      any;
+    onClick:    () => void;
+    danger?:    boolean;
+    disabled?:  boolean;
+    separator?: never;
+    children?:  MenuEntry[];
+  }
+  interface MenuSeparator { separator: true }
+  type MenuEntry = MenuItem | MenuSeparator;
 
   interface Props {
     genre:  string;
@@ -63,17 +74,17 @@
     const t  = parseTags(filter);
     const pt = t[0] ?? "";
 
-    getAdapter().getMangaList({}).then((result) => {
+    getAdapter().getMangaList({}).then((result: { items: Manga[] }) => {
       if (!ctrl.signal.aborted) libraryManga = result.items;
     }).catch(() => {});
 
-    getAdapter().getSources().then(async (allSources) => {
+    getAdapter().getSources().then(async (allSources: Source[]) => {
       if (ctrl.signal.aborted) return;
       const srcs = allSources.filter((s: Source) => s.id !== "0").slice(0, MAX_SOURCES);
       sources    = srcs;
       for (const src of srcs) nextPageMap.set(src.id, -1);
 
-      await runConcurrent(srcs, async (src) => {
+      await runConcurrent(srcs, async (src: Source) => {
         if (ctrl.signal.aborted) return;
         const pageItems: Manga[] = [];
         for (let page = 1; page <= INITIAL_PAGES; page++) {
@@ -108,7 +119,7 @@
     const ctrl = new AbortController();
     abortCtrl  = ctrl;
     try {
-      await runConcurrent(srcs, async (src) => {
+      await runConcurrent(srcs, async (src: Source) => {
         const page = nextPageMap.get(src.id)!;
         if (ctrl.signal.aborted) return;
         let result: { items: Manga[]; hasNextPage: boolean } | null = null;
@@ -131,7 +142,7 @@
     if (!catsLoaded) {
       catsLoaded = true;
       getAdapter().getCategories()
-        .then((cats) => { categories = cats.filter((c) => c.id !== 0); })
+        .then((cats: Category[]) => { categories = cats.filter((c: Category) => c.id !== 0); })
         .catch(console.error);
     }
   }
@@ -140,7 +151,7 @@
     return [
       {
         label: m.inLibrary ? "In Library" : "Add to library",
-        icon: BookmarkSimple,
+        icon: BookmarkSimpleIcon,
         disabled: m.inLibrary,
         onClick: () => getAdapter().addToLibrary(String(m.id))
           .then(() => { sourceManga = sourceManga.map((x) => x.id === m.id ? { ...x, inLibrary: true } : x); })
@@ -149,17 +160,17 @@
       ...(categories.length > 0 ? [
         { separator: true } as MenuEntry,
         ...categories.map((cat): MenuEntry => ({
-          label: (cat.mangas?.nodes ?? []).some((x: { id: number }) => x.id === m.id) ? `✓ ${cat.name}` : cat.name,
-          icon: Folder,
+          label: (cat.mangas ?? []).some((x: Manga) => x.id === m.id) ? `✓ ${cat.name}` : cat.name,
+          icon: FolderIcon,
           onClick: () => getAdapter().updateMangaCategories(String(m.id), [cat.id], []).catch(console.error),
         })),
       ] : []),
       { separator: true },
       {
         label: "New folder & add",
-        icon: FolderSimplePlus,
+        icon: FolderSimplePlusIcon,
         onClick: async () => {
-          const name = prompt("Folder name:");
+          const name = prompt("FolderIcon name:");
           if (!name?.trim()) return;
           const cat = await getAdapter().createCategory(name.trim()).catch(console.error);
           if (cat) {
@@ -177,7 +188,7 @@
 <div class="root">
   <div class="header">
     <button class="back" onclick={onBack}>
-      <ArrowLeft size={13} weight="light" /><span>Back</span>
+      <ArrowLeftIcon size={13} weight="light" /><span>Back</span>
     </button>
     <span class="title">{label}</span>
     {#if !loadingInitial || filtered.length > 0}
@@ -213,7 +224,7 @@
       {#if hasMore}
         <div class="show-more-cell">
           <button class="show-more-btn" onclick={loadMore} disabled={loadingMore}>
-            {#if loadingMore}<CircleNotch size={13} weight="light" class="anim-spin" /> Loading…{:else}Show more{/if}
+            {#if loadingMore}<CircleNotchIcon size={13} weight="light" class="anim-spin" /> Loading…{:else}Show more{/if}
           </button>
         </div>
       {/if}
@@ -239,7 +250,7 @@
   .cover-wrap { position: relative; aspect-ratio: 2/3; overflow: hidden; border-radius: var(--radius-md); background: var(--bg-raised); border: 1px solid var(--border-dim); transform: translateZ(0); }
   :global(.cover) { width: 100%; height: 100%; object-fit: cover; transition: filter var(--t-base); will-change: filter; }
   .in-library-badge { position: absolute; bottom: var(--sp-1); left: var(--sp-1); font-family: var(--font-ui); font-size: var(--text-2xs); letter-spacing: var(--tracking-wide); text-transform: uppercase; background: var(--accent-muted); color: var(--accent-fg); border: 1px solid var(--accent-dim); padding: 2px 5px; border-radius: var(--radius-sm); }
-  .card-title { margin-top: var(--sp-2); font-size: var(--text-sm); color: var(--text-secondary); line-height: var(--leading-snug); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; transition: color var(--t-base); }
+  .card-title { margin-top: var(--sp-2); font-size: var(--text-sm); color: var(--text-secondary); line-height: var(--leading-snug); display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; transition: color var(--t-base); }
   .card-skeleton { padding: 0; }
   .cover-skeleton { aspect-ratio: 2/3; border-radius: var(--radius-md); }
   .title-skeleton { height: 11px; margin-top: var(--sp-2); width: 75%; }

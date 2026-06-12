@@ -5,7 +5,6 @@
   import { getAdapter }         from "$lib/request-manager";
   import { settingsState }      from "$lib/state/settings.svelte";
   import { setPreviewManga }    from "$lib/state/series.svelte";
-  import { dedupeMangaById } from "$lib/core/util";
   import { toCachedManga, shouldHideNsfw, runConcurrent, type CachedManga } from "$lib/components/browse/lib/searchFilter";
   import type { Manga, Source } from "$lib/types";
 
@@ -39,6 +38,8 @@
     goto(u.toString(), { replaceState: true, noScroll: true });
   }
 
+  let pendingPrefill = $state("");
+
   let tabsEl       = $state<HTMLDivElement | undefined>(undefined);
   let tabIndicator = $state({ left: 0, width: 0 });
 
@@ -64,22 +65,31 @@
   const availableLangs   = $derived(Array.from(new Set<string>(allSources.map((s) => s.lang))).sort());
   const hasMultipleLangs = $derived(availableLangs.length > 1);
 
-  loadingSources = true;
-  getAdapter().getSources()
-    .then((nodes) => {
-      localSource = nodes.find((s: Source) => s.id === "0") ?? null;
-      allSources  = nodes.filter((s: Source) => s.id !== "0");
-      startSourceCacheBuild();
-      popularStart(allSources);
-    })
-    .catch(console.error)
-    .finally(() => { loadingSources = false; });
+  let sourcesAbort: AbortController | null = null;
+
+  $effect(() => {
+    sourcesAbort?.abort();
+    const ctrl = new AbortController();
+    sourcesAbort = ctrl;
+    loadingSources = true;
+    getAdapter().getSources()
+      .then((nodes: Source[]) => {
+        if (ctrl.signal.aborted) return;
+        localSource = nodes.find((s: Source) => s.id === "0") ?? null;
+        allSources  = nodes.filter((s: Source) => s.id !== "0");
+        startSourceCacheBuild();
+        popularStart(allSources);
+      })
+      .catch(console.error)
+      .finally(() => { if (!ctrl.signal.aborted) loadingSources = false; });
+    return () => { ctrl.abort(); };
+  });
 
   let popular_raw:          Manga[] = $state([]);
   let popular_loading                  = $state(false);
   let popular_abortCtrl: AbortController | null = null;
-  let popular_sourcePool:   Source[] = $state([]);
-  let popular_sourceCursor             = $state(0);
+  let popular_sourcePool:   Source[] = [];
+  let popular_sourceCursor             = 0;
   let popular_seenIds    = new Set<number>();
   let popular_seenTitles = new Set<string>();
 
@@ -208,6 +218,7 @@
   }
 
   onDestroy(() => {
+    sourcesAbort?.abort();
     popular_abortCtrl?.abort();
     sourceCacheAbort?.abort();
   });
@@ -248,11 +259,13 @@
       {availableLangs}
       {hasMultipleLangs}
       {loadingSources}
+      {pendingPrefill}
       popularResults={popular_results}
       popularLoading={popular_loading}
       {sourceCache}
       query={urlQuery}
       onQueryChange={setQuery}
+      onPrefillConsumed={() => { pendingPrefill = ""; }}
       onPreview={(m) => setPreviewManga(m)}
     />
   {:else if urlTab === "tag"}
@@ -263,7 +276,6 @@
       {sourceCacheLoading}
       {sourceCacheEnriching}
       onPreview={(m) => setPreviewManga(m)}
-      onGenreDrill={(genre) => goto(`/browse?genre=${encodeURIComponent(genre)}`)}
     />
   {:else}
     <SourceTab
