@@ -691,6 +691,10 @@ export class SuwayomiAdapter implements ServerAdapter {
     return []
   }
 
+  async startLibraryUpdate(): Promise<void> {
+    await this.gql(UPDATE_LIBRARY)
+  }
+
   async stopLibraryUpdate(): Promise<void> {
     await this.gql(UPDATE_STOP)
   }

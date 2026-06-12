@@ -233,6 +233,7 @@ export interface ServerAdapter {
   clearCachedImages(opts: { cachedPages: boolean; cachedThumbnails: boolean; downloadedThumbnails: boolean }): Promise<void>
 
   checkForUpdates(mangaIds?: string[]): Promise<UpdateResult[]>
+  startLibraryUpdate(): Promise<void>
   stopLibraryUpdate(): Promise<void>
   getLibraryUpdateStatus(): Promise<LibraryUpdateProgress>
   clearPageCache(chapterId?: number): void

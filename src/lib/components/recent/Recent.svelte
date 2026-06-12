@@ -12,7 +12,7 @@
   import RecentToolbar  from './RecentToolbar.svelte'
   import UpdatesTab     from './UpdatesTab.svelte'
   import HistoryTab     from './HistoryTab.svelte'
-  import type { Manga } from '$lib/types'
+  import type { Manga, Chapter } from '$lib/types'
   import type { RecentUpdate, UpdateGroup } from './lib/recentUpdates'
   import type { HistoryGroup }              from './lib/recentHistory'
 
@@ -122,9 +122,9 @@
       if (force) cache.clear(key)
 
       const [updatesRes, statusRes] = await Promise.all([
-        cache.get<RecentUpdate[]>(
+        cache.get<Chapter[]>(
           key,
-          () => getAdapter().getRecentlyUpdated(nextCtrl.signal),
+          () => getAdapter().getRecentlyUpdated(),
           RECENT_UPDATES_TTL_MS,
           CACHE_GROUPS.LIBRARY,
         ),
@@ -210,7 +210,7 @@
 
   async function deleteDownloaded(item: RecentUpdate) {
     try {
-      await getAdapter().deleteDownloadedChapter(String(item.id))
+      await getAdapter().deleteDownloadedChapters([String(item.id)])
       updates = updates.map(u => u.id === item.id ? { ...u, isDownloaded: false } : u)
     } catch {
       addToast({ kind: 'error', title: 'Delete failed', body: 'Could not delete download.' })
