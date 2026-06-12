@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy }          from "svelte";
   import { getAdapter }         from "$lib/request-manager";
-  import { settingsState }      from "$lib/state/settings.svelte";
+  import { settingsState, updateSettings } from "$lib/state/settings.svelte";
   import { shouldHideNsfw, shouldHideSource } from "$lib/core/util";
   import Thumbnail              from "$lib/components/shared/manga/Thumbnail.svelte";
   import ContextMenu            from "$lib/components/shared/ui/ContextMenu.svelte";
@@ -20,7 +20,7 @@
 
   const preferredLang = $derived(settingsState.settings.preferredExtensionLang ?? "en");
 
-  let src_selectedLang  = $state(preferredLang || "all");
+  let src_selectedLang  = $state(settingsState.settings.preferredExtensionLang || "all");
   let src_activeSource: Source | null = $state(null);
   let src_browseResults: Manga[]      = $state([]);
   let src_loadingBrowse               = $state(false);
@@ -122,7 +122,7 @@
   function togglePinnedSource(id: string) {
     const current = settingsState.settings.pinnedSourceIds ?? [];
     const next = current.includes(id) ? current.filter((x: string) => x !== id) : [...current, id];
-    settingsState.updateSettings({ pinnedSourceIds: next });
+    updateSettings({ pinnedSourceIds: next });
   }
 
   onDestroy(() => { src_abortCtrl?.abort(); });
@@ -356,7 +356,7 @@
   .tagGrid            { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: var(--sp-4); padding: var(--sp-4); overflow-y: auto; flex: 1; align-content: start; }
   .card               { background: none; border: none; padding: 0; cursor: pointer; text-align: left; display: flex; flex-direction: column; gap: var(--sp-2); }
   .coverWrap          { position: relative; aspect-ratio: 2/3; overflow: hidden; border-radius: var(--radius-md); background: var(--bg-raised); border: 1px solid var(--border-dim); }
-  .cardTitle          { font-size: var(--text-sm); color: var(--text-secondary); line-height: var(--leading-snug); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .cardTitle          { font-size: var(--text-sm); color: var(--text-secondary); line-height: var(--leading-snug); display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   .inLibBadge         { position: absolute; top: var(--sp-2); left: var(--sp-2); font-family: var(--font-ui); font-size: 9px; letter-spacing: var(--tracking-wide); background: var(--accent-muted); color: var(--accent-fg); border: 1px solid var(--accent-dim); border-radius: var(--radius-sm); padding: 1px 5px; }
   .showMoreCell       { grid-column: 1 / -1; display: flex; justify-content: center; padding: var(--sp-2) 0; }
   .showMoreBtn        { display: inline-flex; align-items: center; gap: var(--sp-1); padding: 5px 12px; border-radius: var(--radius-md); border: 1px solid var(--border-dim); background: none; font-family: var(--font-ui); font-size: var(--text-xs); letter-spacing: var(--tracking-wide); color: var(--text-muted); cursor: pointer; transition: background var(--t-base), color var(--t-base), border-color var(--t-base); }

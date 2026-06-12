@@ -41,7 +41,8 @@
   let tag_loadingMoreLocal         = $state(false);
   let tag_localOffset              = $state(0);
   let tag_localHasNext             = $state(false);
-  let tag_abortLocal: AbortController | null = null;
+  let tag_abortLocal:     AbortController | null = null;
+  let tag_abortLoadMore:  AbortController | null = null;
 
   const renderLimit = $derived(settingsState.settings.renderLimit ?? 48);
 
@@ -52,14 +53,6 @@
     untrack(() => tagFetchLocal(_tags, _mode, _statuses));
   });
 
-  $effect(() => {
-    const _hasNext      = tag_localHasNext;
-    const _loadingMore  = tag_loadingMoreLocal;
-    const _loadingLocal = tag_loadingLocal;
-    untrack(() => {
-      if (_hasNext && !_loadingMore && !_loadingLocal) tagLoadMoreLocal();
-    });
-  });
 
   async function tagFetchLocal(activeTags: string[], tagMode: TagMode, activeStatuses: string[]) {
     if (activeTags.length === 0 && activeStatuses.length === 0) {
@@ -67,6 +60,7 @@
       return;
     }
     tag_abortLocal?.abort();
+    tag_abortLoadMore?.abort();
     const ctrl = new AbortController();
     tag_abortLocal = ctrl;
     tag_localResults = []; tag_totalCount = 0; tag_localOffset = 0; tag_localHasNext = false;
@@ -82,6 +76,7 @@
       tag_totalCount   = d.totalCount;
       tag_localHasNext = d.hasNextPage;
       tag_localOffset  = limit;
+      if (d.hasNextPage && tag_localResults.length < 20) tagLoadMoreLocal();
     } catch (e: any) {
       if (e?.name !== "AbortError") console.error(e);
     } finally {
@@ -91,10 +86,10 @@
 
   async function tagLoadMoreLocal() {
     if (tag_loadingMoreLocal || !tag_localHasNext) return;
-    tag_loadingMoreLocal = true;
-    tag_abortLocal?.abort();
+    tag_abortLoadMore?.abort();
     const ctrl = new AbortController();
-    tag_abortLocal = ctrl;
+    tag_abortLoadMore    = ctrl;
+    tag_loadingMoreLocal = true;
     const limit = renderLimit;
     try {
       const d = await getAdapter().getMangasByGenre(
@@ -196,17 +191,22 @@
 
   let tag_autoSearchFired = $state(false);
   $effect(() => {
-    const _tags         = tag_activeTags;
-    const _statuses     = tag_activeStatuses;
+    void tag_activeTags;
+    void tag_activeStatuses;
+    untrack(() => { tag_autoSearchFired = false; });
+  });
+  $effect(() => {
     const _loadingLocal = tag_loadingLocal;
     const _hasFilters   = tag_hasActiveFilters;
     const _resultLen    = tag_localResults.length;
     const _cacheReady   = sourceCacheReady;
-    untrack(() => { tag_autoSearchFired = false; });
-    if (!_loadingLocal && _hasFilters && !tag_autoSearchFired && !tag_searchSources && _cacheReady) {
-      if (_resultLen < 20) {
-        untrack(() => { tag_autoSearchFired = true; tag_searchSources = true; });
-      }
+    if (!_loadingLocal && _hasFilters && _cacheReady) {
+      untrack(() => {
+        if (!tag_autoSearchFired && !tag_searchSources && _resultLen < 20) {
+          tag_autoSearchFired = true;
+          tag_searchSources   = true;
+        }
+      });
     }
   });
 
@@ -239,6 +239,7 @@
 
   onDestroy(() => {
     tag_abortLocal?.abort();
+    tag_abortLoadMore?.abort();
     tag_fanOutAbort?.abort();
   });
 </script>
@@ -379,6 +380,10 @@
             {#each Array(12) as _, i (i)}
               <div class="skCard"><div class="skeleton skCover"></div><div class="skeleton skTitle"></div></div>
             {/each}
+          {:else if tag_localHasNext}
+            <div class="loadMoreRow">
+              <button class="loadMoreBtn" onclick={tagLoadMoreLocal}>Load more</button>
+            </div>
           {/if}
         </div>
       {:else}
@@ -435,9 +440,12 @@
   .tagClearAll:hover    { color: var(--color-error); border-color: color-mix(in srgb, var(--color-error) 40%, transparent); background: var(--color-error-bg, color-mix(in srgb, var(--color-error) 8%, transparent)); }
   .tagCheckMark         { font-size: var(--text-xs); color: var(--accent-fg); margin-left: auto; }
   .tagGrid              { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: var(--sp-4); padding: var(--sp-4); overflow-y: auto; flex: 1; align-content: start; will-change: scroll-position; }
+  .loadMoreRow          { grid-column: 1 / -1; display: flex; justify-content: center; padding: var(--sp-2) 0 var(--sp-4); }
+  .loadMoreBtn          { font-family: var(--font-ui); font-size: var(--text-xs); letter-spacing: var(--tracking-wide); color: var(--text-faint); background: none; border: 1px solid var(--border-dim); border-radius: var(--radius-md); padding: 6px 20px; cursor: pointer; transition: color var(--t-base), border-color var(--t-base), background var(--t-base); }
+  .loadMoreBtn:hover    { color: var(--text-muted); border-color: var(--border-strong); background: var(--bg-raised); }
   .card                 { background: none; border: none; padding: 0; cursor: pointer; text-align: left; display: flex; flex-direction: column; gap: var(--sp-2); }
   .coverWrap            { position: relative; aspect-ratio: 2/3; overflow: hidden; border-radius: var(--radius-md); background: var(--bg-raised); border: 1px solid var(--border-dim); }
-  .cardTitle            { font-size: var(--text-sm); color: var(--text-secondary); line-height: var(--leading-snug); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; transition: color var(--t-base); }
+  .cardTitle            { font-size: var(--text-sm); color: var(--text-secondary); line-height: var(--leading-snug); display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; transition: color var(--t-base); }
   .inLibBadge           { position: absolute; top: var(--sp-2); left: var(--sp-2); font-family: var(--font-ui); font-size: 9px; letter-spacing: var(--tracking-wide); background: var(--accent-muted); color: var(--accent-fg); border: 1px solid var(--accent-dim); border-radius: var(--radius-sm); padding: 1px 5px; }
   .skCard               { display: flex; flex-direction: column; gap: var(--sp-2); }
   @keyframes shimmer { from { background-position: -200% 0 } to { background-position: 200% 0 } }

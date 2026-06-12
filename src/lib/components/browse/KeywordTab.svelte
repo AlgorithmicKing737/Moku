@@ -37,7 +37,7 @@
   let kw_inputEl:       HTMLInputElement | null = $state(null);
   let kw_abortCtrl:     AbortController | null = null;
   let kw_debounceTimer: ReturnType<typeof setTimeout> | null = null;
-  let kw_localQuery     = $state(query);
+  let kw_localQuery     = $state("");
   let kw_pending        = $state(false);
 
   interface SourceResult {
@@ -77,19 +77,19 @@
     }, 2000);
   }
 
-  function kwGetVisibleSources(): Source[] {
+  const kw_visibleSources = $derived.by(() => {
     let srcs = allSources;
     if (kw_selectedLangs.size > 0)
       srcs = srcs.filter((s) => kw_selectedLangs.has(s.lang));
     if (settingsState.settings.contentLevel !== "unrestricted")
       srcs = srcs.filter((s) => !shouldHideSource(s, settingsState.settings));
     return srcs;
-  }
+  });
 
   async function kwDoSearch(q: string) {
     const trimmed = q.trim();
     if (!trimmed) return;
-    const visible = kwGetVisibleSources();
+    const visible = kw_visibleSources;
     if (!visible.length) return;
 
     kw_abortCtrl?.abort();
@@ -102,13 +102,13 @@
     await Promise.allSettled(visible.map(async (src) => {
       const idx = idxOf.get(src.id)!;
       try {
-        const result = await getAdapter().searchSource(src.id, trimmed, 1, ctrl.signal);
+        const result: { items: Manga[]; hasNextPage: boolean } = await getAdapter().searchSource(src.id, trimmed, 1, ctrl.signal);
         if (ctrl.signal.aborted) return;
         const mangas = result.items.filter((m) => !shouldHideNsfw(m as any, settingsState.settings));
-        kw_results = kw_results.map((r, i) => i === idx ? { ...r, mangas, loading: false } : r);
+        kw_results[idx] = { ...kw_results[idx], mangas, loading: false };
       } catch (e: any) {
         if (ctrl.signal.aborted || e?.name === "AbortError") return;
-        kw_results = kw_results.map((r, i) => i === idx ? { ...r, loading: false, error: e.message ?? "Error" } : r);
+        kw_results[idx] = { ...kw_results[idx], loading: false, error: e.message ?? "Error" };
       }
     }));
   }
@@ -120,7 +120,7 @@
     kw_selectedLangs = next;
   }
 
-  const kw_visibleCount = $derived(kwGetVisibleSources().length);
+  const kw_visibleCount = $derived(kw_visibleSources.length);
   const kw_anyLoading   = $derived(kw_results.some((r) => r.loading));
   const kw_allDone      = $derived(kw_results.length > 0 && kw_results.every((r) => !r.loading));
   const kw_hasResults   = $derived(kw_results.some((r) => r.mangas.length > 0));
@@ -315,7 +315,7 @@
   .srchCoverWrap { position: relative; aspect-ratio: 2/3; overflow: hidden; border-radius: var(--radius-md); background: var(--bg-raised); border: 1px solid var(--border-dim); transform: translateZ(0); transition: filter var(--t-base); }
   .srchGradient  { position: absolute; inset: 0; z-index: 1; background: linear-gradient(to top, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.15) 50%, transparent 72%); pointer-events: none; }
   .srchFooter    { position: absolute; bottom: 0; left: 0; right: 0; z-index: 2; padding: var(--sp-2); pointer-events: none; }
-  .srchTitle     { font-size: var(--text-xs); font-weight: var(--weight-medium); color: rgba(255,255,255,0.92); line-height: var(--leading-snug); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-shadow: 0 1px 4px rgba(0,0,0,0.7); }
+  .srchTitle     { font-size: var(--text-xs); font-weight: var(--weight-medium); color: rgba(255,255,255,0.92); line-height: var(--leading-snug); display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-shadow: 0 1px 4px rgba(0,0,0,0.7); }
   .srchSource    { font-family: var(--font-ui); font-size: 9px; color: rgba(255,255,255,0.45); letter-spacing: var(--tracking-wide); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .inLibBadge    { position: absolute; top: var(--sp-2); left: var(--sp-2); z-index: 2; font-family: var(--font-ui); font-size: 9px; letter-spacing: var(--tracking-wide); background: var(--accent-muted); color: var(--accent-fg); border: 1px solid var(--accent-dim); border-radius: var(--radius-sm); padding: 1px 5px; }
   .skCard        { display: flex; flex-direction: column; gap: var(--sp-2); flex-shrink: 0; width: 100%; }

@@ -59,7 +59,7 @@
   const unreadCount     = $derived(totalCount - readCount);
   const downloadedCount = $derived(chapters.filter((c) => c.downloaded).length);
   const bookmarkCount   = $derived(chapters.filter((c) => c.bookmarked).length);
-  const inLibrary       = $derived(manga?.inLibrary ?? seriesState.previewManga?.inLibrary ?? false);
+  const inLibrary       = $derived((manga as Manga | null)?.inLibrary ?? seriesState.previewManga?.inLibrary ?? false);
   const scanlators      = $derived(
     [...new Set(chapters.map((c) => c.scanlator).filter((s): s is string => !!s?.trim()))],
   );
@@ -98,7 +98,7 @@
     const inProgress  = asc.find((c) => !c.read && (c.lastPageRead ?? 0) > 0);
     if (inProgress)   return { ch: inProgress, type: "continue" as const, resumePage: inProgress.lastPageRead! };
     const firstUnread = asc.find((c) => !c.read);
-    if (firstUnread)  return { ch: firstUnread, type: (anyRead ? "continue" : "start") as const, resumePage: null };
+    if (firstUnread)  return { ch: firstUnread, type: (anyRead ? "continue" as const : "start" as const), resumePage: null };
     return { ch: asc[0], type: "reread" as const, resumePage: null };
   });
 
@@ -127,10 +127,14 @@
     linkPickerOpen = true;
     if (allMangaForLink.length) return;
     loadingLinkList = true;
-    getAdapter().getMangaList({})
-      .then((d) => { allMangaForLink = d.items; })
-      .catch(console.error)
-      .finally(() => { loadingLinkList = false; });
+    try {
+      const result = await getAdapter().getMangaList({});
+      allMangaForLink = result.items;
+    } catch (e) {
+      console.error(e);
+    } finally {
+      loadingLinkList = false;
+    }
   }
 
   function closeLinkPicker() { linkPickerOpen = false; }
@@ -139,10 +143,14 @@
     coverPickerOpen = true;
     if (allMangaForLink.length) return;
     loadingLinkList = true;
-    getAdapter().getMangaList({})
-      .then((d) => { allMangaForLink = d.items; })
-      .catch(console.error)
-      .finally(() => { loadingLinkList = false; });
+    try {
+      const result = await getAdapter().getMangaList({});
+      allMangaForLink = result.items;
+    } catch (e) {
+      console.error(e);
+    } finally {
+      loadingLinkList = false;
+    }
   }
 
   $effect(() => {
@@ -158,14 +166,21 @@
       if (shouldAutoLink) {
         if (allMangaForLink.length) {
           autoLinkLibrary(focal, allMangaForLink)
-            .then(n => { if (n > 0) addToast({ kind: "success", title: "Series linked", body: `${n} new link${n === 1 ? "" : "s"} found` }); });
+            .then((n: number) => { if (n > 0) addToast({ kind: "success", title: "Series linked", body: `${n} new link${n === 1 ? "" : "s"} found` }); });
         } else {
           loadingLinkList = true;
-          getAdapter().getMangaList({})
-            .then((d) => { allMangaForLink = d.items; return autoLinkLibrary(focal, d.items); })
-            .then(n => { if (n > 0) addToast({ kind: "success", title: "Series linked", body: `${n} new link${n === 1 ? "" : "s"} found` }); })
-            .catch(console.error)
-            .finally(() => { loadingLinkList = false; });
+          (async () => {
+            try {
+              const result = await getAdapter().getMangaList({});
+              allMangaForLink = result.items;
+              const n = await autoLinkLibrary(focal, result.items);
+              if (n > 0) addToast({ kind: "success", title: "Series linked", body: `${n} new link${n === 1 ? "" : "s"} found` });
+            } catch (e) {
+              console.error(e);
+            } finally {
+              loadingLinkList = false;
+            }
+          })();
         }
       }
     });
@@ -258,9 +273,9 @@
   function loadCategories(id: number) {
     catsLoading = true;
     getAdapter().getCategories()
-      .then((cats) => {
-        allCategories   = cats.filter((c) => c.id !== 0);
-        mangaCategories = allCategories.filter((c) => c.mangas?.nodes?.some((m) => m.id === id));
+      .then((cats: Category[]) => {
+        allCategories   = cats.filter((c: Category) => c.id !== 0);
+        mangaCategories = allCategories.filter((c: Category) => c.mangas?.some((m: Manga) => m.id === id));
       })
       .catch(console.error)
       .finally(() => { catsLoading = false; });
@@ -836,8 +851,8 @@
   .read-btn:hover { filter: brightness(1.1); }
 
   .desc-block { display: flex; flex-direction: column; gap: var(--sp-2); border-top: 1px solid var(--border-dim); padding-top: var(--sp-3); }
-  .desc       { font-size: var(--text-sm); color: var(--text-muted); line-height: var(--leading-base); display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
-  .desc.desc-open { display: block; -webkit-line-clamp: unset; overflow: visible; }
+  .desc       { font-size: var(--text-sm); color: var(--text-muted); line-height: var(--leading-base); display: -webkit-box; -webkit-line-clamp: 5; line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
+  .desc.desc-open { display: block; -webkit-line-clamp: unset; line-clamp: unset; overflow: visible; }
   .desc-toggle {
     display: flex; align-items: center; gap: var(--sp-1); align-self: flex-start;
     font-family: var(--font-ui); font-size: var(--text-xs); color: var(--text-faint);
