@@ -27,17 +27,14 @@
 
   const isLocal = pkgName === '__local__';
 
-  // ── Library mode state ──────────────────────────────────────────────
   let groups:  SourceLibrary[] = $state([]);
   let sourceNodes: SourceNode[] = $state([]);
 
-  // ── Local/browse mode state ──────────────────────────────────────────
   let localItems:       any[]    = $state([]);
   let localPage:        number   = $state(1);
   let localHasNext:     boolean  = $state(false);
   let localLoadingMore: boolean  = $state(false);
 
-  // ── Shared state ─────────────────────────────────────────────────────
   let loading  = $state(true);
   let search   = $state("");
   let searchInput = $state("");
@@ -49,8 +46,6 @@
   const hasActiveFilters = $derived(Object.values(activeFilters).some(Boolean));
 
   let migrateTarget: { sourceId: string; sourceName: string; iconUrl: string; manga: LibraryManga[] } | null = $state(null);
-
-  // ── Derived filtered lists ────────────────────────────────────────────
   const allManga = $derived(isLocal ? localItems : groups.flatMap(g => g.manga));
 
   const filtered = $derived((() => {

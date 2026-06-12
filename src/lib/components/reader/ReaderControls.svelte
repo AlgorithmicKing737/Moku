@@ -139,7 +139,7 @@
     <div class="bar-divider"></div>
 
     <button class="icon-btn"
-      onclick={() => { if (adjacent.prev) { onMaybeMarkRead(); readerState.openReader(adjacent.prev, readerState.activeChapterList); } }}
+      onclick={() => { if (adjacent.prev) { onMaybeMarkRead(); readerState.openReader(adjacent.prev); } }}
       disabled={!adjacent.prev}
       title="Previous chapter">
       {#if isVertical}<CaretUp size={13} weight="regular" />{:else}<CaretLeft size={13} weight="regular" />{/if}
@@ -179,7 +179,7 @@
     </div>
 
     <button class="icon-btn"
-      onclick={() => { if (adjacent.next) { onMaybeMarkRead(); readerState.openReader(adjacent.next, readerState.activeChapterList); } }}
+      onclick={() => { if (adjacent.next) { onMaybeMarkRead(); readerState.openReader(adjacent.next); } }}
       disabled={!adjacent.next}
       title="Next chapter">
       {#if isVertical}<CaretDown size={13} weight="regular" />{:else}<CaretRight size={13} weight="regular" />{/if}

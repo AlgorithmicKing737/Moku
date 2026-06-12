@@ -39,6 +39,8 @@
     goto(u.toString(), { replaceState: true, noScroll: true });
   }
 
+  let pendingPrefill = $state("");
+
   let tabsEl       = $state<HTMLDivElement | undefined>(undefined);
   let tabIndicator = $state({ left: 0, width: 0 });
 
@@ -248,11 +250,13 @@
       {availableLangs}
       {hasMultipleLangs}
       {loadingSources}
+      {pendingPrefill}
       popularResults={popular_results}
       popularLoading={popular_loading}
       {sourceCache}
       query={urlQuery}
       onQueryChange={setQuery}
+      onPrefillConsumed={() => { pendingPrefill = ""; }}
       onPreview={(m) => setPreviewManga(m)}
     />
   {:else if urlTab === "tag"}

@@ -1,4 +1,5 @@
 import { readerState, DEFAULT_MANGA_PREFS } from "$lib/state/reader.svelte";
+import { seriesState }                      from "$lib/state/series.svelte";
 import { settingsState }                    from "$lib/state/settings.svelte";
 import { getAdapter }                       from "$lib/request-manager";
 import type { MangaPrefs }                  from "$lib/types/settings";
@@ -35,8 +36,8 @@ export function markChapterRead(id: number, markedRead: Set<number>) {
       const mangaId = readerState.activeManga?.id;
       if (!mangaId) return;
 
-      readerState.activeChapterList = readerState.activeChapterList.map(c =>
-        c.id === id ? { ...c, read: true } : c
+      seriesState.patchChapters(mangaId, chapters =>
+        chapters.map(c => c.id === id ? { ...c, read: true } : c),
       );
 
       const prefs = getMangaPrefs(mangaId);
@@ -79,15 +80,15 @@ export function toggleBookmark(chapter: typeof readerState.activeChapter, pageNu
   const manga = readerState.activeManga;
   if (!chapter || !manga) return;
 
-  const existing = readerState.bookmarks.find(
+  const existing = seriesState.bookmarks.find(
     b => b.mangaId === manga.id && b.chapterId === chapter.id && b.pageNumber === pageNumber,
   );
   if (existing) {
-    readerState.removeBookmark(chapter.id);
+    seriesState.removeBookmark(chapter.id);
   } else {
-    const other = readerState.bookmarks.find(b => b.mangaId === manga.id && b.chapterId !== chapter.id);
-    if (other) readerState.removeBookmark(other.chapterId);
-    readerState.addBookmark({
+    const other = seriesState.bookmarks.find(b => b.mangaId === manga.id && b.chapterId !== chapter.id);
+    if (other) seriesState.removeBookmark(other.chapterId);
+    seriesState.addBookmark({
       mangaId:      manga.id,
       mangaTitle:   manga.title,
       thumbnailUrl: manga.thumbnailUrl,
@@ -103,9 +104,9 @@ export function commitMarker(color: MarkerColor, note: string, editId: string) {
   const manga   = readerState.activeManga;
   if (!chapter || !manga) return;
   if (editId) {
-    readerState.updateMarker(editId, { note: note.trim(), color });
+    seriesState.updateMarker(editId, { note: note.trim(), color });
   } else {
-    readerState.addMarker({
+    seriesState.addMarker({
       mangaId:      manga.id,
       mangaTitle:   manga.title,
       thumbnailUrl: manga.thumbnailUrl,

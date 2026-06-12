@@ -6,7 +6,6 @@
   } from 'phosphor-svelte'
   import type { Chapter, Category } from '$lib/types'
   import type { ChapterSortMode, ChapterSortDir } from './lib/chapterList'
-  import { updateSettings } from '$lib/state/settings.svelte'
 
   interface ContinueChapter {
     chapter:    Chapter
@@ -52,6 +51,8 @@
     onSetScanlatorBlacklist: (v: string[]) => void
     onSetScanlatorForce:     (v: boolean) => void
     onOpenFolder:            () => void
+    onSortModeChange:        (v: ChapterSortMode) => void
+    onSortDirChange:         (v: ChapterSortDir) => void
   }
 
   let {
@@ -64,7 +65,7 @@
     onMarkSelectedRead, onClearSelection, onEnqueueNext, onEnqueueMultiple,
     onDeleteAll, onRefresh, onToggleCategory, onCreateCategory,
     onSetScanlatorFilter, onSetScanlatorBlacklist, onSetScanlatorForce,
-    onOpenFolder,
+    onOpenFolder, onSortModeChange, onSortDirChange,
   }: Props = $props()
 
   let sortMenuOpen:    boolean = $state(false)
@@ -166,11 +167,11 @@
               <button
                 class="sort-option"
                 class:active={sortMode === val}
-                onclick={() => { updateSettings({ chapterSortMode: val as ChapterSortMode }); onPageChange(1); sortMenuOpen = false }}
+                onclick={() => { onSortModeChange(val as ChapterSortMode); onPageChange(1); sortMenuOpen = false }}
               >{label}</button>
             {/each}
             <div class="sort-divider"></div>
-            <button class="sort-option" onclick={() => { updateSettings({ chapterSortDir: sortDir === 'desc' ? 'asc' : 'desc' }); onPageChange(1); sortMenuOpen = false }}>
+            <button class="sort-option" onclick={() => { onSortDirChange(sortDir === 'desc' ? 'asc' : 'desc'); onPageChange(1); sortMenuOpen = false }}>
               {sortDir === 'desc' ? '↑ Ascending' : '↓ Descending'}
             </button>
           </div>

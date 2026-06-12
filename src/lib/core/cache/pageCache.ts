@@ -97,6 +97,10 @@ export function clearResolvedUrlCache(): void {
   aspectCache.clear();
 }
 
+export function getCachedAspect(url: string): number | undefined {
+  return aspectCache.get(url);
+}
+
 export function clearPageCache(chapterId?: number): void {
   if (chapterId !== undefined) {
     pageCache.delete(chapterId);

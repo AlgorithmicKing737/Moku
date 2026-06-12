@@ -65,15 +65,13 @@
 
   {:else if viewMode === 'grid'}
     {#each sortedChapters as ch, i}
-      {@const inProgress     = !ch.read && (ch.lastPageRead ?? 0) > 0}
       {@const isGridSelected = selectedIds.has(ch.id)}
       <button
         class="grid-cell"
         class:read={ch.read}
-        class:in-progress={inProgress}
         class:grid-selected={isGridSelected}
         use:chapterLongPress={[ch, i]}
-        onclick={(e) => hasSelection ? onToggleSelect(ch.id, e) : onOpen(ch, inProgress)}
+        onclick={(e) => hasSelection ? onToggleSelect(ch.id, e) : onOpen(ch, !ch.read && (ch.lastPageRead ?? 0) > 0)}
         oncontextmenu={(e) => { e.preventDefault(); ctx = { x: e.clientX, y: e.clientY, chapter: ch, idx: i } }}
         title={ch.name}
       >
@@ -185,7 +183,6 @@
   .grid-cell { display: flex; align-items: center; justify-content: center; aspect-ratio: 1; border-radius: var(--radius-sm); background: var(--bg-raised); border: 1px solid var(--border-dim); font-family: var(--font-ui); font-size: var(--text-xs); color: var(--text-muted); cursor: pointer; position: relative; transition: background var(--t-fast), border-color var(--t-fast); }
   .grid-cell:hover { background: var(--bg-overlay); border-color: var(--border-strong); }
   .grid-cell.read { background: var(--color-read); color: var(--text-faint); border-color: transparent; }
-  .grid-cell.in-progress { border-color: var(--accent-dim); color: var(--accent-fg); }
   .grid-cell-num { font-size: 10px; }
   .grid-cell-dot { position: absolute; bottom: 3px; right: 3px; width: 4px; height: 4px; border-radius: 50%; background: var(--text-faint); }
   .grid-cell-dl  { position: absolute; top: 3px; left: 3px; width: 4px; height: 4px; border-radius: 50%; background: var(--accent-fg); }

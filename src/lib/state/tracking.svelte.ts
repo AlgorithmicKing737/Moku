@@ -19,7 +19,6 @@ class TrackingState {
   loadingFor:  Set<number>          = $state(new Set())
   error:       string | null        = $state(null)
 
-  // Legacy flat fields kept for request-manager/tracking.ts compatibility
   trackers:       Tracker[]     = $state([])
   loading:        boolean       = $state(false)
   syncing:        boolean       = $state(false)
@@ -55,7 +54,6 @@ class TrackingState {
     }))
   }
 
-  // ── Per-manga load ──────────────────────────────────────────────────────────
 
   async loadForManga(mangaId: number) {
     if (this.loadingFor.has(mangaId)) return
@@ -78,15 +76,13 @@ class TrackingState {
     }
   }
 
-  // ── Global load (tracking page) ─────────────────────────────────────────────
-
   async loadAll() {
     this.loadingAll = true
     this.error      = null
     try {
       const trackers = await getAdapter().getAllTrackerRecords() as TrackerWithRecords[]
       this.allTrackers = trackers
-      this.trackers    = trackers  // keep flat field in sync
+      this.trackers    = trackers
 
       for (const tracker of trackers.filter((t) => t.isLoggedIn)) {
         for (const record of tracker.trackRecords.nodes) {
@@ -103,8 +99,6 @@ class TrackingState {
       this.loadingAll = false
     }
   }
-
-  // ── Field updates ───────────────────────────────────────────────────────────
 
   async updateStatus(mangaId: number, record: TrackRecord, status: number): Promise<TrackRecord> {
     const fresh = await getAdapter().updateTrackRecord(String(record.id), { status })
@@ -134,7 +128,6 @@ class TrackingState {
     }))
   }
 
-  // ── Remote sync ─────────────────────────────────────────────────────────────
 
   async syncFromRemote(
     mangaId:  number,
@@ -168,7 +161,6 @@ class TrackingState {
     )
   }
 
-  // ── Read/unread sync ────────────────────────────────────────────────────────
 
   async updateFromRead(
     mangaId:     number,
@@ -232,7 +224,6 @@ class TrackingState {
     }
   }
 
-  // ── Boot sync ───────────────────────────────────────────────────────────────
 
   async bootSync() {
     if (!settingsState.settings.trackerSyncBack) return
@@ -297,7 +288,6 @@ class TrackingState {
     this.byManga = next
   }
 
-  // ── Status helpers ──────────────────────────────────────────────────────────
 
   private _statusesFor(trackerId: number): { value: number; name: string }[] {
     return this.allTrackers.find((t) => t.id === trackerId)?.statuses ?? []

@@ -1,4 +1,4 @@
-export { fetchPages, resolveUrl, preloadImage, measureAspect, clearPageCache, clearResolvedUrlCache } from "$lib/core/cache/pageCache";
+export { fetchPages, resolveUrl, preloadImage, measureAspect, clearPageCache, clearResolvedUrlCache, getCachedAspect } from "$lib/core/cache/pageCache";
 
 export function buildPageGroups(urls: string[], aspects: number[], offsetSpreads: boolean): number[][] {
   const groups: number[][] = [[1]];

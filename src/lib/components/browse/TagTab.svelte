@@ -53,7 +53,12 @@
   });
 
   $effect(() => {
-    if (tag_localHasNext && !tag_loadingMoreLocal && !tag_loadingLocal) tagLoadMoreLocal();
+    const _hasNext      = tag_localHasNext;
+    const _loadingMore  = tag_loadingMoreLocal;
+    const _loadingLocal = tag_loadingLocal;
+    untrack(() => {
+      if (_hasNext && !_loadingMore && !_loadingLocal) tagLoadMoreLocal();
+    });
   });
 
   async function tagFetchLocal(activeTags: string[], tagMode: TagMode, activeStatuses: string[]) {
@@ -191,11 +196,15 @@
 
   let tag_autoSearchFired = $state(false);
   $effect(() => {
-    tag_activeTags;
-    tag_activeStatuses;
+    const _tags         = tag_activeTags;
+    const _statuses     = tag_activeStatuses;
+    const _loadingLocal = tag_loadingLocal;
+    const _hasFilters   = tag_hasActiveFilters;
+    const _resultLen    = tag_localResults.length;
+    const _cacheReady   = sourceCacheReady;
     untrack(() => { tag_autoSearchFired = false; });
-    if (!tag_loadingLocal && tag_hasActiveFilters && !tag_autoSearchFired && !tag_searchSources && sourceCacheReady) {
-      if (tag_localResults.length < 20) {
+    if (!_loadingLocal && _hasFilters && !tag_autoSearchFired && !tag_searchSources && _cacheReady) {
+      if (_resultLen < 20) {
         untrack(() => { tag_autoSearchFired = true; tag_searchSources = true; });
       }
     }
