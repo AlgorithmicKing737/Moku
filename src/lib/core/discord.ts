@@ -72,10 +72,12 @@ function buildReadingPresence(manga: Manga, chapter: Chapter, cover: string) {
     assets: {
       largeImage: cover,
       largeText:  trunc(manga.title),
-      smallImage: 'https://raw.githubusercontent.com/frozenkelp/Moku/main/static/moku_logo.png', // TEMP: fork raw URL; commit static/moku_logo.png, then switch to moku-project/Moku in the PR
+      // largeUrl is left unset (reserved for linking to a traker).
+      smallImage: 'https://raw.githubusercontent.com/frozenkelp/Moku/sidestep-DRPC-cover-img/static/moku_logo.png', // NOTe: switch to moku-project/Moku/main in the PR
       smallText:  'Moku',
       smallUrl:   REPO_URL,
     },
+    buttons: APP_BUTTONS,
     activityType:      ACTIVITY_TYPE,
     statusDisplayType: STATUS_DISPLAY_DETAILS,
   }
