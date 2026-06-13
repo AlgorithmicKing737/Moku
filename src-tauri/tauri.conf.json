@@ -4,7 +4,6 @@
   "version": "0.10.0",
   "identifier": "io.github.MokuProject.Moku",
   "build": {
-    "devUrl": "http://localhost:1420",
     "frontendDist": "../dist",
     "beforeBuildCommand": "pnpm build:static"
   },
