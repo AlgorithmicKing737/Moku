@@ -509,9 +509,9 @@
       </div>
     </div>
 
-  {:else}
+  {:else if isTauri || failed || notConfigured || ringFull}
     <div style="position:relative;width:{ringSize}px;height:{ringSize}px;margin-bottom:20px;display:flex;align-items:center;justify-content:center">
-      {#if !failed && !notConfigured}
+      {#if !failed && !notConfigured && isTauri}
         <svg width={ringSize} height={ringSize} class="loading-ring" style="position:absolute;top:0;left:0;pointer-events:none">
           <circle cx={ringC} cy={ringC} r={ringR} fill="none" stroke="var(--border-base)" stroke-width="2" />
           <circle cx={ringC} cy={ringC} r={ringR} fill="none" stroke="var(--accent)" stroke-width="2"

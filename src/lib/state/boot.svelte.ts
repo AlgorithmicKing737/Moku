@@ -6,6 +6,7 @@ import { appState }            from '$lib/state/app.svelte'
 import { settingsState }       from '$lib/state/settings.svelte'
 
 const MAX_ATTEMPTS    = 40
+const WEB_MAX_ATTEMPTS = 1
 const BG_MAX_ATTEMPTS = 120
 
 export const boot = $state({
@@ -101,7 +102,8 @@ export async function startProbe(
 
     if (result === 'ok')            { handleProbeSuccess(gen); return }
     if (result === 'auth_required') { handleAuthRequired(gen, authMode, user, pass); return }
-    if (tries >= MAX_ATTEMPTS)      { boot.failed = true; appState.status = 'error'; startBackgroundProbe(gen, authMode, user, pass); return }
+    const maxAttempts = appState.platform === 'tauri' ? MAX_ATTEMPTS : WEB_MAX_ATTEMPTS
+    if (tries >= maxAttempts)       { boot.failed = true; appState.status = 'error'; startBackgroundProbe(gen, authMode, user, pass); return }
 
     setTimeout(probe, Math.min(500 + tries * 200, 2000))
   }

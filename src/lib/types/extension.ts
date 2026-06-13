@@ -7,6 +7,7 @@ export interface Source {
   isNsfw:          boolean
   isConfigurable:  boolean
   supportsLatest:  boolean
+  extension?:      { pkgName: string }
 }
 
 export interface Extension {
