@@ -145,11 +145,15 @@
     }
   })
 
-  // Return Discord presence to "Browsing" whenever we leave the reader. Keyed on the route rather
-  // than any single close handler, so every exit path — ✕ button, Esc, chapter-end, navigating
-  // away — lands on the idle presence uniformly. setIdle() is a no-op when RPC is disabled.
+  // Route changes reset reader presence to "Browsing". setIdle() is harmless when RPC is off.
   $effect(() => {
     if (!isReaderRoute) discord.setIdle().catch(() => {})
+  })
+
+  // Idle splash → show "Away". on return, restore prior card.
+  $effect(() => {
+    if (appState.idleSplash || appState.devSplash) discord.setAway().catch(() => {})
+    else discord.clearAway().catch(() => {})
   })
 
   let idleTimer:       ReturnType<typeof setTimeout> | null = null

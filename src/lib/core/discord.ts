@@ -4,6 +4,7 @@ import { trackingState }    from '$lib/state/tracking.svelte'
 import { resolvePublicCover } from '$lib/core/cover/remoteCover'
 import type { Manga }       from '$lib/types/manga'
 import type { Chapter }     from '$lib/types/chapter'
+import type { DiscordPresence } from '$lib/platform-adapters/types'
 
 const REPO_URL = 'https://github.com/moku-project/Moku'
 
@@ -30,6 +31,18 @@ let sessionStart: number | null = null
 // so a slow cover lookup from setReading can't stop a later idle/clear that ran while it was still resolving.
 let presenceEpoch = 0
 const supersede = () => ++presenceEpoch
+
+// Ambient presence = the last rpc card. While the idle is up we show "Away"
+// and restore this exact card on return.
+// `applyAmbient` caches the ambient payload but suppresses the push while `away`, so setReading updates can't override the Away frame.
+let lastAmbient: DiscordPresence | null = null
+let away = false
+
+async function applyAmbient(payload: DiscordPresence): Promise<void> {
+  lastAmbient = payload
+  if (away) return
+  await platformService.setDiscordPresence(payload)
+}
 
 function trunc(s: string, max = 128): string {
   return s.length <= max ? s : `${s.slice(0, max - 1)}…`
@@ -92,6 +105,7 @@ export async function initRpc(): Promise<void> {
 export async function destroyRpc(): Promise<void> {
   if (!platformService.isSupported('discord-rpc')) return
   sessionStart = null
+  away = false
   supersede()
   await platformService.clearDiscordPresence()
 }
@@ -104,20 +118,45 @@ export async function setReading(manga: Manga, chapter: Chapter): Promise<void> 
   const cover = await resolveCover(manga)
   if (epoch !== presenceEpoch) return // a newer setReading superseded while resolving
 
-  await platformService.setDiscordPresence(buildReadingPresence(manga, chapter, cover))
+  await applyAmbient(buildReadingPresence(manga, chapter, cover))
 }
 
 export async function setIdle(): Promise<void> {
   if (!platformService.isSupported('discord-rpc')) return
   if (!settingsState.settings.discordRpc) return
   supersede()
-  await platformService.setDiscordPresence({
+  await applyAmbient({
     details:    'Browsing',
     timestamps: { start: sessionStart ?? Date.now() },
     assets: { largeImage: FALLBACK_IMAGE, largeText: 'Moku' },
     buttons: APP_BUTTONS,
     activityType: ACTIVITY_TYPE,
   })
+}
+
+// Idle presence
+export async function setAway(): Promise<void> {
+  if (!platformService.isSupported('discord-rpc')) return
+  if (!settingsState.settings.discordRpc) return
+  supersede()
+  away = true
+  await platformService.setDiscordPresence({
+    details: 'Away',
+    assets: { largeImage: FALLBACK_IMAGE, largeText: 'Moku' },
+    buttons: APP_BUTTONS,
+    activityType: ACTIVITY_TYPE,
+  })
+}
+
+// Returning from the idle splash: restore the pre-idle card Reading/Browsing
+export async function clearAway(): Promise<void> {
+  if (!platformService.isSupported('discord-rpc')) return
+  if (!settingsState.settings.discordRpc) return
+  if (!away) return
+  away = false
+  supersede()
+  if (lastAmbient) await platformService.setDiscordPresence(lastAmbient)
+  else await setIdle()
 }
 
 export async function clearReading(): Promise<void> {
