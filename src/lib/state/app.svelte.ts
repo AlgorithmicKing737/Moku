@@ -35,6 +35,8 @@ export const appState = $state({
   history:       [] as unknown[],
   toasts:        [] as unknown[],
   appDir:        '',
+  authUser:      '',
+  authPass:      '',
   idleSplash:    false,
   devSplash:     false,
 })

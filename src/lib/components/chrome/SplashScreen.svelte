@@ -91,10 +91,11 @@
   const PHASE2_MS     = 10000
 
   function triggerExit(cb?: () => void) {
-    if (exitLock) return
+    console.log('[splash] triggerExit called — exitLock:', exitLock, 'mode:', mode, 'cb:', cb?.name ?? String(cb))
+    if (exitLock) { console.log('[splash] triggerExit blocked by exitLock'); return }
     exitLock = true
     exiting  = true
-    setTimeout(() => cb?.(), EXIT_MS)
+    setTimeout(() => { console.log('[splash] triggerExit timeout — calling cb'); cb?.() }, EXIT_MS)
   }
 
   let animFrame = 0
@@ -125,11 +126,13 @@
   })
 
   $effect(() => {
+    console.log('[splash] ringFull effect — ringFull:', ringFull, 'mode:', mode, 'exitLock:', exitLock)
     if (!ringFull || mode === 'locked') { exitLock = false; exiting = false; return }
     cancelAnimationFrame(animFrame)
     animFrame = 0
     ringProg  = 1
-    setTimeout(() => triggerExit(onReady), 650)
+    const t = setTimeout(() => { console.log('[splash] ringFull timeout firing — calling triggerExit(onReady)'); triggerExit(onReady) }, 650)
+    return () => { console.log('[splash] ringFull effect cleanup — cancelling timeout'); clearTimeout(t) }
   })
 
   function submitPin() {

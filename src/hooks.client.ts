@@ -9,15 +9,6 @@ import { historyState }                           from '$lib/state/history.svelt
 import { readerState }                            from '$lib/state/reader.svelte'
 import { seriesState }                            from '$lib/state/series.svelte'
 
-const KEY_URL  = 'moku_server_url'
-const KEY_AUTH = 'moku_auth_config'
-
-interface SavedAuth {
-  mode: 'NONE' | 'BASIC_AUTH' | 'UI_LOGIN'
-  user?: string
-  pass?: string
-}
-
 async function boot() {
   try {
     const platformAdapter = detectAdapter()
@@ -43,20 +34,21 @@ async function boot() {
     readerState.markers   = libraryData.markers
     historyState.load(libraryData.sessions, libraryData.dailyReadCounts)
 
-    const savedUrl     = (await platformAdapter.getCredential(KEY_URL)) ?? 'http://127.0.0.1:4567'
-    const savedAuthRaw = await platformAdapter.getCredential(KEY_AUTH)
-    const savedAuth: SavedAuth = savedAuthRaw ? JSON.parse(savedAuthRaw) : { mode: 'NONE' }
+    const savedUrl  = settingsState.settings.serverUrl      ?? 'http://127.0.0.1:4567'
+    const authMode  = settingsState.settings.serverAuthMode ?? 'NONE'
+    const authUser  = settingsState.settings.serverAuthUser || undefined
+    const authPass  = settingsState.settings.serverAuthPass || undefined
 
     appState.serverUrl = savedUrl
-    appState.authMode  = savedAuth.mode
+    appState.authMode  = authMode === 'SIMPLE_LOGIN' ? 'UI_LOGIN' : authMode
 
-    configureAuth(savedUrl, savedAuth.mode, savedAuth.user, savedAuth.pass)
+    configureAuth(savedUrl, authMode, authUser, authPass)
 
     await serverAdapter.connect({
       baseUrl: savedUrl,
       credentials:
-        savedAuth.mode === 'BASIC_AUTH' && savedAuth.user && savedAuth.pass
-          ? { username: savedAuth.user, password: savedAuth.pass }
+        authMode === 'BASIC_AUTH' && authUser && authPass
+          ? { username: authUser, password: authPass }
           : undefined,
     })
 

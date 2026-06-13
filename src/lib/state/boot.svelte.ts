@@ -33,11 +33,8 @@ export async function initPlatform(): Promise<void> {
 }
 
 function pinLockEnabled(): boolean {
-  return (
-    settingsState.settings.appLockEnabled === true &&
-    typeof settingsState.settings.appLockPin === 'string' &&
-    settingsState.settings.appLockPin.length >= 4
-  )
+  const pin = settingsState.settings.appLockPin
+  return typeof pin === 'string' && pin.length >= 4
 }
 
 function handleProbeSuccess(gen: number) {
@@ -56,6 +53,7 @@ function handleAuthRequired(
   pass:     string,
 ) {
   if (gen !== probeGeneration) return
+  if (boot.skipped) return
   boot.failed       = false
   appState.authMode = authMode
 
@@ -92,13 +90,6 @@ export async function startProbe(
 
   const baseUrl = settingsState.settings.serverUrl ?? 'http://127.0.0.1:4567'
   configureAuth(baseUrl, authMode, user || undefined, pass || undefined)
-
-  if (appState.platform === 'web') {
-    boot.failed     = true
-    appState.status = 'error'
-    startBackgroundProbe(gen, authMode, user, pass)
-    return
-  }
 
   let tries = 0
 
@@ -191,10 +182,9 @@ export function bypassBoot(
   user = '',
   pass = '',
 ) {
-  const gen = probeGeneration
   boot.loginRequired  = false
   boot.sessionExpired = false
   boot.skipped        = true
   appState.status     = 'ready'
-  startBackgroundProbe(gen, authMode, user, pass)
+  startBackgroundProbe(probeGeneration, authMode, user, pass)
 }
