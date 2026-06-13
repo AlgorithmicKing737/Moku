@@ -80,6 +80,9 @@ modules:
 
   - name: libayatana-indicator
     buildsystem: cmake-ninja
+    build-options:
+      env:
+        PKG_CONFIG_PATH: /app/lib/pkgconfig:/app/share/pkgconfig
     config-opts:
       - -DENABLE_TESTS=OFF
       - -DGSETTINGS_COMPILE=OFF
@@ -90,6 +93,9 @@ modules:
 
   - name: libayatana-appindicator
     buildsystem: cmake-ninja
+    build-options:
+      env:
+        PKG_CONFIG_PATH: /app/lib/pkgconfig:/app/share/pkgconfig
     config-opts:
       - -DENABLE_TESTS=OFF
       - -DENABLE_BINDINGS_MONO=OFF
