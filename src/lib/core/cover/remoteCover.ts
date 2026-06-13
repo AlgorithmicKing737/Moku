@@ -1,60 +1,76 @@
-import { MemoryCache }     from '$lib/core/cache/memoryCache'
-import { externalFetch }   from '$lib/core/net/externalFetch'
-import type { TrackRecord } from '$lib/types'
+import { MemoryCache }              from '$lib/core/cache/memoryCache'
+import { clientFor, DEFAULT_ORDER } from './trackers'
+import type { TrackRecord }         from '$lib/types'
+import type { Manga }               from '$lib/types/manga'
 
-// Jikan (the unofficial MyAnimeList API) serves short, public HTTPS cover URLs with no auth — well
-// under Discord's 256-char large_image limit. Cached per-manga so each is looked up once.
-const JIKAN = 'https://api.jikan.moe/v4/manga'
+// Cache mangaCover for 24h: found URL, or '' for no-match (all sources answered, none had it).
+// failures are left uncached so retry.
+// what if a tracker is down? enjoy green leaf. touch grass. check back later.
 const coverCache = new MemoryCache<string>(200, 24 * 60 * 60 * 1000)
-const MAL_ID = /myanimelist\.net\/manga\/(\d+)/i
 
-interface JikanImages { jpg?: { large_image_url?: string; image_url?: string } }
-interface JikanManga  { images?: JikanImages }
+export interface CoverInput {
+  manga:                Pick<Manga, 'id' | 'title' | 'thumbnailUrl'>
+  linkedRecords:        TrackRecord[]
+  configuredTrackerIds: number[]
+  serverBaseUrl:        string
+  coversArePublic:      boolean
+}
 
-// Browser fetch first (real UA), Tauri HTTP plugin as a CORS-bypass fallback.
-async function jikanFetch(url: string, init: RequestInit): Promise<Response> {
-  try {
-    return await fetch(url, init)
-  } catch {
-    return externalFetch(url, init)
+// Suwayomi thumbnails are relative paths; make them absolute against the (declared-public) server.
+function suwayomiCover(thumbnailUrl: string, base: string): string | null {
+  if (!thumbnailUrl) return null
+  if (thumbnailUrl.startsWith('http')) return thumbnailUrl
+  return `${base.replace(/\/$/, '')}${thumbnailUrl}`
+}
+
+async function resolve(input: CoverInput): Promise<string | null> {
+  const { manga, linkedRecords, configuredTrackerIds, serverBaseUrl, coversArePublic } = input
+
+  // Step 1 — server's own thumbnail, when declared reachable by Discord (lowest latency, exact cover).
+  if (coversArePublic) {
+    const url = suwayomiCover(manga.thumbnailUrl, serverBaseUrl)
+    if (url) return url
   }
-}
 
-async function jikanGet(url: string): Promise<unknown> {
-  const ctrl  = new AbortController()
-  const timer = setTimeout(() => ctrl.abort(), 6000)
-  try {
-    const res = await jikanFetch(url, { method: 'GET', headers: { Accept: 'application/json' }, signal: ctrl.signal })
-    if (!res.ok) throw new Error(`Jikan ${res.status}`)
-    return await res.json()
-  } finally {
-    clearTimeout(timer)
+  // A source throws error skip caching and retry.
+  let errored = false
+  const attempt = async (fn: () => Promise<string | null>): Promise<string | null> => {
+    try { return await fn() } catch { errored = true; return null }
   }
+
+  // Step 2 — linked tracker, precise by-id (AniList before MAL. anilist has better quality).
+  const linkedOrder = [...linkedRecords]
+    .filter(r => clientFor(r.trackerId) && r.remoteId)
+    .sort((a, b) => DEFAULT_ORDER.indexOf(a.trackerId) - DEFAULT_ORDER.indexOf(b.trackerId))
+  for (const rec of linkedOrder) {
+    const url = await attempt(() => clientFor(rec.trackerId)!.coverById(rec.remoteId))
+    if (url) return url
+  }
+
+  // Steps 3 — title search: configured trackers or the public AniList/MAL,
+  const linkedIds  = new Set(linkedRecords.map(r => r.trackerId))
+  const titleOrder = [...new Set([...configuredTrackerIds.filter(id => !linkedIds.has(id)), ...DEFAULT_ORDER])]
+    .filter(id => clientFor(id))
+  for (const id of titleOrder) {
+    const url = await attempt(() => clientFor(id)!.coverByTitle(manga.title))
+    if (url) return url
+  }
+
+  if (errored) throw new Error('cover lookup inconclusive') // error: don't cache this
+  return null
 }
 
-function coverOf(m: JikanManga | undefined): string {
-  return m?.images?.jpg?.large_image_url ?? m?.images?.jpg?.image_url ?? ''
-}
-
-export async function fetchRemoteCover(mangaId: number, title: string, records: TrackRecord[]): Promise<string | null> {
-  const key    = String(mangaId)
+// Public entry: Returns null when nothing is found use fallback image.
+export async function resolvePublicCover(input: CoverInput): Promise<string | null> {
+  const key    = String(input.manga.id)
   const cached = coverCache.get(key)
   if (cached !== undefined) return cached || null
 
   try {
-    // Exact lookup when the manga is linked to MAL; otherwise a title search (top hit).
-    const malId = records.map(r => r.remoteUrl?.match(MAL_ID)?.[1]).find(Boolean)
-    let url: string
-    if (malId) {
-      const data = (await jikanGet(`${JIKAN}/${malId}`)) as { data?: JikanManga }
-      url = coverOf(data?.data)
-    } else {
-      const data = (await jikanGet(`${JIKAN}?q=${encodeURIComponent(title)}&limit=1`)) as { data?: JikanManga[] }
-      url = coverOf(data?.data?.[0])
-    }
-    coverCache.set(key, url) // caches '' for a genuine no-match
-    return url || null
+    const url = await resolve(input)   // every source errored
+    coverCache.set(key, url ?? '')     // cache a hit OR a confirmed no-match
+    return url
   } catch {
-    return null
+    return null                        // failure: leave uncached so the next read retries
   }
 }

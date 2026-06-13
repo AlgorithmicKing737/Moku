@@ -17,8 +17,10 @@ export interface ServerLaunchConfig {
 export interface DiscordAssets {
   largeImage?: string
   largeText?:  string
+  largeUrl?:   string
   smallImage?: string
   smallText?:  string
+  smallUrl?:   string
 }
 
 export interface DiscordButton {

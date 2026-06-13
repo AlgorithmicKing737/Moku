@@ -43,7 +43,6 @@
     "discord-rpc:allow-disconnect",
     "discord-rpc:allow-set-activity",
     "discord-rpc:allow-clear-activity",
-    "discord-rpc:allow-is-running",
     "dialog:default",
     "dialog:allow-open"
   ]

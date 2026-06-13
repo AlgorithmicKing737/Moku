@@ -1,21 +1,27 @@
 import { platformService }  from '$lib/platform-service'
 import { settingsState }    from '$lib/state/settings.svelte'
 import { trackingState }    from '$lib/state/tracking.svelte'
-import { fetchRemoteCover } from '$lib/core/cover/remoteCover'
+import { resolvePublicCover } from '$lib/core/cover/remoteCover'
 import type { Manga }       from '$lib/types/manga'
 import type { Chapter }     from '$lib/types/chapter'
 
+const REPO_URL = 'https://github.com/moku-project/Moku'
+
 const APP_BUTTONS = [
-  { label: 'GitHub',  url: 'https://github.com/moku-project/Moku' },
+  { label: 'GitHub',  url: REPO_URL },
   { label: 'Discord', url: 'https://discord.gg/Jq3pwuNqPp' },
 ]
 
 const FALLBACK_IMAGE = 'moku_logo'
 
-// Discord activity type 3 = "Watching"; status-display 2 = use `details` as the member-list
-// headline. Together they make reading presence read "Watching <manga title>" (Discord has no
-// "Reading" type, so Watching is the closest fit).
-const ACTIVITY_WATCHING      = 3
+// TEMP, set true only if your Suwayomi server is publicly reachable by Discord,
+// so its own thumbnail URL can be used directly.
+const SUWAYOMI_COVERS_PUBLIC = false
+
+// Discord activity verb. only set Playing(0)/Listening(2)/Watching(3)/Competing(5)
+// Type 4 is justa status and doesnt show in activity [and therefor none of the details]
+const ACTIVITY_TYPE          = 3
+// status-display 2 = use `details` as the member-list headline → "Playing <manga title>" while reading.
 const STATUS_DISPLAY_DETAILS = 2
 
 let sessionStart: number | null = null
@@ -34,29 +40,30 @@ function formatChapter(chapter: Chapter): string {
   return `Chapter ${Number.isInteger(n) ? n : n.toFixed(1)}`
 }
 
-// Per-manga cover from MAL/Jikan (a short public URL Discord can proxy on any setup, incl. localhost).
-// Falls back to the uploaded logo asset when there's no match.
+// Resolve a public cover URL from tracker or public api AniList/MAL by-title
+// Falls back to logo
 async function resolveCover(manga: Manga): Promise<string> {
   try {
-    const cover = await fetchRemoteCover(manga.id, manga.title, trackingState.recordsFor(manga.id))
+    // Ensure this manga's linked records are loaded so step 2 (by-id) can fire.
+    await trackingState.loadForManga(manga.id)
+    const cover = await resolvePublicCover({
+      manga,
+      linkedRecords:        trackingState.recordsFor(manga.id),
+      configuredTrackerIds: trackingState.allTrackers.filter(t => t.isLoggedIn).map(t => t.id),
+      serverBaseUrl:        settingsState.settings.serverUrl ?? '',
+      coversArePublic:      SUWAYOMI_COVERS_PUBLIC,
+    })
     if (cover) return cover
   } catch { /* fall through to logo */ }
   return FALLBACK_IMAGE
 }
 
 // Reading presence.
-//
-// Discord validates an activity ATOMICALLY: when `largeImage` is an external (proxied) URL rather
-// than an uploaded asset key, it silently drops the ENTIRE SET_ACTIVITY if the frame also carries
-// certain fields — the presence just stays on whatever it showed before. We bisected every
-// combination on this stack, and all of these were dropped:
-//   • URL largeImage  +  buttons                       → dropped (stuck on previous state)
-//   • URL largeImage  +  smallImage (asset-key logo)   → dropped
-//   • URL largeImage  +  buttons  +  smallImage         → dropped
-// Only an uploaded asset-KEY largeImage tolerates buttons/smallImage (see setIdle, which keeps
-// both). So a live URL cover is mutually exclusive with the buttons AND the corner logo. The
-// maximal payload that still renders is exactly:
-//   details + state + timestamps + largeImage(URL) + largeText   — no buttons, no small image.
+
+// Discord validates an activity ATOMICALLY: a frame with both URL asset and uploaded asse is silently dropped
+// the presence just freezes on the previous frame.
+// A URL small image asset logo, however, renders alongside a URL large image
+// `largeUrl` is left unset (reserved for linking to a traker).
 function buildReadingPresence(manga: Manga, chapter: Chapter, cover: string) {
   return {
     details:    trunc(manga.title),
@@ -65,8 +72,11 @@ function buildReadingPresence(manga: Manga, chapter: Chapter, cover: string) {
     assets: {
       largeImage: cover,
       largeText:  trunc(manga.title),
+      smallImage: 'https://raw.githubusercontent.com/frozenkelp/Moku/main/static/moku_logo.png', // TEMP: fork raw URL; commit static/moku_logo.png, then switch to moku-project/Moku in the PR
+      smallText:  'Moku',
+      smallUrl:   REPO_URL,
     },
-    activityType:      ACTIVITY_WATCHING,
+    activityType:      ACTIVITY_TYPE,
     statusDisplayType: STATUS_DISPLAY_DETAILS,
   }
 }
@@ -90,7 +100,7 @@ export async function setReading(manga: Manga, chapter: Chapter): Promise<void> 
   const epoch = supersede()
 
   const cover = await resolveCover(manga)
-  if (epoch !== presenceEpoch) return // a newer setReading superseded us while resolving
+  if (epoch !== presenceEpoch) return // a newer setReading superseded while resolving
 
   await platformService.setDiscordPresence(buildReadingPresence(manga, chapter, cover))
 }
@@ -104,9 +114,7 @@ export async function setIdle(): Promise<void> {
     timestamps: { start: sessionStart ?? Date.now() },
     assets: { largeImage: FALLBACK_IMAGE, largeText: 'Moku' },
     buttons: APP_BUTTONS,
-    // Keep the verb consistent with reading ("Watching"): no statusDisplayType here, so the
-    // member-list headline stays the app name → "Watching Moku" while browsing.
-    activityType: ACTIVITY_WATCHING,
+    activityType: ACTIVITY_TYPE,
   })
 }
 
