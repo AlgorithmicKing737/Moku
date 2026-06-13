@@ -91,7 +91,13 @@ jobs:
 
       - name: Patch tauri.conf.json for CI
         run: |
-          sed -i '' 's/"beforeBuildCommand": "pnpm build"/"beforeBuildCommand": ""/' src-tauri/tauri.conf.json
+          python3 -c "
+          import json, pathlib
+          p = pathlib.Path('src-tauri/tauri.conf.json')
+          c = json.loads(p.read_text())
+          c.setdefault('build', {})['beforeBuildCommand'] = ''
+          p.write_text(json.dumps(c, indent=2))
+          "
 
       - name: Build Tauri app (aarch64)
         run: |
