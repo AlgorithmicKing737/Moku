@@ -1,24 +1,27 @@
 import { invoke } from "@tauri-apps/api/core";
 import {
-  saveSettings,
-  saveLibrary,
-  saveUpdates,
+  loadSettings, saveSettings,
+  loadLibrary,  saveLibrary,
+  loadUpdates,  saveUpdates,
 } from "$lib/core/persistence/persist";
 
-const STORE_FILES = ["settings.json", "library.json", "updates.json"] as const;
+async function collectStoreFiles(): Promise<{ name: string; bytes: Uint8Array }[]> {
+  const [settings, library, updates] = await Promise.all([
+    loadSettings(),
+    loadLibrary(),
+    loadUpdates(),
+  ]);
+
+  const enc = new TextEncoder();
+  return [
+    { name: "settings.json", bytes: enc.encode(JSON.stringify(settings)) },
+    { name: "library.json",  bytes: enc.encode(JSON.stringify(library)) },
+    { name: "updates.json",  bytes: enc.encode(JSON.stringify(updates)) },
+  ];
+}
 
 export async function exportAppData(): Promise<void> {
-  const entries: [string, string][] = await invoke("read_store_files", {
-    names: [...STORE_FILES],
-  });
-
-  const zip = buildZip(
-    entries.map(([name, content]) => ({
-      name,
-      bytes: new TextEncoder().encode(content),
-    }))
-  );
-
+  const zip = buildZip(await collectStoreFiles());
   await invoke("export_app_data", { bytes: Array.from(zip) });
 }
 
@@ -60,15 +63,7 @@ export async function importAppData(): Promise<void> {
 
 export async function autoBackupAppData(): Promise<void> {
   try {
-    const entries: [string, string][] = await invoke("read_store_files", {
-      names: [...STORE_FILES],
-    });
-    const zip = buildZip(
-      entries.map(([name, content]) => ({
-        name,
-        bytes: new TextEncoder().encode(content),
-      }))
-    );
+    const zip = buildZip(await collectStoreFiles());
     await invoke("auto_backup_app_data", { bytes: Array.from(zip) });
   } catch (e) {
     console.warn("[moku] auto-backup failed:", e);

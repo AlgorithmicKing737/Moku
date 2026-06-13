@@ -81,20 +81,3 @@ pub fn get_auto_backup_dir(app: tauri::AppHandle) -> String {
     let _ = std::fs::create_dir_all(&dir);
     dir.to_string_lossy().into_owned()
 }
-
-#[tauri::command]
-pub fn read_store_files(app: tauri::AppHandle, names: Vec<String>) -> Vec<(String, String)> {
-    let base = app
-        .path()
-        .app_local_data_dir()
-        .unwrap_or_else(|_| PathBuf::from("."));
-
-    names
-        .into_iter()
-        .map(|name| {
-            let content = std::fs::read_to_string(base.join(&name))
-                .unwrap_or_else(|_| "{}".to_string());
-            (name, content)
-        })
-        .collect()
-}
