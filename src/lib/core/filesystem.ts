@@ -16,9 +16,26 @@ function join(root: string, ...parts: string[]): string {
   return [root.replace(/[/\\]$/, ''), ...parts].join(sep)
 }
 
-function checkSupported(): boolean {
+function isLocalServer(): boolean {
+  try {
+    const host = new URL(settingsState.settings.serverUrl).hostname
+    return host === 'localhost' || host === '127.0.0.1' || host === '::1'
+  } catch {
+    return false
+  }
+}
+
+export function canOpenFolder(): boolean {
+  return platformService.isSupported('filesystem') && isLocalServer()
+}
+
+function checkCanOpenFolder(): boolean {
   if (!platformService.isSupported('filesystem')) {
     addToast({ kind: 'info', title: 'Desktop only', body: 'Opening folders requires the desktop app.' })
+    return false
+  }
+  if (!isLocalServer()) {
+    addToast({ kind: 'info', title: 'Remote server', body: 'Folder access is unavailable when connected to a remote server.' })
     return false
   }
   return true
@@ -33,7 +50,7 @@ function checkRoot(root: string): boolean {
 }
 
 export async function openMangaFolder(manga: Manga): Promise<void> {
-  if (!checkSupported()) return
+  if (!checkCanOpenFolder()) return
   const root   = getDownloadsRoot()
   if (!checkRoot(root)) return
   const source = (manga as any).source?.displayName ?? (manga as any).source?.name ?? ''
@@ -44,14 +61,14 @@ export async function openMangaFolder(manga: Manga): Promise<void> {
 }
 
 export async function openDownloadsFolder(): Promise<void> {
-  if (!checkSupported()) return
+  if (!checkCanOpenFolder()) return
   const root = getDownloadsRoot()
   if (!checkRoot(root)) return
   await platformService.openPath(root).catch(console.error)
 }
 
 export async function openCustomFolder(path: string): Promise<void> {
-  if (!checkSupported()) return
+  if (!checkCanOpenFolder()) return
   if (!path?.trim()) return
   await platformService.openPath(path).catch(console.error)
 }

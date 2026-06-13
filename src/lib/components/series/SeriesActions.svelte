@@ -4,6 +4,7 @@
     CaretDown, ArrowsClockwise, List, SquaresFour, FolderSimplePlus,
     Trash, DownloadSimple, X, MagnifyingGlass, Funnel, Check, FolderOpen,
   } from 'phosphor-svelte'
+  import { canOpenFolder }  from '$lib/core/filesystem'
   import type { Chapter, Category } from '$lib/types'
   import type { ChapterSortMode, ChapterSortDir } from './lib/chapterList'
 
@@ -275,7 +276,7 @@
       <ArrowsClockwise size={14} weight="light" class={refreshing ? 'anim-spin' : ''} />
     </button>
 
-    {#if downloadedCount > 0}
+    {#if downloadedCount > 0 && canOpenFolder()}
       <button class="icon-btn" onclick={onOpenFolder} title="Open manga folder">
         <FolderOpen size={14} weight="light" />
       </button>

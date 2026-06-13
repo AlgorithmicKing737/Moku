@@ -3,6 +3,7 @@
     MagnifyingGlass, Books, DownloadSimple, Folder, FolderSimple,
     SortAscending, CaretUp, CaretDown, ArrowsClockwise, Star, X, CheckSquare,
   } from "phosphor-svelte";
+  import { canOpenFolder }  from "$lib/core/filesystem";
   import LibraryFilters from "./LibraryFilters.svelte";
   import type { Category } from "$lib/types";
   import type { LibrarySortOption, LibrarySortDir, LibraryStatusFilter, LibraryContentFilter } from "$lib/state/library.svelte";
@@ -165,9 +166,11 @@
       </button>
     {/if}
 
-    <button class="icon-btn" title="Open downloads folder" onclick={onOpenDownloadsFolder}>
-      <FolderSimple size={15} weight="bold" />
-    </button>
+    {#if canOpenFolder()}
+      <button class="icon-btn" title="Open downloads folder" onclick={onOpenDownloadsFolder}>
+        <FolderSimple size={15} weight="bold" />
+      </button>
+    {/if}
 
     <div class="sort-panel-wrap">
       <button
