@@ -31,6 +31,33 @@
   const statsAlways = $derived(settingsState.settings.libraryStatsAlways ?? false)
   const cropCovers  = $derived(settingsState.settings.libraryCropCovers  ?? true)
 
+  // Virtual rendering — only mount cards up to visibleCount
+  const PAGE = 48
+  let visibleCount = $state(PAGE)
+  let sentinel: HTMLDivElement | undefined = $state()
+  let observer: IntersectionObserver | null = null
+
+  const renderedItems = $derived(items.slice(0, visibleCount))
+  const hasMore       = $derived(visibleCount < items.length)
+
+  // Reset when items list changes (tab switch, filter, etc)
+  $effect(() => {
+    items
+    visibleCount = PAGE
+  })
+
+  $effect(() => {
+    observer?.disconnect()
+    if (!sentinel) return
+    observer = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting && hasMore) {
+        visibleCount = Math.min(visibleCount + PAGE, items.length)
+      }
+    }, { rootMargin: '200px' })
+    observer.observe(sentinel)
+    return () => observer?.disconnect()
+  })
+
   function onDocDown(e: MouseEvent) {
     if (movePanelOpen && !(e.target as HTMLElement).closest('.move-wrap')) movePanelOpen = false
   }
@@ -111,7 +138,7 @@
 
   {:else}
     <div class="grid">
-    {#each items as m (m.id)}
+    {#each renderedItems as m (m.id)}
       {@const isSelected  = selected.has(m.id)}
       {@const isCompleted = m.status === 'COMPLETED' || (!m.unreadCount && (m.chapters?.totalCount ?? 0) > 0)}
         <button
@@ -152,6 +179,9 @@
         </button>
       {/each}
     </div>
+    {#if hasMore}
+      <div bind:this={sentinel} class="sentinel" aria-hidden="true"></div>
+    {/if}
   {/if}
 </div>
 
@@ -288,6 +318,8 @@
   .cover-skeleton { aspect-ratio: 2/3; border-radius: var(--radius-md); }
   .title-skeleton { height: 12px; margin-top: var(--sp-2); width: 80%; border-radius: var(--radius-sm); }
   .skeleton { background: var(--bg-raised); animation: pulse 1.4s ease infinite; }
+
+  .sentinel { height: 1px; width: 100%; }
 
   .empty {
     display: flex; align-items: center; justify-content: center;

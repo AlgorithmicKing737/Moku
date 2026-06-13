@@ -63,7 +63,12 @@
     onTabDragStart, onTabDragOver, onTabDragLeave, onTabDrop, onTabDragEnd,
   }: Props = $props();
 
+  let wheelTimer: ReturnType<typeof setTimeout> | null = null
+
   function onTabsWheel(e: WheelEvent) {
+    e.preventDefault()
+    if (wheelTimer) return
+    wheelTimer = setTimeout(() => { wheelTimer = null }, 180)
     const ids = visibleTabIds.filter(id => id === "library" || id === "downloaded" || visibleCategories.some(c => String(c.id) === id));
     const idx = ids.indexOf(tab);
     if (e.deltaY > 0 && idx < ids.length - 1) onTabChange(ids[idx + 1]);
