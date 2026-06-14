@@ -193,6 +193,21 @@
     finally { bulkWorking = false; libraryState.exitSelect() }
   }
 
+  async function bulkRemoveFromFolder() {
+    const catId = Number(libraryState.tab)
+    if (Number.isNaN(catId)) return
+    bulkWorking = true
+    try {
+      await getAdapter().updateMangasCategories(
+        [...libraryState.selected].map(String),
+        [],
+        [catId],
+      )
+      await loadCategories()
+    } catch (e) { console.error(e) }
+    finally { bulkWorking = false; libraryState.exitSelect() }
+  }
+
   async function onBulkRemove() {
     bulkWorking = true
     try {
@@ -451,6 +466,7 @@
       onSelectAll={() => libraryState.selectAll(libraryState.filteredItems.map(m => m.id))}
       onExitSelect={() => libraryState.exitSelect()}
       onBulkRemove={onBulkRemove}
+      onBulkRemoveFromFolder={bulkRemoveFromFolder}
       onBulkMove={bulkMove}
     />
   {/if}

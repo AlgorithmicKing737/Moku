@@ -1,37 +1,40 @@
 <script lang="ts">
-  import { CheckSquare, Trash, Folder } from 'phosphor-svelte'
+  import { CheckSquare, Trash, Folder, FolderPlus, FolderMinus } from 'phosphor-svelte'
   import Thumbnail from '$lib/components/shared/manga/Thumbnail.svelte'
   import { settingsState } from '$lib/state/settings.svelte'
   import type { Manga, Category } from '$lib/types'
 
   interface Props {
-    items:             Manga[]
-    loading:           boolean
-    selectMode:        boolean
-    selected:          Set<number>
-    tab:               string
-    visibleCategories: Category[]
-    bulkWorking:       boolean
-    onCardClick:       (e: MouseEvent, m: Manga) => void
-    onCardContextMenu: (e: MouseEvent, m: Manga) => void
-    onSelectAll:       () => void
-    onExitSelect:      () => void
-    onBulkRemove:      () => void
-    onBulkMove:        (cat: Category) => void
+    items:                  Manga[]
+    loading:                boolean
+    selectMode:             boolean
+    selected:               Set<number>
+    tab:                    string
+    visibleCategories:      Category[]
+    bulkWorking:            boolean
+    onCardClick:            (e: MouseEvent, m: Manga) => void
+    onCardContextMenu:      (e: MouseEvent, m: Manga) => void
+    onSelectAll:            () => void
+    onExitSelect:           () => void
+    onBulkRemove:           () => void
+    onBulkRemoveFromFolder: () => void
+    onBulkMove:             (cat: Category) => void
   }
 
   let {
     items, loading, selectMode, selected, tab,
     visibleCategories, bulkWorking,
-    onCardClick, onCardContextMenu, onSelectAll, onExitSelect, onBulkRemove, onBulkMove,
+    onCardClick, onCardContextMenu, onSelectAll, onExitSelect,
+    onBulkRemove, onBulkRemoveFromFolder, onBulkMove,
   }: Props = $props()
+
+  const isFolderTab = $derived(tab !== 'library' && tab !== 'downloaded')
 
   let movePanelOpen = $state(false)
 
   const statsAlways = $derived(settingsState.settings.libraryStatsAlways ?? false)
   const cropCovers  = $derived(settingsState.settings.libraryCropCovers  ?? true)
 
-  // Virtual rendering — only mount cards up to visibleCount
   const PAGE = 48
   let visibleCount = $state(PAGE)
   let sentinel: HTMLDivElement | undefined = $state()
@@ -40,7 +43,6 @@
   const renderedItems = $derived(items.slice(0, visibleCount))
   const hasMore       = $derived(visibleCount < items.length)
 
-  // Reset when items list changes (tab switch, filter, etc)
   $effect(() => {
     items
     visibleCount = PAGE
@@ -76,12 +78,12 @@
       {#if visibleCategories.length > 0}
         <div class="move-wrap">
           <button
-            class="sel-action-btn"
+            class="sel-icon-btn"
+            title="Move to folder"
             disabled={selected.size === 0 || bulkWorking}
             onclick={() => movePanelOpen = !movePanelOpen}
           >
-            <Folder size={13} weight="bold" />
-            Move to folder
+            <FolderPlus size={14} weight="bold" />
           </button>
           {#if movePanelOpen}
             <div class="move-panel" role="menu">
@@ -100,13 +102,24 @@
         </div>
       {/if}
 
+      {#if isFolderTab}
+        <button
+          class="sel-icon-btn"
+          title="Remove from folder"
+          disabled={selected.size === 0 || bulkWorking}
+          onclick={onBulkRemoveFromFolder}
+        >
+          <FolderMinus size={14} weight="bold" />
+        </button>
+      {/if}
+
       <button
-        class="sel-action-btn sel-danger"
+        class="sel-icon-btn sel-icon-danger"
+        title="Remove from library"
         disabled={selected.size === 0 || bulkWorking}
         onclick={onBulkRemove}
       >
-        <Trash size={13} weight="bold" />
-        Remove
+        <Trash size={14} weight="bold" />
       </button>
     </div>
   </div>
@@ -211,30 +224,31 @@
     transition: color var(--t-base);
   }
   .sel-text-btn:hover { color: var(--text-primary); }
-  .sel-action-btn {
-    display: flex; align-items: center; gap: 5px;
-    font-family: var(--font-ui); font-size: var(--text-xs);
-    padding: 5px 10px; border-radius: var(--radius-md);
+  .sel-icon-btn {
+    display: flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; border-radius: var(--radius-md);
     border: 1px solid var(--border-dim); background: var(--bg-raised);
-    color: var(--text-muted); cursor: pointer; white-space: nowrap;
+    color: var(--text-muted); cursor: pointer; flex-shrink: 0;
     transition: color var(--t-base), border-color var(--t-base), background var(--t-base);
   }
-  .sel-action-btn:disabled { opacity: 0.35; cursor: not-allowed; }
-  .sel-action-btn:hover:not(:disabled) { color: var(--text-primary); border-color: var(--border-strong); }
-  .sel-danger:hover:not(:disabled) {
+  .sel-icon-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .sel-icon-btn:hover:not(:disabled) { color: var(--text-primary); border-color: var(--border-strong); }
+  .sel-icon-danger:hover:not(:disabled) {
     color: var(--color-error, #e05c5c);
     border-color: color-mix(in srgb, var(--color-error, #e05c5c) 40%, transparent);
     background: color-mix(in srgb, var(--color-error, #e05c5c) 8%, transparent);
   }
 
   .move-wrap { position: relative; }
+
   .move-panel {
-    position: absolute; top: calc(100% + 4px); right: 0; z-index: 9999;
     min-width: 180px; background: var(--bg-raised);
     border: 1px solid var(--border-base); border-radius: var(--radius-lg);
     padding: var(--sp-1); box-shadow: 0 8px 32px rgba(0,0,0,0.5);
     animation: fadeIn 0.1s ease both;
+    position: absolute; top: calc(100% + 4px); right: 0; z-index: 9999;
   }
+
   .move-item {
     display: flex; align-items: center; gap: var(--sp-2);
     width: 100%; padding: 7px 10px; border-radius: var(--radius-sm);
