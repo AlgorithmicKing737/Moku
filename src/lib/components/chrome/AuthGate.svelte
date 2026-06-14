@@ -1,14 +1,15 @@
 <script lang="ts">
   import logoUrl                           from '$lib/assets/moku-icon-splash.svg'
   import { appState }                      from '$lib/state/app.svelte'
+  import { authVerifiedState }             from '$lib/state/auth.svelte'
   import { boot, submitLogin, bypassBoot } from '$lib/state/boot.svelte'
 
   function handleBypass() {
-    bypassBoot(appState.authMode, boot.loginUser)
+    bypassBoot(appState.authMode, boot.loginUser, boot.loginPass)
   }
 </script>
 
-{#if appState.status === 'auth'}
+{#if appState.authRequired && !authVerifiedState.value}
   <div class="overlay overlay--clear">
     <div class="card anim-scale-in">
       <img src={logoUrl} alt="Moku" class="logo" />

@@ -36,7 +36,7 @@
 
   let libraryManga: Manga[] = $state([])
 
-  let ctrl:            AbortController | null         = null
+  let ctrl:            AbortController | null              = null
   let statusPollTimer: ReturnType<typeof setTimeout> | null = null
 
   onMount(() => {
@@ -221,8 +221,11 @@
     try {
       if (updaterRunning) {
         await getAdapter().stopLibraryUpdate()
+        updaterRunning = false
+        stopStatusPolling()
       } else {
         await getAdapter().startLibraryUpdate()
+        updaterRunning = true
         scheduleStatusPoll()
       }
     } catch (e: any) {
@@ -239,11 +242,13 @@
     {historyConfirmClear}
     hasHistory={historyState.sessions.length > 0}
     {updatesLoading}
+    {updaterRunning}
     onTabChange={(t) => tab = t}
     onHistorySearchChange={(v) => historySearch = v}
     onUpdatesSearchChange={(v) => updatesSearch = v}
     onHistoryClear={handleHistoryClear}
     onRefreshUpdates={() => loadUpdates(true)}
+    onToggleUpdate={toggleLibraryUpdate}
   />
 
   <div class="content">

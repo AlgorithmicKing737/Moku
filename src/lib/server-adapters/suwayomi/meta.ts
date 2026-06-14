@@ -103,3 +103,19 @@ export const SET_FLARE_SOLVERR = `
     }
   }
 `
+
+export const LOGIN_MUTATION = `
+  mutation Login($username: String!, $password: String!) {
+    login(input: { username: $username, password: $password }) {
+      accessToken refreshToken
+    }
+  }
+`
+
+export const REFRESH_MUTATION = `
+  mutation RefreshToken($refreshToken: String!) {
+    refreshToken(input: { refreshToken: $refreshToken }) {
+      accessToken
+    }
+  }
+`

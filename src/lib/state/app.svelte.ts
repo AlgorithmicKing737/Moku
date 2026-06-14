@@ -1,6 +1,6 @@
 import type { Platform } from '$lib/platform-adapters/types'
 
-export type AppStatus = 'booting' | 'not-configured' | 'auth' | 'locked' | 'ready' | 'error'
+export type AppStatus = 'booting' | 'not-configured' | 'locked' | 'ready' | 'error'
 
 class AppStore {
   settingsOpen:    boolean             = $state(false)
@@ -23,6 +23,7 @@ export const app = new AppStore()
 
 export const appState = $state({
   status:        'booting' as AppStatus,
+  authRequired:  false     as boolean,
   error:         null      as string | null,
   serverUrl:     '',
   authenticated: false,

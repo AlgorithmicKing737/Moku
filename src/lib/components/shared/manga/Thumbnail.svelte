@@ -1,6 +1,9 @@
 <script lang="ts">
   import { settingsState } from "$lib/state/settings.svelte";
   import { getBlobUrl }    from "$lib/core/cache/imageCache";
+  import { appState } from "$lib/state/app.svelte";
+
+
 
   let {
     src,
@@ -17,8 +20,8 @@
     id?:       string | number;
     alt?:      string;
     class?:    string;
-    loading?:  string;
-    decoding?: string;
+    loading?:  "lazy" | "eager";
+    decoding?: "async" | "auto" | "sync";
     priority?: number;
     onerror?:  ((e: Event) => void) | undefined;
     [key: string]: any;
@@ -39,7 +42,7 @@
     return withBust(base);
   }
 
-  const isAuth = $derived((settingsState.settings.serverAuthMode ?? "NONE") !== "NONE");
+  const isAuth = $derived(appState.authMode !== "NONE");
 
   let blobUrl = $state("");
   let reqId   = 0;
@@ -59,7 +62,7 @@
   });
 
   const plainUrl = $derived(plainThumbUrl(src));
-  const resolved = $derived(isAuth ? (blobUrl || plainUrl) || undefined : plainUrl || undefined);
+  const resolved = $derived(isAuth ? (blobUrl || undefined) : (plainUrl || undefined));
 </script>
 
 <img src={resolved} {alt} class={cls} {loading} {decoding} {onerror} {...rest} />

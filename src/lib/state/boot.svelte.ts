@@ -1,13 +1,14 @@
 import { detectAdapter }      from '$lib/platform-adapters'
 import { initPlatformService } from '$lib/platform-service'
 import { platformService }     from '$lib/platform-service'
-import { probeServer, loginBasic, loginUI, configureAuth } from '$lib/core/auth'
+import { probeServer, loginBasic, loginUI, verifyBasicAuth, configureAuth } from '$lib/core/auth'
+import { authVerifiedState }   from '$lib/state/auth.svelte'
 import { appState }            from '$lib/state/app.svelte'
 import { settingsState }       from '$lib/state/settings.svelte'
 
-const MAX_ATTEMPTS    = 40
+const MAX_ATTEMPTS     = 40
 const WEB_MAX_ATTEMPTS = 1
-const BG_MAX_ATTEMPTS = 120
+const BG_MAX_ATTEMPTS  = 120
 
 export const boot = $state({
   failed:         false,
@@ -40,11 +41,12 @@ function pinLockEnabled(): boolean {
 
 function handleProbeSuccess(gen: number) {
   if (gen !== probeGeneration) return
-  boot.failed            = false
-  boot.skipped           = false
-  boot.serverProbeOk     = true
-  appState.authenticated = true
-  appState.status        = pinLockEnabled() ? 'locked' : 'ready'
+  boot.failed             = false
+  boot.skipped            = false
+  boot.serverProbeOk      = true
+  authVerifiedState.value = true
+  appState.authenticated  = true
+  appState.status         = pinLockEnabled() ? 'locked' : 'ready'
 }
 
 function handleAuthRequired(
@@ -59,20 +61,17 @@ function handleAuthRequired(
   appState.authMode = authMode
 
   if (authMode === 'BASIC_AUTH' && user && pass) {
+    // Saved creds — set optimistically; a real 401 will re-prompt via reportUnauthorized
     loginBasic(user, pass)
-      .then(() => { if (gen === probeGeneration) handleProbeSuccess(gen) })
-      .catch(() => {
-        if (gen !== probeGeneration) return
-        boot.loginUser     = user
-        boot.loginRequired = true
-        appState.status    = 'auth'
-      })
+    handleProbeSuccess(gen)
     return
   }
 
-  boot.loginUser     = user
-  boot.loginRequired = true
-  appState.status    = 'auth'
+  boot.loginUser          = user
+  boot.loginRequired      = true
+  authVerifiedState.value = false
+  appState.authRequired   = true
+  appState.status         = 'ready'   // let layout render, AuthGate overlay will block
 }
 
 export async function startProbe(
@@ -82,12 +81,13 @@ export async function startProbe(
   initialDelay = 100,
 ): Promise<void> {
   const gen = ++probeGeneration
-  boot.failed        = false
-  boot.loginRequired = false
-  boot.skipped       = false
-  boot.serverProbeOk = false
-  appState.status    = 'booting'
-  appState.authMode  = authMode
+  boot.failed             = false
+  boot.loginRequired      = false
+  boot.skipped            = false
+  boot.serverProbeOk      = false
+  authVerifiedState.value = false
+  appState.status         = 'booting'
+  appState.authMode       = authMode
 
   const baseUrl = settingsState.settings.serverUrl ?? 'http://127.0.0.1:4567'
   configureAuth(baseUrl, authMode, user || undefined, pass || undefined)
@@ -150,16 +150,18 @@ export async function submitLogin(): Promise<void> {
     if (appState.authMode === 'UI_LOGIN') {
       await loginUI(boot.loginUser.trim(), boot.loginPass.trim())
     } else {
-      await loginBasic(boot.loginUser.trim(), boot.loginPass.trim())
+      await verifyBasicAuth(boot.loginUser.trim(), boot.loginPass.trim())
     }
-    boot.loginRequired  = false
-    boot.sessionExpired = false
-    boot.skipped        = false
-    boot.loginPass      = ''
-    boot.loginError     = null
-    boot.serverProbeOk  = true
-    appState.authenticated = true
-    appState.status        = pinLockEnabled() ? 'locked' : 'ready'
+    boot.loginRequired      = false
+    boot.sessionExpired     = false
+    boot.skipped            = false
+    boot.loginPass          = ''
+    boot.loginError         = null
+    boot.serverProbeOk      = true
+    authVerifiedState.value = true
+    appState.authenticated  = true
+    appState.authRequired   = false
+    appState.status         = pinLockEnabled() ? 'locked' : 'ready'
   } catch (e: unknown) {
     boot.loginError = e instanceof Error ? e.message : 'Login failed'
   } finally {
@@ -184,9 +186,11 @@ export function bypassBoot(
   user = '',
   pass = '',
 ) {
-  boot.loginRequired  = false
-  boot.sessionExpired = false
-  boot.skipped        = true
-  appState.status     = 'ready'
+  boot.loginRequired      = false
+  boot.sessionExpired     = false
+  boot.skipped            = true
+  authVerifiedState.value = true   // user explicitly opted out of the auth gate
+  appState.authRequired   = false
+  appState.status         = 'ready'
   startBackgroundProbe(probeGeneration, authMode, user, pass)
 }

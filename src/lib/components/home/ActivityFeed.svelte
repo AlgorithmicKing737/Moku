@@ -19,7 +19,7 @@
   const entries = $derived(
     historyState.sessions
       .filter((s, i, arr) => arr.findIndex(x => x.mangaId === s.mangaId) === i)
-      .slice(0, 6)
+      .slice(0, 5)
   )
 </script>
 

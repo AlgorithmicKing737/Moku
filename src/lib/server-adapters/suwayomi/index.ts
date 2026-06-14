@@ -116,7 +116,7 @@ import {
   RESTORE_BACKUP,
   VALIDATE_BACKUP,
 } from './meta'
-import { authHeaders } from '$lib/core/auth'
+import { authHeaders, reportUnauthorized } from '$lib/core/auth'
 import {
   type GQLResponse,
   mapManga,
@@ -171,9 +171,9 @@ export class SuwayomiAdapter implements ServerAdapter {
   }
 
   private async gql<T>(
-    query: string,
+    query:      string,
     variables?: Record<string, unknown>,
-    signal?: AbortSignal,
+    signal?:    AbortSignal,
   ): Promise<T> {
     const res = await fetch(`${this.baseUrl}/api/graphql`, {
       method:  'POST',
@@ -181,10 +181,38 @@ export class SuwayomiAdapter implements ServerAdapter {
       body:    JSON.stringify({ query, variables }),
       signal,
     })
+    if (res.status === 401 || res.status === 403) {
+      reportUnauthorized()
+      throw new Error(`Suwayomi HTTP ${res.status}`)
+    }
     if (!res.ok) throw new Error(`Suwayomi HTTP ${res.status}`)
     const json: GQLResponse<T> = await res.json()
-    if (json.errors?.length) throw new Error(json.errors[0].message)
+    if (json.errors?.length) {
+      if (/unauthorized|unauthenticated/i.test(json.errors[0].message)) reportUnauthorized()
+      throw new Error(json.errors[0].message)
+    }
     return json.data
+  }
+
+  private multipartGql<T>(query: string, file: File): Promise<T> {
+    const form = new FormData()
+    form.append('operations', JSON.stringify({ query, variables: { backup: null } }))
+    form.append('map', JSON.stringify({ '0': ['variables.backup'] }))
+    form.append('0', file, file.name)
+    const headers: Record<string, string> = { Accept: 'application/json', ...authHeaders() }
+    return fetch(`${this.baseUrl}/api/graphql`, { method: 'POST', headers, body: form })
+      .then(r => {
+        if (r.status === 401 || r.status === 403) { reportUnauthorized(); throw new Error(`Suwayomi HTTP ${r.status}`) }
+        if (!r.ok) throw new Error(`Suwayomi HTTP ${r.status}`)
+        return r.json()
+      })
+      .then((json: GQLResponse<T>) => {
+        if (json.errors?.length) {
+          if (/unauthorized|unauthenticated/i.test(json.errors[0].message)) reportUnauthorized()
+          throw new Error(json.errors[0].message)
+        }
+        return json.data
+      })
   }
 
   async getAboutServer(): Promise<AboutServer> {
@@ -502,7 +530,6 @@ export class SuwayomiAdapter implements ServerAdapter {
     ids:   number[],
     patch: { includeInUpdate?: 'INCLUDE' | 'EXCLUDE'; includeInDownload?: 'INCLUDE' | 'EXCLUDE' },
   ): Promise<void> {
-    // Suwayomi has no bulk-category-patch mutation; fan out individually.
     await Promise.all(ids.map(id => this.gql(UPDATE_CATEGORY, { id, ...patch })))
   }
 
@@ -644,17 +671,6 @@ export class SuwayomiAdapter implements ServerAdapter {
   async createBackup(): Promise<{ url: string }> {
     const data = await this.gql<{ createBackup: { url: string } }>(CREATE_BACKUP)
     return data.createBackup
-  }
-
-  private multipartGql<T>(query: string, file: File): Promise<T> {
-    const form = new FormData()
-    form.append('operations', JSON.stringify({ query, variables: { backup: null } }))
-    form.append('map', JSON.stringify({ '0': ['variables.backup'] }))
-    form.append('0', file, file.name)
-    const headers: Record<string, string> = { Accept: 'application/json', ...authHeaders() }
-    return fetch(`${this.baseUrl}/api/graphql`, { method: 'POST', headers, body: form })
-      .then(r => { if (!r.ok) throw new Error(`Suwayomi HTTP ${r.status}`); return r.json() })
-      .then((json: GQLResponse<T>) => { if (json.errors?.length) throw new Error(json.errors[0].message); return json.data })
   }
 
   async restoreBackup(file: File): Promise<{ id: string; status: RestoreStatus }> {

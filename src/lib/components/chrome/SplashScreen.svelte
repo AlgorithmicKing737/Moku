@@ -47,6 +47,7 @@
     ringFull?:       boolean
     failed?:         boolean
     notConfigured?:  boolean
+    authRequired?:   boolean
     showCards?:      boolean
     showFps?:        boolean
     showDevOverlay?: boolean
@@ -56,14 +57,15 @@
     onUnlock?:       () => void
     onRetry?:        () => void
     onBypass?:       () => void
+    onSkip?:         () => void
     onDismiss?:      () => void
   }
 
   let {
     mode = 'loading', ringFull = false, failed = false,
-    notConfigured = false, showCards = true, showFps = false, showDevOverlay = false,
+    notConfigured = false, authRequired = false, showCards = true, showFps = false, showDevOverlay = false,
     pinLen = 4, pinCorrect = '',
-    onReady, onUnlock, onRetry, onBypass, onDismiss,
+    onReady, onUnlock, onRetry, onBypass, onSkip, onDismiss,
   }: Props = $props()
 
   let fpsEl    = $state<HTMLSpanElement | undefined>(undefined)
@@ -91,11 +93,10 @@
   const PHASE2_MS     = 10000
 
   function triggerExit(cb?: () => void) {
-    console.log('[splash] triggerExit called — exitLock:', exitLock, 'mode:', mode, 'cb:', cb?.name ?? String(cb))
-    if (exitLock) { console.log('[splash] triggerExit blocked by exitLock'); return }
+    if (exitLock) return
     exitLock = true
     exiting  = true
-    setTimeout(() => { console.log('[splash] triggerExit timeout — calling cb'); cb?.() }, EXIT_MS)
+    setTimeout(() => cb?.(), EXIT_MS)
   }
 
   let animFrame = 0
@@ -126,13 +127,13 @@
   })
 
   $effect(() => {
-    console.log('[splash] ringFull effect — ringFull:', ringFull, 'mode:', mode, 'exitLock:', exitLock)
     if (!ringFull || mode === 'locked') { exitLock = false; exiting = false; return }
     cancelAnimationFrame(animFrame)
     animFrame = 0
     ringProg  = 1
-    const t = setTimeout(() => { console.log('[splash] ringFull timeout firing — calling triggerExit(onReady)'); triggerExit(onReady) }, 650)
-    return () => { console.log('[splash] ringFull effect cleanup — cancelling timeout'); clearTimeout(t) }
+    if (authRequired) return
+    const t = setTimeout(() => triggerExit(onReady), 650)
+    return () => clearTimeout(t)
   })
 
   function submitPin() {
@@ -530,6 +531,13 @@
           <div class="error-actions">
             <button class="err-btn" onclick={() => onRetry?.()}>Retry</button>
             <button class="err-btn err-btn--primary" onclick={() => onBypass?.()}>Enter app</button>
+          </div>
+        </div>
+      {:else if authRequired && ringFull}
+        <div class="error-box anim-fade-up">
+          <p class="error-label">Waiting for login</p>
+          <div class="error-actions">
+            <button class="err-btn" onclick={() => { onSkip?.() }}>Skip</button>
           </div>
         </div>
       {:else}

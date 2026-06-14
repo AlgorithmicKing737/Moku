@@ -1,0 +1,1 @@
+export const authVerifiedState = $state({ value: false })

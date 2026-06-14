@@ -18,6 +18,7 @@
   import { downloadStore }                                              from '$lib/state/downloads.svelte'
   import { seriesState }                                                from '$lib/state/series.svelte'
   import MangaPreview                                                   from '$lib/components/shared/manga/MangaPreview.svelte'
+  import { authVerifiedState } from '$lib/state/auth.svelte'
   import '../app.css'
 
   let { children } = $props()
@@ -45,7 +46,6 @@
     appState.status === 'booting' ||
     appState.status === 'locked'  ||
     appState.status === 'error'   ||
-    appState.status === 'auth'    ||
     (appState.status === 'ready' && !splashDismissed)
   )
 
@@ -56,7 +56,7 @@
   const ringFull = $derived(appState.status === 'ready')
   const showApp  = $derived(!splashVisible)
 
-  function onSplashReady()  { splashDismissed = true }
+  function onSplashReady()  { if (!appState.authRequired || authVerifiedState.value) splashDismissed = true }
   function onSplashUnlock() { appState.status = 'ready'; splashDismissed = true }
   function onSplashBypass() {
     import('$lib/state/boot.svelte').then(({ bypassBoot }) => {
@@ -208,11 +208,13 @@
     {ringFull}
     failed={appState.status === 'error'}
     notConfigured={boot.notConfigured}
+    authRequired={appState.authRequired && !authVerifiedState.value}
     pinLen={settingsState.settings.appLockPin?.length ?? 0}
     pinCorrect={settingsState.settings.appLockPin ?? ''}
     onReady={onSplashReady}
     onUnlock={onSplashUnlock}
     onBypass={onSplashBypass}
+    onSkip={onSplashBypass}
     onRetry={onSplashRetry}
   />
 {/if}
