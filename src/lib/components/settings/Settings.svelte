@@ -4,7 +4,7 @@
   import { settingsState, updateSettings } from '$lib/state/settings.svelte'
   import { eventToKeybind } from '$lib/core/keybinds/keybindEngine'
   import type { Keybinds } from '$lib/core/keybinds/defaultBinds'
-  import { anchorToModal } from '$lib/core/ui/selectPortal'
+  import { selectPortal } from '$lib/core/ui/selectPortal'
 
   import GeneralSettings     from './sections/GeneralSettings.svelte'
   import AppearanceSettings  from './sections/AppearanceSettings.svelte'
@@ -175,13 +175,13 @@
 
       <div class="s-content-body" bind:this={contentBodyEl}>
         {#if tab === 'general'}
-          <GeneralSettings {selectOpen} {closingSelect} {toggleSelect} {registerTrigger} {getTrigger} {anchorToModal} {modalEl} {anims} />
+          <GeneralSettings {selectOpen} {closingSelect} {toggleSelect} {registerTrigger} {getTrigger} {selectPortal} {modalEl} {anims} />
         {:else if tab === 'appearance'}
-          <AppearanceSettings {selectOpen} {closingSelect} {toggleSelect} {registerTrigger} {getTrigger} {anchorToModal} {modalEl} {anims} {onOpenThemeEditor} />
+          <AppearanceSettings {selectOpen} {closingSelect} {toggleSelect} {registerTrigger} {getTrigger} {selectPortal} {modalEl} {anims} {onOpenThemeEditor} />
         {:else if tab === 'reader'}
-          <ReaderSettings {selectOpen} {closingSelect} {toggleSelect} {registerTrigger} {getTrigger} {anchorToModal} {modalEl} {anims} />
+          <ReaderSettings {selectOpen} {closingSelect} {toggleSelect} {registerTrigger} {getTrigger} {selectPortal} {modalEl} {anims} />
         {:else if tab === 'library'}
-          <LibrarySettings {selectOpen} {closingSelect} {toggleSelect} {registerTrigger} {getTrigger} {anchorToModal} {modalEl} {anims} />
+          <LibrarySettings {selectOpen} {closingSelect} {toggleSelect} {registerTrigger} {getTrigger} {selectPortal} {modalEl} {anims} />
         {:else if tab === 'automation'}
           <AutomationSettings />
         {:else if tab === 'performance'}
@@ -189,13 +189,13 @@
         {:else if tab === 'keybinds'}
           <KeybindsSettings bind:listeningKey />
         {:else if tab === 'storage'}
-          <StorageSettings {selectOpen} {closingSelect} {toggleSelect} {registerTrigger} {getTrigger} {anchorToModal} {modalEl} />
+          <StorageSettings {selectOpen} {closingSelect} {toggleSelect} {registerTrigger} {getTrigger} {selectPortal} {modalEl} />
         {:else if tab === 'folders'}
           <FoldersSettings />
         {:else if tab === 'tracking'}
           <TrackingSettings />
         {:else if tab === 'security'}
-          <SecuritySettings {selectOpen} {toggleSelect} {registerTrigger} {getTrigger} {anchorToModal} {modalEl} />
+          <SecuritySettings {selectOpen} {toggleSelect} {registerTrigger} {getTrigger} {selectPortal} {modalEl} />
         {:else if tab === 'content'}
           <ContentSettings />
         {:else if tab === 'about'}

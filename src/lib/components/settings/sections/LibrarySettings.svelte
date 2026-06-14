@@ -2,16 +2,22 @@
   import { settingsState, updateSettings } from '$lib/state/settings.svelte'
   import { homeState } from '$lib/state/home.svelte'
   import type { Settings } from '$lib/types/settings'
+  import type { Action } from 'svelte/action'
 
   interface Props {
-    selectOpen: string | null
-    closingSelect?: string | null
-    toggleSelect: (id: string) => void
-    anims: boolean
+    selectOpen:      string | null
+    closingSelect?:  string | null
+    toggleSelect:    (id: string) => void
+    registerTrigger: (id: string, el: HTMLElement) => void
+    getTrigger:      (id: string) => HTMLElement | undefined
+    selectPortal:    Action<HTMLElement, HTMLElement | undefined>
+    anims:           boolean
   }
-  let { selectOpen, toggleSelect, anims }: Props = $props()
+  let { selectOpen, closingSelect, toggleSelect, registerTrigger, getTrigger, selectPortal, anims }: Props = $props()
 
   let triggerSortDir = $state<HTMLButtonElement>(null!)
+
+  $effect(() => { if (triggerSortDir) registerTrigger('sort-dir', triggerSortDir) })
 
   function clearHistory() {
     homeState.history = []
@@ -54,8 +60,8 @@
             <span>{{ 'desc':'Newest first','asc':'Oldest first' }[settingsState.settings.chapterSortDir]}</span>
             <svg class="s-select-caret" class:open={selectOpen === 'sort-dir'} width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6" fill="currentColor"/></svg>
           </button>
-          {#if selectOpen === 'sort-dir'}
-            <div class="s-select-menu" class:anims>
+          {#if selectOpen === 'sort-dir' || closingSelect === 'sort-dir'}
+            <div use:selectPortal={getTrigger('sort-dir')} class="s-select-menu" class:anims class:closing={closingSelect === 'sort-dir'}>
               {#each [['desc','Newest first'],['asc','Oldest first']] as [v, l]}
                 <button class="s-select-option" class:active={settingsState.settings.chapterSortDir === v} onclick={() => { updateSettings({ chapterSortDir: v as Settings['chapterSortDir'] }); toggleSelect('sort-dir') }}>{l}</button>
               {/each}
