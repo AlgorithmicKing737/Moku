@@ -4,6 +4,7 @@
   import { settingsState, updateSettings } from '$lib/state/settings.svelte'
   import { eventToKeybind } from '$lib/core/keybinds/keybindEngine'
   import type { Keybinds } from '$lib/core/keybinds/defaultBinds'
+  import { selectPortal } from '$lib/core/ui/selectPortal'
 
   import GeneralSettings     from './sections/GeneralSettings.svelte'
   import AppearanceSettings  from './sections/AppearanceSettings.svelte'
@@ -49,6 +50,7 @@
   let tabSlideDir        = $state<'up'|'down'>('down')
   let tabIconKey         = $state(0)
   let contentBodyEl: HTMLDivElement
+  let modalEl: HTMLDivElement
   let bugReporterOpen    = $state(false)
 
   $effect(() => { tab; tick().then(() => contentBodyEl?.scrollTo({ top: 0 })) })
@@ -89,6 +91,7 @@
   let selectOpen: string | null    = $state(null)
   let closingSelect: string | null = $state(null)
   const CLOSE_ANIM_MS = 120
+  const selectTriggers = new Map<string, HTMLElement>()
 
   function closeSelect() {
     if (!selectOpen) return
@@ -100,6 +103,14 @@
   function toggleSelect(id: string) {
     if (selectOpen === id) { closeSelect() }
     else { closingSelect = null; selectOpen = id }
+  }
+
+  function registerTrigger(id: string, el: HTMLElement) {
+    selectTriggers.set(id, el)
+  }
+
+  function getTrigger(id: string): HTMLElement | undefined {
+    return selectTriggers.get(id)
   }
 
   $effect(() => {
@@ -118,7 +129,7 @@
 <div class="s-backdrop" role="presentation" tabindex="-1"
   onclick={(e) => { if (e.target === e.currentTarget) close() }}
   onkeydown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); close() } }}>
-  <div class="s-modal" role="dialog" aria-label="Settings">
+  <div class="s-modal" role="dialog" aria-label="Settings" bind:this={modalEl}>
 
     <div class="s-sidebar">
       <p class="s-sidebar-title">Settings</p>
@@ -164,13 +175,13 @@
 
       <div class="s-content-body" bind:this={contentBodyEl}>
         {#if tab === 'general'}
-          <GeneralSettings {selectOpen} {closingSelect} {toggleSelect} {anims} />
+          <GeneralSettings {selectOpen} {closingSelect} {toggleSelect} {registerTrigger} {getTrigger} {selectPortal} {modalEl} {anims} />
         {:else if tab === 'appearance'}
-          <AppearanceSettings {selectOpen} {closingSelect} {toggleSelect} {anims} {onOpenThemeEditor} />
+          <AppearanceSettings {selectOpen} {closingSelect} {toggleSelect} {registerTrigger} {getTrigger} {selectPortal} {modalEl} {anims} {onOpenThemeEditor} />
         {:else if tab === 'reader'}
-          <ReaderSettings {selectOpen} {closingSelect} {toggleSelect} {anims} />
+          <ReaderSettings {selectOpen} {closingSelect} {toggleSelect} {registerTrigger} {getTrigger} {selectPortal} {modalEl} {anims} />
         {:else if tab === 'library'}
-          <LibrarySettings {selectOpen} {closingSelect} {toggleSelect} {anims} />
+          <LibrarySettings {selectOpen} {closingSelect} {toggleSelect} {registerTrigger} {getTrigger} {selectPortal} {modalEl} {anims} />
         {:else if tab === 'automation'}
           <AutomationSettings />
         {:else if tab === 'performance'}
@@ -178,13 +189,13 @@
         {:else if tab === 'keybinds'}
           <KeybindsSettings bind:listeningKey />
         {:else if tab === 'storage'}
-          <StorageSettings {selectOpen} {closingSelect} {toggleSelect} />
+          <StorageSettings {selectOpen} {closingSelect} {toggleSelect} {registerTrigger} {getTrigger} {selectPortal} {modalEl} />
         {:else if tab === 'folders'}
           <FoldersSettings />
         {:else if tab === 'tracking'}
           <TrackingSettings />
         {:else if tab === 'security'}
-          <SecuritySettings {selectOpen} {toggleSelect} />
+          <SecuritySettings {selectOpen} {toggleSelect} {registerTrigger} {getTrigger} {selectPortal} {modalEl} />
         {:else if tab === 'content'}
           <ContentSettings />
         {:else if tab === 'about'}

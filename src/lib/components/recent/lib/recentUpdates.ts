@@ -25,7 +25,10 @@ export interface UpdateStatus {
 }
 
 export function fetchedAtMs(item: Pick<RecentUpdate, 'fetchedAt'>): number {
-  const ts = item.fetchedAt ? new Date(item.fetchedAt).getTime() : Date.now()
+  if (!item.fetchedAt) return Date.now()
+  const numeric = Number(item.fetchedAt)
+  if (Number.isFinite(numeric)) return numeric * 1000
+  const ts = new Date(item.fetchedAt).getTime()
   return Number.isFinite(ts) ? ts : Date.now()
 }
 
@@ -42,10 +45,18 @@ export function parseServerTimestamp(value: unknown): number | null {
 
 export function groupUpdatesByDay(updates: RecentUpdate[]): UpdateGroup[] {
   const grouped: Record<string, RecentUpdate[]> = {}
+  const order: Record<string, number> = {}
   for (const item of updates) {
-    const label = dayLabel(fetchedAtMs(item))
-    if (!grouped[label]) grouped[label] = []
+    const ts = fetchedAtMs(item)
+    const label = dayLabel(ts)
+    if (!grouped[label]) {
+      grouped[label] = []
+      order[label] = ts
+    }
     grouped[label].push(item)
+    if (ts > order[label]) order[label] = ts
   }
-  return Object.entries(grouped).map(([label, items]) => ({ label, items }))
+  return Object.entries(grouped)
+    .sort(([a], [b]) => order[b] - order[a])
+    .map(([label, items]) => ({ label, items }))
 }

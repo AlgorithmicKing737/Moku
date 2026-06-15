@@ -1,21 +1,13 @@
-import { detectAdapter }                              from '$lib/platform-adapters'
-import { initPlatformService }                        from '$lib/platform-service'
-import { initRequestManager }                         from '$lib/request-manager'
-import { appState }                                   from '$lib/state/app.svelte'
-import { configureAuth, probeServer }                 from '$lib/core/auth'
-import { loadSettings, loadLibrary, loadUpdates }     from '$lib/core/persistence/persist'
-import { loadSettingsIntoState }                      from '$lib/state/settings.svelte'
-import { historyState }                               from '$lib/state/history.svelte'
-import { readerState }                                from '$lib/state/reader.svelte'
-
-const KEY_URL  = 'moku_server_url'
-const KEY_AUTH = 'moku_auth_config'
-
-interface SavedAuth {
-  mode: 'NONE' | 'BASIC_AUTH' | 'UI_LOGIN'
-  user?: string
-  pass?: string
-}
+import { detectAdapter }                          from '$lib/platform-adapters'
+import { initPlatformService }                    from '$lib/platform-service'
+import { initRequestManager }                     from '$lib/request-manager'
+import { appState }                               from '$lib/state/app.svelte'
+import { configureAuth, probeServer }             from '$lib/core/auth'
+import { loadSettings, loadLibrary }              from '$lib/core/persistence/persist'
+import { loadSettingsIntoState, settingsState }   from '$lib/state/settings.svelte'
+import { historyState }                           from '$lib/state/history.svelte'
+import { readerState }                            from '$lib/state/reader.svelte'
+import { seriesState }                            from '$lib/state/series.svelte'
 
 async function boot() {
   try {
@@ -40,34 +32,32 @@ async function boot() {
 
     const [libraryData] = await Promise.all([
       loadLibrary(),
-      loadUpdates(),
     ])
 
-    readerState.bookmarks = libraryData.bookmarks
+    seriesState.bookmarks = libraryData.bookmarks
     readerState.markers   = libraryData.markers
     historyState.load(libraryData.sessions, libraryData.dailyReadCounts)
 
-    const savedUrl     = (await platformAdapter.getCredential(KEY_URL)) ?? 'http://127.0.0.1:4567'
-    const savedAuthRaw = await platformAdapter.getCredential(KEY_AUTH)
-    const savedAuth: SavedAuth = savedAuthRaw ? JSON.parse(savedAuthRaw) : { mode: 'NONE' }
+    const savedUrl  = settingsState.settings.serverUrl      ?? 'http://127.0.0.1:4567'
+    const authMode  = settingsState.settings.serverAuthMode ?? 'NONE'
+    const authUser  = settingsState.settings.serverAuthUser || undefined
+    const authPass  = settingsState.settings.serverAuthPass || undefined
 
     appState.serverUrl = savedUrl
-    appState.authMode  = savedAuth.mode
-    appState.authUser  = savedAuth.user ?? ''
-    appState.authPass  = savedAuth.pass ?? ''
+    appState.authMode  = authMode === 'SIMPLE_LOGIN' ? 'UI_LOGIN' : authMode
 
-    configureAuth(savedUrl, savedAuth.mode, savedAuth.user, savedAuth.pass)
+    configureAuth(savedUrl, authMode, authUser, authPass)
 
     await serverAdapter.connect({
       baseUrl: savedUrl,
       credentials:
-        savedAuth.mode === 'BASIC_AUTH' && savedAuth.user && savedAuth.pass
-          ? { username: savedAuth.user, password: savedAuth.pass }
+        authMode === 'BASIC_AUTH' && authUser && authPass
+          ? { username: authUser, password: authPass }
           : undefined,
     })
 
     const isTauri         = platformAdapter.platform === 'tauri'
-    const autoStartServer = settingsData.settings.autoStartServer ?? false
+    const autoStartServer = settingsState.settings.autoStartServer
 
     if (isTauri && autoStartServer) {
       appState.status = 'booting'

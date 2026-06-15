@@ -1,5 +1,5 @@
 {
-  moku = "0.9.4";
+  moku = "0.10.1";
 
   suwayomi = {
     version = "2.2.2196";
@@ -11,9 +11,9 @@
   };
 
   frontend = {
-    pnpmHash   = "sha256-18twdFhprV9v9hzvqxuVDHD6Tm4zHNDJs7s6l/7ClBo=";
+    pnpmHash   = "sha256-fBkNpQXEeGZNbrpx7+0xVYYtQ6dGvpgRflCGPoxvnVY=";
     distHash   = "7db288b4b54277aa82b6ec5b21fc31a1e71f8246c50a74777500083b806c1fa5";
-    distHashSri = "sha256-fbiiu0tCd6qCtu+SIfw+aR8Yj2bFCnR3dQAIO4BvwfM=";
+    distHashSri = "sha256-lR00QjVP+htsQQk0mypQVOUvA891Y4stRU6Tc0G8k7o=";
   };
 
   gitDeps = {
@@ -21,5 +21,5 @@
   };
 
   gitCommit  = "239960683b6c7f1347e1798b0e179a8a46628728";
-  tarballHash = "";
+  tarballHash = "dd4807d1c1d7fe7baa8ea27d049c787072e71ec80d5ce9aac21c74ecb43b476d";
 }

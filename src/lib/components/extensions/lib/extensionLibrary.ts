@@ -4,7 +4,7 @@ export interface LibraryManga {
   thumbnailUrl: string;
   unreadCount: number;
   downloadCount: number;
-  source: { id: string; displayName: string };
+  source: { id: string; displayName: string } | null;
 }
 
 export interface SourceLibrary {
@@ -17,7 +17,7 @@ export type SourceNode = {
   id: string;
   displayName: string;
   isConfigurable: boolean;
-  extension: { pkgName: string };
+  extension?: { pkgName: string };
 };
 
 export function libraryByExtension(
@@ -31,7 +31,7 @@ export function libraryByExtension(
   const bySource = new Map<string, LibraryManga[]>();
   for (const src of pkgSources) bySource.set(src.id, []);
   for (const m of libraryManga) {
-    if (sourceIds.has(m.source.id)) bySource.get(m.source.id)!.push(m);
+    if (m.source && sourceIds.has(m.source.id)) bySource.get(m.source.id)!.push(m);
   }
 
   return pkgSources
@@ -49,6 +49,7 @@ export function libraryCountByPkg(
   }
   const counts: Record<string, number> = {};
   for (const m of libraryManga) {
+    if (!m.source) continue;
     const pkg = sourceIdToPkg.get(m.source.id);
     if (pkg) counts[pkg] = (counts[pkg] ?? 0) + 1;
   }

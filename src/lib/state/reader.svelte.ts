@@ -1,5 +1,5 @@
 import type { Manga, Chapter }      from "$lib/types";
-import type { BookmarkEntry, MarkerEntry, MarkerColor } from "$lib/types/history";
+import type { MarkerEntry, MarkerColor } from "$lib/types/history";
 import type { MangaPrefs, ReaderSettings, ReaderPreset } from "$lib/types/settings";
 import { settingsState, updateSettings }                 from "$lib/state/settings.svelte";
 import { seriesState }                                   from "$lib/state/series.svelte";
@@ -39,7 +39,6 @@ class ReaderState {
 
   pageUrls          = $state<string[]>([]);
   pageNumber        = $state(1);
-  bookmarks         = $state<BookmarkEntry[]>([]);
   markers           = $state<MarkerEntry[]>([]);
 
   loading          = $state(true);
@@ -145,17 +144,6 @@ class ReaderState {
     this.markerOpen   = false;
     this.markerNote   = "";
     this.markerEditId = "";
-  }
-
-  addBookmark(entry: Omit<BookmarkEntry, "savedAt">) {
-    this.bookmarks = [
-      { ...entry, savedAt: Date.now() },
-      ...this.bookmarks.filter(b => b.mangaId !== entry.mangaId),
-    ].slice(0, 200);
-  }
-
-  removeBookmark(chapterId: number) {
-    this.bookmarks = this.bookmarks.filter(b => b.chapterId !== chapterId);
   }
 
   addMarker(entry: Omit<MarkerEntry, "id" | "createdAt">): string {

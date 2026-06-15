@@ -3,6 +3,7 @@
     MagnifyingGlass, Books, DownloadSimple, Folder, FolderSimple,
     SortAscending, CaretUp, CaretDown, ArrowsClockwise, Star, X, CheckSquare,
   } from "phosphor-svelte";
+  import { canOpenFolder }  from "$lib/core/filesystem";
   import LibraryFilters from "./LibraryFilters.svelte";
   import type { Category } from "$lib/types";
   import type { LibrarySortOption, LibrarySortDir, LibraryStatusFilter, LibraryContentFilter } from "$lib/state/library.svelte";
@@ -62,7 +63,14 @@
     onTabDragStart, onTabDragOver, onTabDragLeave, onTabDrop, onTabDragEnd,
   }: Props = $props();
 
+  let wheelTimer: ReturnType<typeof setTimeout> | null = null
+
   function onTabsWheel(e: WheelEvent) {
+    if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return
+    e.preventDefault()
+    tabsEl?.scrollBy({ left: e.deltaY * 0.5, behavior: "instant" })
+    if (wheelTimer) return
+    wheelTimer = setTimeout(() => { wheelTimer = null }, 180)
     const ids = visibleTabIds.filter(id => id === "library" || id === "downloaded" || visibleCategories.some(c => String(c.id) === id));
     const idx = ids.indexOf(tab);
     if (e.deltaY > 0 && idx < ids.length - 1) onTabChange(ids[idx + 1]);
@@ -165,9 +173,11 @@
       </button>
     {/if}
 
-    <button class="icon-btn" title="Open downloads folder" onclick={onOpenDownloadsFolder}>
-      <FolderSimple size={15} weight="bold" />
-    </button>
+    {#if canOpenFolder()}
+      <button class="icon-btn" title="Open downloads folder" onclick={onOpenDownloadsFolder}>
+        <FolderSimple size={15} weight="bold" />
+      </button>
+    {/if}
 
     <div class="sort-panel-wrap">
       <button

@@ -4,15 +4,22 @@
 
   const isTauri = platformService.platform === 'tauri'
 
+  import { selectPortal as _defaultPortal } from '$lib/core/ui/selectPortal'
+  import type { Action } from 'svelte/action'
+
   interface Props {
-    selectOpen: string | null
-    closingSelect: string | null
-    toggleSelect: (id: string) => void
-    anims: boolean
+    selectOpen:      string | null
+    closingSelect:   string | null
+    toggleSelect:    (id: string) => void
+    registerTrigger: (id: string, el: HTMLElement) => void
+    getTrigger:      (id: string) => HTMLElement | undefined
+    selectPortal:    Action<HTMLElement, HTMLElement | undefined>
+    anims:           boolean
   }
-  let { selectOpen, closingSelect, toggleSelect, anims }: Props = $props()
+  let { selectOpen, closingSelect, toggleSelect, registerTrigger, getTrigger, selectPortal, anims }: Props = $props()
 
   let triggerIdleTimeout = $state<HTMLButtonElement>(null!)
+  $effect(() => { if (triggerIdleTimeout) registerTrigger('idle-timeout', triggerIdleTimeout) })
   let serverAdvancedOpen = $state(false)
 
   async function pickServerBinary() {
@@ -138,7 +145,7 @@
             <svg class="s-select-caret" class:open={selectOpen === 'idle-timeout'} width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6" fill="currentColor"/></svg>
           </button>
           {#if selectOpen === 'idle-timeout' || closingSelect === 'idle-timeout'}
-            <div class="s-select-menu" class:anims class:closing={closingSelect === 'idle-timeout'}>
+            <div use:selectPortal={getTrigger('idle-timeout')} class="s-select-menu" class:anims class:closing={closingSelect === 'idle-timeout'}>
               {#each [['0','Never'],['1','1 minute'],['2','2 minutes'],['5','5 minutes'],['10','10 minutes'],['15','15 minutes'],['30','30 minutes']] as [v, l]}
                 <button class="s-select-option" class:active={String(settingsState.settings.idleTimeoutMin ?? 5) === v} onclick={() => { updateSettings({ idleTimeoutMin: Number(v) }); toggleSelect('idle-timeout') }}>{l}</button>
               {/each}

@@ -1,3 +1,7 @@
+import { appState }         from '$lib/state/app.svelte'
+import { authVerifiedState } from '$lib/state/auth.svelte'
+import { LOGIN_MUTATION, REFRESH_MUTATION } from '$lib/server-adapters/suwayomi/meta'
+
 const DEFAULT_URL = 'http://127.0.0.1:4567'
 const SKEW_MS     = 60_000 * 2
 
@@ -24,6 +28,7 @@ let accessToken:     string | null = null
 let refreshToken:    string | null = null
 let accessExpiresAt: number | null = null
 let refreshInFlight                = false
+let authSnoozed                    = false
 
 function parseExpiry(token: string): number | null {
   try {
@@ -56,16 +61,34 @@ export function getUiAuthDebugStatus(): UiAuthDebugStatus {
   }
 }
 
+export function reportUnauthorized(): void {
+  if (config.mode === 'NONE') return
+  if (authSnoozed) return
+  appState.authRequired   = true
+  authVerifiedState.value = false
+}
+
+export function reportAuthOk(): void {
+  appState.authRequired = false
+}
+
+export function snoozeAuthPrompt(): void {
+  authSnoozed = true
+  appState.authRequired = false
+}
+
 export function configureAuth(
   baseUrl: string,
   mode:    'NONE' | 'BASIC_AUTH' | 'UI_LOGIN',
   user?:   string,
   pass?:   string,
 ): void {
-  config      = { baseUrl: baseUrl.replace(/\/$/, ''), mode, user, pass }
-  accessToken     = null
-  refreshToken    = null
-  accessExpiresAt = null
+  config                = { baseUrl: baseUrl.replace(/\/$/, ''), mode, user, pass }
+  accessToken            = null
+  refreshToken           = null
+  accessExpiresAt        = null
+  authSnoozed            = false
+  appState.authRequired  = false
 }
 
 export function authHeaders(): Record<string, string> {
@@ -86,9 +109,16 @@ async function gql<T>(query: string, variables?: Record<string, unknown>, bare =
     headers,
     body:    JSON.stringify({ query, variables }),
   })
+  if (res.status === 401 || res.status === 403) {
+    reportUnauthorized()
+    throw new Error(`HTTP ${res.status}`)
+  }
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   const json = await res.json()
-  if (json.errors?.length) throw new Error(json.errors[0].message)
+  if (json.errors?.length) {
+    if (/unauthorized|unauthenticated/i.test(json.errors[0].message)) reportUnauthorized()
+    throw new Error(json.errors[0].message)
+  }
   return json.data as T
 }
 
@@ -109,34 +139,33 @@ export async function probeServer(): Promise<'ok' | 'auth_required' | 'unreachab
   } catch { return 'unreachable' }
 }
 
-const LOGIN_MUTATION = `
-  mutation Login($username: String!, $password: String!) {
-    login(input: { username: $username, password: $password }) {
-      accessToken refreshToken
-    }
-  }
-`
+export function loginBasic(user: string, pass: string): void {
+  config.user = user
+  config.pass = pass
+  config.mode = 'BASIC_AUTH'
+  authSnoozed = false
+  reportAuthOk()
+}
 
-const REFRESH_MUTATION = `
-  mutation RefreshToken($refreshToken: String!) {
-    refreshToken(input: { refreshToken: $refreshToken }) {
-      accessToken
-    }
-  }
-`
-
-export async function loginBasic(user: string, pass: string): Promise<void> {
+/**
+ * Verify basic-auth credentials by making a real GQL request with them.
+ * Throws if the server returns 401/403 or an auth error.
+ */
+export async function verifyBasicAuth(user: string, pass: string): Promise<void> {
   const prev = { user: config.user, pass: config.pass, mode: config.mode }
   config.user = user
   config.pass = pass
   config.mode = 'BASIC_AUTH'
-  const probe = await probeServer()
-  if (probe !== 'ok') {
+  try {
+    await gql<unknown>('{ settings { authMode } }')
+  } catch {
     config.user = prev.user
     config.pass = prev.pass
     config.mode = prev.mode as typeof config.mode
     throw new Error('Invalid credentials')
   }
+  authSnoozed = false
+  reportAuthOk()
 }
 
 export async function loginUI(user: string, pass: string): Promise<void> {
@@ -148,6 +177,8 @@ export async function loginUI(user: string, pass: string): Promise<void> {
   accessExpiresAt = parseExpiry(accessToken)
   config.mode     = 'UI_LOGIN'
   config.user     = user
+  authSnoozed     = false
+  reportAuthOk()
 }
 
 export async function refreshUiAccessToken(force = false): Promise<string | null> {
@@ -163,8 +194,10 @@ export async function refreshUiAccessToken(force = false): Promise<string | null
     )
     accessToken     = data.refreshToken.accessToken
     accessExpiresAt = parseExpiry(accessToken)
+    reportAuthOk()
     return accessToken
   } catch {
+    reportUnauthorized()
     return null
   } finally {
     refreshInFlight = false

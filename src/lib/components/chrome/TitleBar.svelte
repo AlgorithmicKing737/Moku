@@ -16,15 +16,22 @@
   let closeDialogOpen = $state(false)
   let closeRemember   = $state(false)
 
-  onMount(async () => {
-    isFullscreen = await win.isFullscreen()
-    const unlistenResize = await win.onResized(async () => {
+  onMount(() => {
+    let unlistenResize: (() => void) | undefined
+    let unlistenClose:  (() => void) | undefined
+
+    win.isFullscreen().then(v => { isFullscreen = v })
+
+    win.onResized(async () => {
       isFullscreen = await win.isFullscreen()
-    })
-    const unlistenClose = await win.listen('tauri://close-requested', handleCloseRequested)
+    }).then(u => { unlistenResize = u })
+
+    win.listen('tauri://close-requested', handleCloseRequested)
+      .then(u => { unlistenClose = u })
+
     return () => {
-      unlistenResize()
-      unlistenClose()
+      unlistenResize?.()
+      unlistenClose?.()
     }
   })
 
@@ -55,6 +62,10 @@
     closeRemember = false
     if (choice === 'tray') await doHide()
     else await doQuit()
+  }
+
+  function onBackdropKey(e: KeyboardEvent) {
+    if (e.key === 'Escape') { closeDialogOpen = false; closeRemember = false }
   }
 </script>
 
@@ -99,8 +110,21 @@
 {/if}
 
 {#if closeDialogOpen}
-  <div class="close-backdrop" role="presentation" onclick={() => { closeDialogOpen = false; closeRemember = false; }}>
-    <div class="close-dialog" role="dialog" aria-modal="true" onclick={(e) => e.stopPropagation()}>
+  <div
+    class="close-backdrop"
+    role="presentation"
+    onclick={() => { closeDialogOpen = false; closeRemember = false }}
+    onkeydown={onBackdropKey}
+  >
+    <div
+      class="close-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Close Moku"
+      tabindex="-1"
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => e.stopPropagation()}
+    >
       <div class="close-header">
         <p class="close-title">Close Moku?</p>
         <p class="close-sub">Choose how the app should exit.</p>
@@ -169,6 +193,7 @@
       0 24px 64px rgba(0,0,0,0.7),
       0 8px 24px rgba(0,0,0,0.4);
     animation: cdPop 0.22s cubic-bezier(0.16,1,0.3,1) both;
+    outline: none;
   }
   @keyframes cdPop { from { opacity: 0; transform: scale(0.96) translateY(6px) } to { opacity: 1; transform: none } }
 

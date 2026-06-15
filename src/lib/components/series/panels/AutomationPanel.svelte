@@ -1,6 +1,6 @@
 <script lang="ts">
   import { X }          from "phosphor-svelte";
-  import { getPref, setPref } from "$lib/components/series/lib/mangaPrefs";
+  import { getPref, setPref } from "$lib/state/series.svelte";
   import { settingsState }    from "$lib/state/settings.svelte";
   import { libraryState }     from "$lib/state/library.svelte";
   import { resolvedCover }    from "$lib/core/cover/coverResolver";

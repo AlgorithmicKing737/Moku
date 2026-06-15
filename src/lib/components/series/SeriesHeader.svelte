@@ -163,7 +163,7 @@
         <Play size={12} weight="fill" />
         {continueChapter.type === 'reread' ? 'Read again'
           : continueChapter.type === 'start' ? 'Start reading'
-          : `Continue · Ch.${continueChapter.chapter.chapterNumber}${continueChapter.resumePage ? ` p.${continueChapter.resumePage}` : ''}`}
+          : `Continue · Ch.${continueChapter.chapter.chapterNumber}`}
       </button>
     {/if}
     <div class="actions">

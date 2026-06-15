@@ -6,12 +6,13 @@
   import { historyState }            from '$lib/state/history.svelte'
   import { setActiveManga, openReaderForChapter, setPreviewManga } from '$lib/state/series.svelte'
   import { addToast }           from '$lib/state/notifications.svelte'
+  import { downloadStore }      from '$lib/state/downloads.svelte'
   import { groupByDay }                                from './lib/recentHistory'
   import { fetchedAtMs, parseServerTimestamp, groupUpdatesByDay } from './lib/recentUpdates'
   import RecentToolbar  from './RecentToolbar.svelte'
   import UpdatesTab     from './UpdatesTab.svelte'
   import HistoryTab     from './HistoryTab.svelte'
-  import type { Manga } from '$lib/types'
+  import type { Manga, Chapter } from '$lib/types'
   import type { RecentUpdate, UpdateGroup } from './lib/recentUpdates'
   import type { HistoryGroup }              from './lib/recentHistory'
 
@@ -27,6 +28,7 @@
   let updatesLoading:      boolean        = $state(true)
   let updatesError:        string | null  = $state(null)
   let openingId:           number | null  = $state(null)
+  let enqueueing:          Set<number>    = $state(new Set())
   let updaterRunning:      boolean        = $state(false)
   let lastUpdatedTs:       number | null  = $state(null)
   let updaterFinishedJobs: number | null  = $state(null)
@@ -34,7 +36,7 @@
 
   let libraryManga: Manga[] = $state([])
 
-  let ctrl:            AbortController | null         = null
+  let ctrl:            AbortController | null              = null
   let statusPollTimer: ReturnType<typeof setTimeout> | null = null
 
   onMount(() => {
@@ -120,9 +122,9 @@
       if (force) cache.clear(key)
 
       const [updatesRes, statusRes] = await Promise.all([
-        cache.get<RecentUpdate[]>(
+        cache.get<Chapter[]>(
           key,
-          () => getAdapter().getRecentlyUpdated(nextCtrl.signal),
+          () => getAdapter().getRecentlyUpdated(),
           RECENT_UPDATES_TTL_MS,
           CACHE_GROUPS.LIBRARY,
         ),
@@ -136,7 +138,7 @@
       if (nextCtrl.signal.aborted) return
 
       updates = (updatesRes ?? [])
-        .filter(item => item.manga?.inLibrary)
+        .map(item => ({ ...item, isRead: item.read }))
         .sort((a, b) => fetchedAtMs(b) - fetchedAtMs(a))
     } catch (e: any) {
       if (nextCtrl.signal.aborted) return
@@ -191,6 +193,45 @@
     clearHistory()
     historyConfirmClear = false
   }
+
+  async function enqueueUpdate(item: RecentUpdate) {
+    if (enqueueing.has(item.id)) return
+    enqueueing = new Set(enqueueing).add(item.id)
+    try {
+      const allowed = await downloadStore.enqueue(item.id)
+      if (allowed) addToast({ kind: 'download', title: 'Download queued', body: item.name ?? 'Chapter' })
+    } catch {
+      addToast({ kind: 'error', title: 'Download failed', body: 'Could not queue chapter.' })
+    } finally {
+      enqueueing.delete(item.id)
+      enqueueing = new Set(enqueueing)
+    }
+  }
+
+  async function deleteDownloaded(item: RecentUpdate) {
+    try {
+      await getAdapter().deleteDownloadedChapters([String(item.id)])
+      updates = updates.map(u => u.id === item.id ? { ...u, isDownloaded: false } : u)
+    } catch {
+      addToast({ kind: 'error', title: 'Delete failed', body: 'Could not delete download.' })
+    }
+  }
+
+  async function toggleLibraryUpdate() {
+    try {
+      if (updaterRunning) {
+        await getAdapter().stopLibraryUpdate()
+        updaterRunning = false
+        stopStatusPolling()
+      } else {
+        await getAdapter().startLibraryUpdate()
+        updaterRunning = true
+        scheduleStatusPoll()
+      }
+    } catch (e: any) {
+      addToast({ kind: 'error', title: 'Update error', body: e?.message ?? 'Failed' })
+    }
+  }
 </script>
 
 <div class="root anim-fade-in">
@@ -201,11 +242,13 @@
     {historyConfirmClear}
     hasHistory={historyState.sessions.length > 0}
     {updatesLoading}
+    {updaterRunning}
     onTabChange={(t) => tab = t}
     onHistorySearchChange={(v) => historySearch = v}
     onUpdatesSearchChange={(v) => updatesSearch = v}
     onHistoryClear={handleHistoryClear}
     onRefreshUpdates={() => loadUpdates(true)}
+    onToggleUpdate={toggleLibraryUpdate}
   />
 
   <div class="content">
@@ -215,13 +258,16 @@
         error={updatesError}
         groups={updateGroups}
         {updatesSearch}
-        totalCount={updates.length}
+        totalCount={updates.filter(u => !u.isRead).length}
         {openingId}
+        {enqueueing}
         {updaterRunning}
         {lastUpdatedLabel}
         {updaterProgressLabel}
         onOpenUpdate={openUpdate}
         onOpenSeries={(item) => setActiveManga(mangaStub(item))}
+        onEnqueue={enqueueUpdate}
+        onDeleteDownload={deleteDownloaded}
       />
     {:else}
       <HistoryTab

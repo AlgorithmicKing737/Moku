@@ -13,9 +13,9 @@
   import ExtensionLibrary       from "$lib/components/extensions/ExtensionLibrary.svelte";
 
   const anims      = $derived(settingsState.settings.qolAnimations ?? true);
-  const cols       = $derived(settingsState.settings.libraryCols   ?? 5);
-  const cropCovers = $derived(settingsState.settings.cropCovers    ?? true);
-  const statsAlways = $derived(settingsState.settings.statsAlways  ?? false);
+  const cols        = $derived(settingsState.settings.libraryPageSize ?? 5);
+  const cropCovers  = $derived(settingsState.settings.libraryCropCovers ?? true);
+  const statsAlways = $derived(settingsState.settings.libraryStatsAlways ?? false);
 
   let tabsEl       = $state<HTMLDivElement | undefined>(undefined);
   let tabIndicator = $state({ left: 0, width: 0 });
@@ -337,14 +337,14 @@
     {:else}
       <div class="list">
         {#if showLocal}
-          <div class="local-row" style="cursor:pointer" onclick={() => libraryTarget = { pkgName: '__local__', extensionName: 'Local Source', iconUrl: '' }}>
+          <button type="button" class="local-row" onclick={() => libraryTarget = { pkgName: '__local__', extensionName: 'Local Source', iconUrl: '' }}>
             <div class="local-icon"><HardDrives size={18} weight="bold" /></div>
             <div class="info">
               <span class="name">Local Source</span>
-              <span class="meta">Built-in · {localMangaCount} {localMangaCount === 1 ? "manga" : "manga"}</span>
+              <span class="meta">Built-in · {localMangaCount} {localMangaCount === "1" ? "manga" : "mangas"}</span>
             </div>
             <span class="local-badge">Built-in</span>
-          </div>
+          </button>
         {/if}
         {#each groups as { base, primary, variants }}
           <ExtensionCard
@@ -404,8 +404,7 @@
   .repo-remove { display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: var(--radius-sm); color: var(--text-faint); flex-shrink: 0; transition: color var(--t-base), background var(--t-base); }
   .repo-remove:hover:not(:disabled) { color: var(--color-error); background: var(--bg-overlay); }
   @keyframes panelSlide { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
-  .local-row { display: flex; align-items: center; gap: var(--sp-3); padding: 8px var(--sp-3); border-radius: var(--radius-md); border: 1px solid transparent; transition: background var(--t-fast), border-color var(--t-fast); margin-bottom: 1px; }
-  .local-row:hover { background: var(--bg-raised); border-color: var(--border-dim); }
+  .local-row { display: flex; align-items: center; gap: var(--sp-3); padding: 8px var(--sp-3); border-radius: var(--radius-md); border: 1px solid transparent; transition: background var(--t-fast), border-color var(--t-fast); margin-bottom: 1px; width: 100%; text-align: left; background: none; font: inherit; cursor: pointer; }
   .local-icon { width: 32px; height: 32px; border-radius: var(--radius-md); background: var(--accent-muted); border: 1px solid var(--accent-dim); display: flex; align-items: center; justify-content: center; color: var(--accent-fg); flex-shrink: 0; }
   .info { flex: 1; display: flex; flex-direction: column; gap: 2px; overflow: hidden; }
   .name { font-size: var(--text-base); font-weight: var(--weight-medium); color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

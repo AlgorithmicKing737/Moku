@@ -10,20 +10,18 @@ export type { BookmarkEntry, MarkerEntry, MarkerColor } from '$lib/types/history
 export type { MangaPrefs }                              from '$lib/types/settings'
 
 export const DEFAULT_MANGA_PREFS: MangaPrefs = {
-  sortMode:           'source',
-  sortDir:            'asc',
-  preferredScanlator: '',
-  scanlatorFilter:    [],
-  scanlatorBlacklist: [],
-  scanlatorForce:     false,
-  autoDownload:       false,
-  downloadAhead:      0,
-  maxKeepChapters:    0,
-  deleteOnRead:       false,
-  deleteDelayHours:   0,
-  pauseUpdates:       false,
-  refreshInterval:    'global',
-  coverUrl:           '',
+  autoDownload:           false,
+  downloadAhead:          0,
+  deleteOnRead:           false,
+  deleteDelayHours:       0,
+  maxKeepChapters:        0,
+  pauseUpdates:           false,
+  refreshInterval:        'global',
+  preferredScanlator:     '',
+  scanlatorFilter:        [],
+  scanlatorBlacklist:     [],
+  scanlatorForce:         false,
+  autoDownloadScanlators: [],
 }
 
 const CHAPTER_TTL_MS = 2 * 60 * 1000
@@ -36,24 +34,25 @@ class SeriesStore {
   markers             = $state<MarkerEntry[]>([])
   acknowledgedUpdates = $state<Set<number>>(new Set())
 
-  #rawChapters  = $state<Map<number, Chapter[]>>(new Map())
-  #fetchedAt    = new Map<number, number>()
-  #abortCtrls   = new Map<number, AbortController>()
-  #loading      = $state<Set<number>>(new Set())
-  #errors       = $state<Map<number, string>>(new Map())
+  #rawChapters = $state<Map<number, Chapter[]>>(new Map())
+  #fetchedAt   = new Map<number, number>()
+  #abortCtrls  = new Map<number, AbortController>()
+  #loading     = $state<Set<number>>(new Set())
+  #errors      = $state<Map<number, string>>(new Map())
 
   readonly activeChapterList = $derived.by(() => {
     const id = this.activeManga?.id
     if (id == null) return []
-    const raw   = this.#rawChapters.get(id) ?? []
-    const prefs = settingsState.settings.mangaPrefs?.[id] ?? {}
+    const raw     = this.#rawChapters.get(id) ?? []
+    const prefs   = settingsState.settings.mangaPrefs?.[id] ?? {}
+    const globals = settingsState.settings
     return buildChapterList(raw, {
-      sortMode:           (prefs.sortMode           ?? DEFAULT_MANGA_PREFS.sortMode)           as MangaPrefs['sortMode'],
-      sortDir:            (prefs.sortDir             ?? DEFAULT_MANGA_PREFS.sortDir)             as MangaPrefs['sortDir'],
-      preferredScanlator: (prefs.preferredScanlator  ?? DEFAULT_MANGA_PREFS.preferredScanlator) as string,
-      scanlatorFilter:    (prefs.scanlatorFilter     ?? DEFAULT_MANGA_PREFS.scanlatorFilter)    as string[],
-      scanlatorBlacklist: (prefs.scanlatorBlacklist  ?? DEFAULT_MANGA_PREFS.scanlatorBlacklist) as string[],
-      scanlatorForce:     (prefs.scanlatorForce      ?? DEFAULT_MANGA_PREFS.scanlatorForce)     as boolean,
+      sortMode:           globals.chapterSortMode,
+      sortDir:            globals.chapterSortDir,
+      preferredScanlator: (prefs.preferredScanlator  ?? DEFAULT_MANGA_PREFS.preferredScanlator),
+      scanlatorFilter:    (prefs.scanlatorFilter     ?? DEFAULT_MANGA_PREFS.scanlatorFilter),
+      scanlatorBlacklist: (prefs.scanlatorBlacklist  ?? DEFAULT_MANGA_PREFS.scanlatorBlacklist),
+      scanlatorForce:     (prefs.scanlatorForce      ?? DEFAULT_MANGA_PREFS.scanlatorForce),
     })
   })
 
@@ -65,21 +64,21 @@ class SeriesStore {
     return buildChapterList(raw, {
       sortMode:           'source',
       sortDir:            'asc',
-      preferredScanlator: (prefs.preferredScanlator  ?? DEFAULT_MANGA_PREFS.preferredScanlator) as string,
-      scanlatorFilter:    (prefs.scanlatorFilter     ?? DEFAULT_MANGA_PREFS.scanlatorFilter)    as string[],
-      scanlatorBlacklist: (prefs.scanlatorBlacklist  ?? DEFAULT_MANGA_PREFS.scanlatorBlacklist) as string[],
-      scanlatorForce:     (prefs.scanlatorForce      ?? DEFAULT_MANGA_PREFS.scanlatorForce)     as boolean,
+      preferredScanlator: (prefs.preferredScanlator  ?? DEFAULT_MANGA_PREFS.preferredScanlator),
+      scanlatorFilter:    (prefs.scanlatorFilter     ?? DEFAULT_MANGA_PREFS.scanlatorFilter),
+      scanlatorBlacklist: (prefs.scanlatorBlacklist  ?? DEFAULT_MANGA_PREFS.scanlatorBlacklist),
+      scanlatorForce:     (prefs.scanlatorForce      ?? DEFAULT_MANGA_PREFS.scanlatorForce),
     })
   })
 
-  chaptersFor(mangaId: number): Chapter[]  { return this.#rawChapters.get(mangaId) ?? [] }
-  isLoadingChapters(mangaId: number)       { return this.#loading.has(mangaId) }
-  chapterError(mangaId: number)            { return this.#errors.get(mangaId) ?? null }
+  chaptersFor(mangaId: number): Chapter[] { return this.#rawChapters.get(mangaId) ?? [] }
+  isLoadingChapters(mangaId: number)      { return this.#loading.has(mangaId) }
+  chapterError(mangaId: number)           { return this.#errors.get(mangaId) ?? null }
 
   async loadChapters(mangaId: number, { force = false } = {}): Promise<void> {
-    const now     = Date.now()
+    const now    = Date.now()
     const stalest = this.#fetchedAt.get(mangaId) ?? 0
-    const fresh   = !force && this.#rawChapters.has(mangaId) && now - stalest < CHAPTER_TTL_MS
+    const fresh  = !force && this.#rawChapters.has(mangaId) && now - stalest < CHAPTER_TTL_MS
 
     if (fresh) return
 
@@ -127,13 +126,8 @@ class SeriesStore {
     this.#rawChapters = new Map(this.#rawChapters).set(mangaId, updater(current))
   }
 
-  setActiveManga(manga: Manga | null) {
-    this.activeManga = manga
-  }
-
-  setPreviewManga(manga: Manga | null) {
-    this.previewManga = manga
-  }
+  setActiveManga(manga: Manga | null)  { this.activeManga  = manga }
+  setPreviewManga(manga: Manga | null) { this.previewManga = manga }
 
   openReaderForChapter(chapter: Chapter, manga?: Manga | null) {
     if (manga !== undefined) this.activeManga = manga
@@ -189,9 +183,17 @@ class SeriesStore {
     ].slice(0, 200)
   }
 
-  removeBookmark(chapterId: number)  { this.bookmarks = this.bookmarks.filter(b => b.chapterId !== chapterId) }
-  clearBookmarks()                   { this.bookmarks = [] }
-  getBookmark(chapterId: number)     { return this.bookmarks.find(b => b.chapterId === chapterId) }
+  /** Sets the single "resume" bookmark for a manga, replacing any bookmark
+   *  that exists for that manga in a different chapter. */
+  setBookmark(entry: Omit<BookmarkEntry, 'savedAt'>, label?: string) {
+    const other = this.bookmarks.find(b => b.mangaId === entry.mangaId && b.chapterId !== entry.chapterId)
+    if (other) this.removeBookmark(other.chapterId)
+    this.addBookmark(entry, label)
+  }
+
+  removeBookmark(chapterId: number) { this.bookmarks = this.bookmarks.filter(b => b.chapterId !== chapterId) }
+  clearBookmarks()                  { this.bookmarks = [] }
+  getBookmark(chapterId: number)    { return this.bookmarks.find(b => b.chapterId === chapterId) }
 
   addMarker(entry: Omit<MarkerEntry, 'id' | 'createdAt'>): string {
     const id = Math.random().toString(36).slice(2)
@@ -203,11 +205,11 @@ class SeriesStore {
     this.markers = this.markers.map(m => m.id === id ? { ...m, ...patch, updatedAt: Date.now() } : m)
   }
 
-  removeMarker(id: string)                            { this.markers = this.markers.filter(m => m.id !== id) }
-  getMarkersForPage(chapterId: number, page: number)  { return this.markers.filter(m => m.chapterId === chapterId && m.pageNumber === page) }
-  getMarkersForChapter(chapterId: number)             { return this.markers.filter(m => m.chapterId === chapterId) }
-  getMarkersForManga(mangaId: number)                 { return this.markers.filter(m => m.mangaId === mangaId) }
-  clearMarkersForManga(mangaId: number)               { this.markers = this.markers.filter(m => m.mangaId !== mangaId) }
+  removeMarker(id: string)                           { this.markers = this.markers.filter(m => m.id !== id) }
+  getMarkersForPage(chapterId: number, page: number) { return this.markers.filter(m => m.chapterId === chapterId && m.pageNumber === page) }
+  getMarkersForChapter(chapterId: number)            { return this.markers.filter(m => m.chapterId === chapterId) }
+  getMarkersForManga(mangaId: number)                { return this.markers.filter(m => m.mangaId === mangaId) }
+  clearMarkersForManga(mangaId: number)              { this.markers = this.markers.filter(m => m.mangaId !== mangaId) }
 
   get settings() { return settingsState.settings }
 }
@@ -215,21 +217,22 @@ class SeriesStore {
 export const seriesState = new SeriesStore()
 export const seriesStore  = seriesState
 
-export function setActiveManga(next: Manga | null)                                                   { seriesState.setActiveManga(next) }
-export function setPreviewManga(next: Manga | null)                                                  { seriesState.setPreviewManga(next) }
-export function openReaderForChapter(ch: Chapter, manga?: Manga | null)                              { seriesState.openReaderForChapter(ch, manga) }
-export function closeReader()                                                                         { seriesState.closeReader() }
-export function acknowledgeUpdate(mangaId: number)                                                   { seriesState.acknowledgeUpdate(mangaId) }
-export function addBookmark(entry: Omit<BookmarkEntry, 'savedAt'>, label?: string)                   { seriesState.addBookmark(entry, label) }
-export function removeBookmark(chapterId: number)                                                    { seriesState.removeBookmark(chapterId) }
-export function clearBookmarks()                                                                      { seriesState.clearBookmarks() }
-export function getBookmark(chapterId: number)                                                       { return seriesState.getBookmark(chapterId) }
-export function addMarker(entry: Omit<MarkerEntry, 'id' | 'createdAt'>): string                      { return seriesState.addMarker(entry) }
-export function updateMarker(id: string, patch: Partial<Pick<MarkerEntry, 'note' | 'color'>>)        { seriesState.updateMarker(id, patch) }
-export function removeMarker(id: string)                                                              { seriesState.removeMarker(id) }
-export function getMarkersForPage(chapterId: number, page: number)                                   { return seriesState.getMarkersForPage(chapterId, page) }
-export function getMarkersForChapter(chapterId: number)                                              { return seriesState.getMarkersForChapter(chapterId) }
-export function getMarkersForManga(mangaId: number)                                                  { return seriesState.getMarkersForManga(mangaId) }
-export function clearMarkersForManga(mangaId: number)                                                { seriesState.clearMarkersForManga(mangaId) }
-export function getPref<K extends keyof MangaPrefs>(mangaId: number, key: K): MangaPrefs[K]          { return seriesState.getPref(mangaId, key) }
-export function setPref<K extends keyof MangaPrefs>(mangaId: number, key: K, v: MangaPrefs[K])       { seriesState.setPref(mangaId, key, v) }
+export function setActiveManga(next: Manga | null)                                                  { seriesState.setActiveManga(next) }
+export function setPreviewManga(next: Manga | null)                                                 { seriesState.setPreviewManga(next) }
+export function openReaderForChapter(ch: Chapter, manga?: Manga | null)                             { seriesState.openReaderForChapter(ch, manga) }
+export function closeReader()                                                                        { seriesState.closeReader() }
+export function acknowledgeUpdate(mangaId: number)                                                  { seriesState.acknowledgeUpdate(mangaId) }
+export function addBookmark(entry: Omit<BookmarkEntry, 'savedAt'>, label?: string)                  { seriesState.addBookmark(entry, label) }
+export function setBookmark(entry: Omit<BookmarkEntry, 'savedAt'>, label?: string)                  { seriesState.setBookmark(entry, label) }
+export function removeBookmark(chapterId: number)                                                   { seriesState.removeBookmark(chapterId) }
+export function clearBookmarks()                                                                     { seriesState.clearBookmarks() }
+export function getBookmark(chapterId: number)                                                      { return seriesState.getBookmark(chapterId) }
+export function addMarker(entry: Omit<MarkerEntry, 'id' | 'createdAt'>): string                     { return seriesState.addMarker(entry) }
+export function updateMarker(id: string, patch: Partial<Pick<MarkerEntry, 'note' | 'color'>>)       { seriesState.updateMarker(id, patch) }
+export function removeMarker(id: string)                                                             { seriesState.removeMarker(id) }
+export function getMarkersForPage(chapterId: number, page: number)                                  { return seriesState.getMarkersForPage(chapterId, page) }
+export function getMarkersForChapter(chapterId: number)                                             { return seriesState.getMarkersForChapter(chapterId) }
+export function getMarkersForManga(mangaId: number)                                                 { return seriesState.getMarkersForManga(mangaId) }
+export function clearMarkersForManga(mangaId: number)                                               { seriesState.clearMarkersForManga(mangaId) }
+export function getPref<K extends keyof MangaPrefs>(mangaId: number, key: K): MangaPrefs[K]         { return seriesState.getPref(mangaId, key) }
+export function setPref<K extends keyof MangaPrefs>(mangaId: number, key: K, v: MangaPrefs[K])      { seriesState.setPref(mangaId, key, v) }

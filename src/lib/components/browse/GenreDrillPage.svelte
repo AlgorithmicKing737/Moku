@@ -170,7 +170,7 @@
         label: "New folder & add",
         icon: FolderSimplePlusIcon,
         onClick: async () => {
-          const name = prompt("FolderIcon name:");
+          const name = prompt("Folder name:");
           if (!name?.trim()) return;
           const cat = await getAdapter().createCategory(name.trim()).catch(console.error);
           if (cat) {

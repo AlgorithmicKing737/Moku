@@ -129,9 +129,10 @@ export function buildIssueUrl(
 ): string {
   const base = 'https://github.com/moku-project/Moku/issues/new'
 
+  const prefix = type === 'bug' ? '[Bug] ' : '[Feature Request] '
   const common = {
     template:    type === 'bug' ? 'bug_report.yml' : 'feature_request.yml',
-    title,
+    title:       title.startsWith(prefix) ? title : `${prefix}${title}`,
     environment: buildEnvironmentBlock(serverVersion),
   }
 
@@ -149,6 +150,10 @@ export function buildIssueUrl(
         alternatives: (fields as FeatureFields).alternatives,
       }
 
-  const params = new URLSearchParams({ ...common, ...specific })
+  const merged: Record<string, string> = {}
+  for (const [k, v] of Object.entries({ ...common, ...specific })) {
+    if (v !== undefined) merged[k] = v
+  }
+  const params = new URLSearchParams(merged)
   return `${base}?${params.toString()}`
 }

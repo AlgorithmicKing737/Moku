@@ -8,13 +8,17 @@
     CheckCircle, Circle, ArrowFatLinesUp, ArrowFatLinesDown,
     ArrowFatLineUp, ArrowFatLineDown, Download, Trash, DownloadSimple, CheckSquare,
   } from 'phosphor-svelte'
-  import type { MenuEntry }            from '$lib/components/shared/ui/ContextMenu.svelte'
+
+  type MenuSeparator = { separator: true }
+  type MenuItem     = { label: string; icon?: any; onClick: () => void; danger?: boolean; disabled?: boolean; separator?: never; children?: MenuEntry[] }
+  type MenuEntry    = MenuItem | MenuSeparator
   import { getManga, getMangaList }    from '$lib/request-manager/manga'
   import { markChapterRead, markChaptersRead, deleteDownloadedChapters, fetchChapters } from '$lib/request-manager/chapters'
   import { downloadStore }             from '$lib/state/downloads.svelte'
   import { getCategories, updateMangaCategories, createCategory as createCategoryReq, updateManga } from '$lib/request-manager/manga'
   import { saveScroll, getScroll }     from '$lib/state/app.svelte'
   import { seriesState, openReaderForChapter, acknowledgeUpdate, addBookmark, clearMarkersForManga } from '$lib/state/series.svelte'
+  import { updateSettings } from '$lib/state/settings.svelte'
   import { DEFAULT_MANGA_PREFS }       from '$lib/state/series.svelte'
   import type { MangaPrefs }           from '$lib/types/settings'
   import { addToast }                  from '$lib/state/notifications.svelte'
@@ -33,8 +37,8 @@
   interface Props { mangaId: number }
   let { mangaId }: Props = $props()
 
-  const CHAPTERS_PER_PAGE = 25
-  const MANGA_TTL_MS      = 5 * 60 * 1000
+  let chaptersPerPage: number = $state(25)
+  const MANGA_TTL_MS  = 5 * 60 * 1000
 
   const mangaCache: Map<number, { data: Manga; fetchedAt: number }> = new Map()
 
@@ -80,8 +84,8 @@
   const scanlatorBlacklist = $derived(get('scanlatorBlacklist') as string[])
   const scanlatorForce     = $derived(get('scanlatorForce')     as boolean)
 
-  const totalPages      = $derived(Math.ceil(sortedChapters.length / CHAPTERS_PER_PAGE))
-  const pageChapters    = $derived(sortedChapters.slice((chapterPage - 1) * CHAPTERS_PER_PAGE, chapterPage * CHAPTERS_PER_PAGE))
+  const totalPages      = $derived(Math.ceil(sortedChapters.length / chaptersPerPage))
+  const pageChapters    = $derived(sortedChapters.slice((chapterPage - 1) * chaptersPerPage, chapterPage * chaptersPerPage))
   const readCount       = $derived(sortedChapters.filter(c => c.read).length)
   const totalCount      = $derived(sortedChapters.length)
   const progressPct     = $derived(totalCount > 0 ? (readCount / totalCount) * 100 : 0)
@@ -94,11 +98,11 @@
     const bookmark = seriesState.bookmarks.find(b => b.mangaId === mangaId)
     const bookmarkedCh = bookmark ? asc.find(c => c.id === bookmark.chapterId) : null
     if (bookmarkedCh && !bookmarkedCh.read)
-      return { chapter: bookmarkedCh, type: (anyRead ? 'continue' : 'start') as const, resumePage: bookmark!.pageNumber }
+      return { chapter: bookmarkedCh, type: (anyRead ? 'continue' : 'start') as 'continue' | 'start', resumePage: bookmark!.pageNumber }
     const inProgress  = asc.find(c => !c.read && (c.lastPageRead ?? 0) > 0)
     const firstUnread = asc.find(c => !c.read)
     const target      = inProgress ?? firstUnread
-    if (target) return { chapter: target, type: (anyRead ? 'continue' : 'start') as const, resumePage: null }
+    if (target) return { chapter: target, type: (anyRead ? 'continue' : 'start') as 'continue' | 'start', resumePage: null }
     return { chapter: asc[0], type: 'reread' as const, resumePage: null }
   })())
 
@@ -140,8 +144,13 @@
     const completed = allCategories.find(c => c.name === 'Completed')
     if (!completed) return
     const inCompleted = mangaCategories.some(c => c.id === completed.id)
-    if (allRead && !inCompleted)      mangaCategories = [...mangaCategories, completed]
-    else if (!allRead && inCompleted) mangaCategories = mangaCategories.filter(c => c.id !== completed.id)
+    if (allRead && !inCompleted) {
+      await updateMangaCategories(String(id), [completed.id], []).catch(console.error)
+      mangaCategories = [...mangaCategories, completed]
+    } else if (!allRead && inCompleted) {
+      await updateMangaCategories(String(id), [], [completed.id]).catch(console.error)
+      mangaCategories = mangaCategories.filter(c => c.id !== completed.id)
+    }
   }
 
   function loadMangaData(id: number) {
@@ -154,7 +163,6 @@
       loadingManga = false
       seriesState.setActiveManga(cached.data)
       if (Date.now() - cached.fetchedAt < MANGA_TTL_MS) return
-      // stale-while-revalidate: update cache + store in background
       getManga(id, ctrl.signal)
         .then(m => {
           if (ctrl.signal.aborted) return
@@ -224,8 +232,8 @@
     const records = trackingState.recordsFor(id)
     if (!records.length) return
     const prefs = {
-      sortMode:           get('sortMode'),
-      sortDir:            get('sortDir'),
+      sortMode:           seriesState.settings.chapterSortMode,
+      sortDir:            seriesState.settings.chapterSortDir,
       preferredScanlator: get('preferredScanlator') as string,
       scanlatorFilter:    scanlatorFilter,
       scanlatorBlacklist: scanlatorBlacklist,
@@ -278,7 +286,7 @@
     checkAndMarkCompleted(mangaId, seriesState.chaptersFor(mangaId))
     const ch = seriesState.chaptersFor(mangaId).find(c => c.id === chapterId)
     const currentPrefs = {
-      sortMode: get('sortMode'), sortDir: get('sortDir'),
+      sortMode: seriesState.settings.chapterSortMode, sortDir: seriesState.settings.chapterSortDir,
       preferredScanlator: get('preferredScanlator') as string,
       scanlatorFilter, scanlatorBlacklist, scanlatorForce,
     }
@@ -310,7 +318,7 @@
     seriesState.patchChapters(mangaId, chaps => chaps.map(c => idSet.has(c.id) ? { ...c, read: isRead } : c))
     checkAndMarkCompleted(mangaId, seriesState.chaptersFor(mangaId))
     const currentPrefs = {
-      sortMode: get('sortMode'), sortDir: get('sortDir'),
+      sortMode: seriesState.settings.chapterSortMode, sortDir: seriesState.settings.chapterSortDir,
       preferredScanlator: get('preferredScanlator') as string,
       scanlatorFilter, scanlatorBlacklist, scanlatorForce,
     }
@@ -431,21 +439,8 @@
     openReaderForChapter(ch, manga)
   }
 
-  function handleContinue(cc: typeof continueChapter) {
-    if (!cc) return
-    if (cc.type === 'continue' && cc.resumePage && cc.resumePage > 1) {
-      const existing = seriesState.bookmarks.find(b => b.chapterId === cc.chapter.id)
-      if (!existing || existing.pageNumber < cc.resumePage) {
-        addBookmark({
-          mangaId,
-          mangaTitle:   manga!.title,
-          thumbnailUrl: manga!.thumbnailUrl,
-          chapterId:    cc.chapter.id,
-          chapterName:  cc.chapter.name,
-          pageNumber:   cc.resumePage,
-        })
-      }
-    }
+  interface ContinueChapter { chapter: Chapter; type: 'start' | 'continue' | 'reread'; resumePage: number | null }
+  function handleContinue(cc: ContinueChapter) {
     openReaderForChapter(cc.chapter, manga)
   }
 
@@ -472,7 +467,7 @@
   async function toggleCategory(cat: Category) {
     const inCat = mangaCategories.some(c => c.id === cat.id)
     try {
-      await updateMangaCategories(mangaId, inCat ? [] : [cat.id], inCat ? [cat.id] : [])
+      await updateMangaCategories(String(mangaId), inCat ? [] : [cat.id], inCat ? [cat.id] : [])
       if (!inCat && !manga?.inLibrary) {
         await updateManga(mangaId, { inLibrary: true }).catch(console.error)
         if (manga) { manga = { ...manga, inLibrary: true }; seriesState.setActiveManga(manga) }
@@ -485,7 +480,7 @@
     if (!name) return
     try {
       const cat = await createCategoryReq(name)
-      await updateMangaCategories(mangaId, [cat.id], [])
+      await updateMangaCategories(String(mangaId), [cat.id], [])
       if (!manga?.inLibrary) {
         await updateManga(mangaId, { inLibrary: true }).catch(console.error)
         if (manga) { manga = { ...manga, inLibrary: true }; seriesState.setActiveManga(manga) }
@@ -514,7 +509,7 @@
     {loadingLinkList}
     {mangaCategories}
     {togglingLibrary}
-    onRead={handleContinue}
+    onRead={(ch) => handleContinue(ch)}
     onToggleLibrary={toggleLibrary}
     onDeleteAll={deleteAllDownloads}
     onMigrateOpen={() => migrateOpen = true}
@@ -526,15 +521,13 @@
     onGenreClick={(genre) => goto(`/browse?genre=${encodeURIComponent(genre)}`)}
   />
 
-  <div class="list-wrap">
+  <div class="list-wrap" bind:this={chapterListEl}>
     <SeriesActions
       {chapters}
       {sortedChapters}
-      sortMode={get('sortMode')}
-      sortDir={get('sortDir')}
+      sortMode={seriesState.settings.chapterSortMode}
+      sortDir={seriesState.settings.chapterSortDir}
       {viewMode}
-      {chapterPage}
-      {totalPages}
       {downloadedCount}
       {totalCount}
       {deletingAll}
@@ -564,8 +557,8 @@
       onSetScanlatorFilter={(v) => set('scanlatorFilter', v)}
       onSetScanlatorBlacklist={(v) => set('scanlatorBlacklist', v)}
       onSetScanlatorForce={(v) => set('scanlatorForce', v)}
-      onSortModeChange={(v) => set('sortMode', v)}
-      onSortDirChange={(v) => set('sortDir', v)}
+      onSortModeChange={(v) => updateSettings({ chapterSortMode: v })}
+      onSortDirChange={(v) => updateSettings({ chapterSortDir: v })}
       onOpenFolder={() => manga && openMangaFolder(manga)}
     />
 
@@ -578,12 +571,12 @@
       {enqueueing}
       {chapterPage}
       {totalPages}
-      bind:scrollEl={chapterListEl}
       onOpen={openReaderWithAhead}
       onToggleSelect={toggleSelect}
       onEnqueue={enqueue}
       onDeleteDownload={deleteDownloaded}
       onPageChange={(p) => chapterPage = p}
+      onPageSizeChange={(n) => { chaptersPerPage = n; chapterPage = Math.min(chapterPage, Math.ceil(sortedChapters.length / n) || 1) }}
       {buildCtxItems}
     />
   </div>

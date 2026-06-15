@@ -316,8 +316,8 @@
 {/if}
 
 {#each flatPages as page, gi (page.chapterId + ":" + page.localIndex)}
-  {@const src      = (_version, resolvedSrc.get(gi))}
-  {@const isLoaded = (_version, loadedSet.has(gi))}
+  {@const src      = _version >= 0 ? resolvedSrc.get(gi) : undefined}
+  {@const isLoaded = _version >= 0 ? loadedSet.has(gi) : false}
   <div class="strip-slot" data-local-page={page.localIndex + 1} data-chapter={page.chapterId} style={getCachedAspect(page.url) != null ? `--aspect:${getCachedAspect(page.url)}` : undefined}>
     {#if isLoaded && src}
       <img

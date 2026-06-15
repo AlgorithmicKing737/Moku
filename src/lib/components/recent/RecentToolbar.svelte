@@ -1,7 +1,7 @@
 <script lang="ts">
   import {
     ArrowsClockwise, BookOpen, CircleNotch,
-    MagnifyingGlass, NewspaperClipping, Trash,
+    MagnifyingGlass, NewspaperClipping, Trash, X,
   } from 'phosphor-svelte'
 
   interface Props {
@@ -11,16 +11,20 @@
     historyConfirmClear:   boolean
     hasHistory:            boolean
     updatesLoading:        boolean
+    updaterRunning:        boolean
     onTabChange:           (tab: 'updates' | 'history') => void
     onHistorySearchChange: (v: string) => void
     onUpdatesSearchChange: (v: string) => void
     onHistoryClear:        () => void
     onRefreshUpdates:      () => void
+    onToggleUpdate:        () => void
   }
 
   let {
-    tab, historySearch, updatesSearch, historyConfirmClear, hasHistory, updatesLoading,
-    onTabChange, onHistorySearchChange, onUpdatesSearchChange, onHistoryClear, onRefreshUpdates,
+    tab, historySearch, updatesSearch, historyConfirmClear, hasHistory,
+    updatesLoading, updaterRunning,
+    onTabChange, onHistorySearchChange, onUpdatesSearchChange,
+    onHistoryClear, onRefreshUpdates, onToggleUpdate,
   }: Props = $props()
 </script>
 
@@ -55,12 +59,15 @@
 
       <button
         class="icon-btn"
-        onclick={onRefreshUpdates}
-        disabled={updatesLoading}
-        title="Refresh updates"
+        class:running={updaterRunning}
+        onclick={updaterRunning ? onToggleUpdate : onRefreshUpdates}
+        disabled={updatesLoading && !updaterRunning}
+        title={updaterRunning ? 'Stop library update' : 'Run library update'}
       >
-        {#if updatesLoading}
+        {#if updatesLoading && !updaterRunning}
           <CircleNotch size={14} weight="light" class="anim-spin" />
+        {:else if updaterRunning}
+          <X size={14} weight="bold" />
         {:else}
           <ArrowsClockwise size={14} weight="bold" />
         {/if}
@@ -78,19 +85,6 @@
           <button class="search-clear" onclick={() => onHistorySearchChange('')}>×</button>
         {/if}
       </div>
-
-      <button
-        class="icon-btn"
-        onclick={onRefreshUpdates}
-        disabled={updatesLoading}
-        title="Refresh library"
-      >
-        {#if updatesLoading}
-          <CircleNotch size={14} weight="light" class="anim-spin" />
-        {:else}
-          <ArrowsClockwise size={14} weight="bold" />
-        {/if}
-      </button>
 
       {#if hasHistory}
         <button
@@ -155,6 +149,8 @@
   }
   .icon-btn:hover:not(:disabled) { color: var(--text-primary); border-color: var(--border-strong); }
   .icon-btn:disabled { opacity: 0.45; cursor: default; }
+  .icon-btn.running { color: var(--color-error); border-color: color-mix(in srgb, var(--color-error) 30%, transparent); background: var(--color-error-bg); }
+  .icon-btn.running:hover { color: var(--color-error); border-color: var(--color-error); }
 
   .search-wrap { position: relative; display: flex; align-items: center; }
   .search-wrap :global(.search-icon) { position: absolute; left: 8px; color: var(--text-faint); pointer-events: none; }

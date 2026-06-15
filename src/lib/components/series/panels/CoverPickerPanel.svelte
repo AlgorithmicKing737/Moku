@@ -1,6 +1,6 @@
 <script lang="ts">
   import { X, CaretLeft, CaretRight, CircleNotch } from "phosphor-svelte";
-  import { setPref }                               from "$lib/components/series/lib/mangaPrefs";
+  import { setPref }                               from "$lib/state/series.svelte";
   import { coverCandidatesSync, dedupeByImage }    from "$lib/core/cover/coverResolver";
   import Thumbnail                                 from "$lib/components/shared/manga/Thumbnail.svelte";
   import type { Manga }                            from "$lib/types";

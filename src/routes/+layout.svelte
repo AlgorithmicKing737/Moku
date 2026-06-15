@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount }                                                    from 'svelte'
   import { page }                                                       from '$app/stores'
-  import { appState, app }                                              from '$lib/state/app.svelte'
+  import { appState, app, type AppStatus }                             from '$lib/state/app.svelte'
   import { boot }                                                        from '$lib/state/boot.svelte'
   import { notifications }                                              from '$lib/state/notifications.svelte'
   import { settingsState, loadSettingsIntoState, updateSettings }       from '$lib/state/settings.svelte'
@@ -18,6 +18,7 @@
   import { downloadStore }                                              from '$lib/state/downloads.svelte'
   import { seriesState }                                                from '$lib/state/series.svelte'
   import MangaPreview                                                   from '$lib/components/shared/manga/MangaPreview.svelte'
+  import { authVerifiedState } from '$lib/state/auth.svelte'
   import '../app.css'
 
   let { children } = $props()
@@ -34,22 +35,28 @@
 
   const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 
-  let splashDismissed = $state(false)
-  let themeEditorOpen = $state(false)
-  let themeEditorId   = $state<string | null>(null)
+  appState.status = 'booting' as AppStatus
+
+  let splashDismissed  = $state(false)
+  let settingsLoaded   = $state(false)
+  let themeEditorOpen  = $state(false)
+  let themeEditorId    = $state<string | null>(null)
 
   const splashVisible = $derived(
-    !splashDismissed ||
     appState.status === 'booting' ||
     appState.status === 'locked'  ||
     appState.status === 'error'   ||
-    appState.status === 'auth'
+    (appState.status === 'ready' && !splashDismissed)
+  )
+
+  const splashMode = $derived(
+    appState.status === 'locked' && settingsLoaded ? 'locked' : 'loading'
   )
 
   const ringFull = $derived(appState.status === 'ready')
   const showApp  = $derived(!splashVisible)
 
-  function onSplashReady()  { splashDismissed = true }
+  function onSplashReady()  { if (!appState.authRequired || authVerifiedState.value) splashDismissed = true }
   function onSplashUnlock() { appState.status = 'ready'; splashDismissed = true }
   function onSplashBypass() {
     import('$lib/state/boot.svelte').then(({ bypassBoot }) => {
@@ -62,51 +69,57 @@
   const readerContainerized = $derived(settingsState.settings.readerContainerized ?? false)
   const strippedLayout      = $derived(isReaderRoute && !readerContainerized)
 
-  onMount(async () => {
-    const { detectAdapter }       = await import('$lib/platform-adapters')
-    const { initPlatformService } = await import('$lib/platform-service')
-    const { loadSettings }        = await import('$lib/core/persistence/persist')
-    const { startProbe }          = await import('$lib/state/boot.svelte')
+  onMount(() => {
+    async function init() {
+      const { detectAdapter }       = await import('$lib/platform-adapters')
+      const { initPlatformService } = await import('$lib/platform-service')
+      const { loadSettings }        = await import('$lib/core/persistence/persist')
+      const { startProbe }          = await import('$lib/state/boot.svelte')
 
-    const adapter = detectAdapter()
-    initPlatformService(adapter)
-    await adapter.init()
-    appState.platform = adapter.platform
-    appState.version  = await platformService.getVersion().catch(() => '')
-    appState.appDir   = await platformService.getAppDir().catch(() => '')
+      const adapter = detectAdapter()
+      initPlatformService(adapter)
+      await adapter.init()
+      appState.platform = adapter.platform
+      appState.version  = await platformService.getVersion().catch(() => '')
+      appState.appDir   = await platformService.getAppDir().catch(() => '')
 
-    const persisted = await loadSettings()
-    const raw       = persisted?.settings ?? persisted ?? null
-    await loadSettingsIntoState(raw)
+      const persisted = await loadSettings()
+      const raw       = persisted?.settings ?? persisted ?? null
+      await loadSettingsIntoState(raw)
 
-    const s = (raw ?? {}) as Record<string, unknown>
-    appState.serverUrl = (s.serverUrl      as string) ?? ''
-    appState.authMode  = (s.serverAuthMode as 'NONE' | 'BASIC_AUTH' | 'UI_LOGIN') ?? 'NONE'
-    appState.authUser  = (s.serverAuthUser as string) ?? ''
-    appState.authPass  = (s.serverAuthPass as string) ?? ''
+      const s = (raw ?? {}) as Record<string, unknown>
+      appState.serverUrl = (s.serverUrl      as string) ?? ''
+      appState.authMode  = (s.serverAuthMode as 'NONE' | 'BASIC_AUTH' | 'UI_LOGIN') ?? 'NONE'
+      appState.authUser  = (s.serverAuthUser as string) ?? ''
+      appState.authPass  = (s.serverAuthPass as string) ?? ''
 
-    applyTheme(
-      settingsState.settings.theme        ?? 'dark',
-      settingsState.settings.customThemes ?? [],
-    )
+      settingsLoaded = true
 
-    if (isTauri && settingsState.settings.autoStartServer) {
-      platformService.launchServer({
-        binary:       settingsState.settings.serverBinary,
-        binaryArgs:   settingsState.settings.serverBinaryArgs,
-        webUiEnabled: settingsState.settings.suwayomiWebUI,
-      }).catch(() => {})
+      applyTheme(
+        settingsState.settings.theme        ?? 'dark',
+        settingsState.settings.customThemes ?? [],
+      )
+
+      if (isTauri && settingsState.settings.autoStartServer) {
+        platformService.launchServer({
+          binary:       settingsState.settings.serverBinary,
+          binaryArgs:   settingsState.settings.serverBinaryArgs,
+          webUiEnabled: settingsState.settings.suwayomiWebUI,
+        }).catch(() => {})
+      }
+
+      startProbe(
+        appState.authMode ?? 'NONE',
+        appState.authUser ?? '',
+        appState.authPass ?? '',
+        isTauri && settingsState.settings.autoStartServer ? 2000 : 100,
+      )
+
+      polling = true
+      pollLoop()
     }
 
-    startProbe(
-      appState.authMode ?? 'NONE',
-      appState.authUser ?? '',
-      appState.authPass ?? '',
-      isTauri && settingsState.settings.autoStartServer ? 2000 : 100,
-    )
-
-    polling = true
-    pollLoop()
+    init()
 
     return () => {
       polling = false
@@ -202,15 +215,17 @@
 
 {#if splashVisible}
   <SplashScreen
-    mode={appState.status === 'locked' ? 'locked' : 'loading'}
+    mode={splashMode}
     {ringFull}
     failed={appState.status === 'error'}
     notConfigured={boot.notConfigured}
+    authRequired={appState.authRequired && !authVerifiedState.value}
     pinLen={settingsState.settings.appLockPin?.length ?? 0}
     pinCorrect={settingsState.settings.appLockPin ?? ''}
     onReady={onSplashReady}
     onUnlock={onSplashUnlock}
     onBypass={onSplashBypass}
+    onSkip={onSplashBypass}
     onRetry={onSplashRetry}
   />
 {/if}

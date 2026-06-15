@@ -137,7 +137,12 @@
       selectedMatch = { manga: m, chapters, readCount: matchReadCount, similarity };
       step = "confirm";
     } catch (e: any) {
-      error = e.message;
+      if (/no chapters found/i.test(e.message)) {
+        selectedMatch = { manga: m, chapters: [], readCount: 0, similarity };
+        step = "confirm";
+      } else {
+        error = e.message;
+      }
     } finally {
       loadingMatchId = null;
     }

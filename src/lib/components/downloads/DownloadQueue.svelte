@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { CircleNotch } from "phosphor-svelte";
+  import { CircleNotchIcon } from "phosphor-svelte";
   import DownloadItem    from "$lib/components/downloads/DownloadItem.svelte";
   import type { DownloadQueueItem } from "$lib/types/api";
 
@@ -9,16 +9,14 @@
     isRunning:  boolean;
     dequeueing: Set<number>;
     selected:   Set<number>;
-    onRemove:      (chapterId: number) => void;
-    onRetry:       (chapterId: number) => void;
-    onReorder:     (chapterId: number, dir: "up" | "down") => void;
-    onReorderEdge: (chapterId: number, edge: "top" | "bottom") => void;
-    onSelect:      (chapterId: number, e: MouseEvent) => void;
+    onRemove: (chapterId: number) => void;
+    onRetry:  (chapterId: number) => void;
+    onSelect: (chapterId: number, e: MouseEvent) => void;
   }
 
   const {
     queue, loading, isRunning, dequeueing, selected,
-    onRemove, onRetry, onReorder, onReorderEdge, onSelect,
+    onRemove, onRetry, onSelect,
   }: Props = $props();
 </script>
 
@@ -54,8 +52,6 @@
         isSelected={selected.has(item.chapter.id)}
         {onRemove}
         {onRetry}
-        {onReorder}
-        {onReorderEdge}
         {onSelect}
       />
     {/each}

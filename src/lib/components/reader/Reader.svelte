@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, untrack, tick }        from "svelte";
   import { readerState, PAGE_STYLES }      from "$lib/state/reader.svelte";
+  import type { PageStyle }                              from "$lib/state/reader.svelte";
   import { settingsState, updateSettings } from "$lib/state/settings.svelte";
   import { app, appState }                 from "$lib/state/app.svelte";
   import { DEFAULT_KEYBINDS }              from "$lib/core/keybinds/defaultBinds";
@@ -11,7 +12,7 @@
   import { clampZoom, captureZoomAnchor, restoreZoomAnchor } from "$lib/components/reader/lib/zoomHelpers";
   import { loadChapter, scheduleResumeDismiss }              from "$lib/components/reader/lib/chapterLoader";
   import { historyState }                                    from "$lib/state/history.svelte";
-  import { setPreviewManga }                                 from "$lib/state/series.svelte";
+  import { setPreviewManga, seriesState }                   from "$lib/state/series.svelte";
   import { getAdapter }                                      from "$lib/request-manager";
   import { setReading }                                      from "$lib/core/discord";
   import { revokeBlobUrl, cancelQueuedFetches, preloadBlobUrls } from "$lib/core/cache/imageCache";
@@ -55,9 +56,16 @@
 
   const currentBookmark = $derived(
     readerState.activeManga
-      ? readerState.bookmarks.find(b => b.mangaId === readerState.activeManga!.id)
+      ? seriesState.bookmarks.find(b => b.mangaId === readerState.activeManga!.id)
       : undefined
   );
+  const currentGroup = $derived.by(() => {
+    const group = style === "double" && readerState.pageGroups.length
+      ? (readerState.pageGroups.find(g => g.includes(readerState.pageNumber)) ?? [readerState.pageNumber])
+      : [readerState.pageNumber];
+    return rtl ? [...group].reverse() : group;
+  });
+
   const isBookmarked = $derived(
     !!currentBookmark &&
     currentBookmark.chapterId === displayChapter?.id &&
@@ -101,13 +109,6 @@
     fit === "original" && "fit-original",
     effectiveReaderSettings.optimizeContrast && "optimize-contrast",
   ].filter(Boolean).join(" "));
-
-  const currentGroup = $derived.by(() => {
-    const group = style === "double" && readerState.pageGroups.length
-      ? (readerState.pageGroups.find(g => g.includes(readerState.pageNumber)) ?? [readerState.pageNumber])
-      : [readerState.pageNumber];
-    return rtl ? [...group].reverse() : group;
-  });
 
   const sliderPage = $derived.by(() => {
     if (style === "double" && readerState.pageGroups.length)
@@ -239,7 +240,7 @@
     lastPage:         () => lastPage,
     adjustZoom:       (d) => { captureZoomAnchor(containerEl, style, zoomAnchor); applySettings({ readerZoom: clampZoom(zoom + d) }); restoreZoomAnchor(containerEl, zoomAnchor); },
     resetZoom:        () => { captureZoomAnchor(containerEl, style, zoomAnchor); applySettings({ readerZoom: 1.0 }); restoreZoomAnchor(containerEl, zoomAnchor); },
-    cycleStyle:       () => { const idx = PAGE_STYLES.indexOf(style); applySettings({ pageStyle: PAGE_STYLES[(idx + 1) % PAGE_STYLES.length] }); },
+    cycleStyle:       () => { const idx = PAGE_STYLES.indexOf(style); applySettings({ pageStyle: PAGE_STYLES[(idx + 1) % PAGE_STYLES.length] as PageStyle }); },
     toggleDirection:  () => applySettings({ readingDirection: rtl ? "ltr" : "rtl" }),
     openSettings:     () => { app.setSettingsOpen(true); },
     toggleBookmark:   () => toggleBookmark(displayChapter, readerState.pageNumber),
@@ -254,11 +255,11 @@
     },
     chapterNext: () => {
       const ch = rtl ? adjacent.prev : adjacent.next;
-      if (ch) { maybeMarkCurrentRead(); readerState.openReader(ch, readerState.activeChapterList); }
+      if (ch) { maybeMarkCurrentRead(); readerState.openReader(ch, readerState.activeManga); }
     },
     chapterPrev: () => {
       const ch = rtl ? adjacent.next : adjacent.prev;
-      if (ch) readerState.openReader(ch, readerState.activeChapterList);
+      if (ch) readerState.openReader(ch, readerState.activeManga);
     },
     closePopovers: () => readerState.closeAllPopovers(),
     getKeybinds:   () => settingsState.settings.keybinds ?? DEFAULT_KEYBINDS,
@@ -268,7 +269,7 @@
 
   function captureCurrentReaderSettings(): ReaderSettings {
     return {
-      pageStyle:           style,
+      pageStyle:           style as PageStyle,
       fitMode:             fit,
       readingDirection:    (settingsState.settings.readingDirection ?? "ltr") as ReaderSettings["readingDirection"],
       readerZoom:          zoom,
@@ -465,9 +466,7 @@
         if (!hasNavigated) return;
         if (style === "longstrip" && visibleChapterId && chapterId !== visibleChapterId) return;
         if (settingsState.settings.autoBookmark ?? true) {
-          const existing = readerState.bookmarks.find(b => b.mangaId === mangaId && b.chapterId !== chapterId);
-          if (existing) readerState.removeBookmark(existing.chapterId);
-          readerState.addBookmark({ mangaId, mangaTitle, thumbnailUrl: thumb, chapterId, chapterName, pageNumber: pageNum });
+          seriesState.setBookmark({ mangaId, mangaTitle, thumbnailUrl: thumb, chapterId, chapterName, pageNumber: pageNum });
         }
         if (style !== "longstrip" && (settingsState.settings.autoMarkRead ?? true) && atLast) markChapterRead(chapterId, markedRead);
 
@@ -587,6 +586,7 @@
     resumePage={readerState.resumePage}
     resumeFading={readerState.resumeFading}
     {adjacent}
+    {barPosition}
     onDismissResume={() => { readerState.resumeVisible = false; readerState.resumeFading = false; }}
   />
 

@@ -5,6 +5,7 @@
   import { getAdapter } from '$lib/request-manager'
   import { libraryState } from '$lib/state/library.svelte'
   import { homeState, setHeroSlot } from '$lib/state/home.svelte'
+  import { openReaderForChapter }   from '$lib/state/series.svelte'
   import { historyState } from '$lib/state/history.svelte'
   import type { ReadSession } from '$lib/types/history'
   import HeroStage       from '$lib/components/home/HeroStage.svelte'
@@ -107,7 +108,7 @@
       heroAllChapters = all
       const lastReadIdx = heroEntry
         ? all.findLastIndex(c => c.id === heroEntry!.endChapterId)
-        : all.findLastIndex(c => c.isRead)
+        : all.findLastIndex(c => c.read)
       const startIdx = Math.max(0, lastReadIdx)
       heroChapters = all.slice(startIdx, startIdx + 5)
     } catch {
@@ -129,7 +130,7 @@
     if (!heroEntry && heroManga) { goto(`/series/${heroManga.id}`); return }
     if (!heroEntry) return
     const target = heroAllChapters.find(c => c.id === heroEntry!.endChapterId) ?? heroAllChapters[0]
-    if (target) openChapter(target)
+    if (target) openReaderForChapter(target, heroManga ?? null)
   }
 
   function cycleNext() { activeIdx = (activeIdx + 1) % TOTAL_SLOTS; heroChapters = []; heroAllChapters = [] }

@@ -1,6 +1,5 @@
-import { platformService }    from "$lib/platform-service";
-import { settingsState }      from "$lib/state/settings.svelte";
-import { getUIAccessToken }   from "$lib/core/auth";
+import { platformService } from "$lib/platform-service";
+import { authHeaders }    from "$lib/core/auth";
 
 const cache    = new Map<string, string>();
 const inflight = new Map<string, Promise<string>>();
@@ -18,22 +17,8 @@ interface QueueEntry {
 
 const queue: QueueEntry[] = [];
 
-async function getAuthHeaders(): Promise<Record<string, string>> {
-  const mode = settingsState.settings.serverAuthMode ?? "NONE";
-  if (mode === "UI_LOGIN") {
-    const token = getUIAccessToken();
-    return token ? { Authorization: `Bearer ${token}` } : {};
-  }
-  if (mode === "BASIC_AUTH") {
-    const user = settingsState.settings.serverAuthUser?.trim() ?? "";
-    const pass = settingsState.settings.serverAuthPass?.trim() ?? "";
-    return user && pass ? { Authorization: `Basic ${btoa(`${user}:${pass}`)}` } : {};
-  }
-  return {};
-}
-
 async function doFetch(url: string, gen: number): Promise<string> {
-  const headers = await getAuthHeaders();
+  const headers = authHeaders();
   if (gen !== generation) throw new DOMException("Cancelled", "AbortError");
   const blob    = await platformService.fetchImage(url, headers);
   if (gen !== generation) throw new DOMException("Cancelled", "AbortError");

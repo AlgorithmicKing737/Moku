@@ -107,7 +107,6 @@ pub fn run() {
             commands::backup::import_app_data,
             commands::backup::auto_backup_app_data,
             commands::backup::get_auto_backup_dir,
-            commands::backup::read_store_files,
             commands::storage::load_store,
             commands::storage::save_store,
             commands::storage::store_credential,

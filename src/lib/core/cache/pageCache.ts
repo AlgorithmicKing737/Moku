@@ -1,5 +1,6 @@
 import { getBlobUrl, preloadBlobUrls, revokeBlobUrl } from "$lib/core/cache/imageCache";
-import { settingsState }                               from "$lib/state/settings.svelte";
+import { authHeaders }                                from "$lib/core/auth";
+import { settingsState }                              from "$lib/state/settings.svelte";
 
 const pageCache        = new Map<number, string[]>();
 const inflight         = new Map<number, Promise<string[]>>();
@@ -12,13 +13,7 @@ function getServerUrl(): string {
 
 async function fetchChapterPagesFromServer(chapterId: number): Promise<string[]> {
   const base    = getServerUrl();
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  const mode    = settingsState.settings.serverAuthMode ?? "NONE";
-  if (mode === "BASIC_AUTH") {
-    const u = settingsState.settings.serverAuthUser?.trim() ?? "";
-    const p = settingsState.settings.serverAuthPass?.trim() ?? "";
-    if (u && p) headers["Authorization"] = `Basic ${btoa(`${u}:${p}`)}`;
-  }
+  const headers = { "Content-Type": "application/json", ...authHeaders() };
   const query = `mutation FetchChapterPages($chapterId: Int!) { fetchChapterPages(input: { chapterId: $chapterId }) { pages } }`;
   const res   = await fetch(`${base}/api/graphql`, {
     method: "POST",

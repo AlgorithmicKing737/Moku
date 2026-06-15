@@ -1,5 +1,5 @@
 pkgname=moku
-pkgver=0.9.4
+pkgver=0.10.1
 pkgrel=1
 pkgdesc="Native Linux manga reader frontend for Suwayomi-Server"
 arch=('x86_64')
@@ -25,7 +25,7 @@ source=(
 )
 noextract=("Suwayomi-Server-v2.1.2087.jar")
 sha256sums=(
-    'fc1c8268b812e70e56460c8930ca8ae83bcd30eea5903ddfef4e30a3a9a5c1cc'
+    'dd4807d1c1d7fe7baa8ea27d049c787072e71ec80d5ce9aac21c74ecb43b476d'
     'f589a422674252394c13b289a9c8be691905bf583efb7f4d5f1501ae5e91e6b3'
 )
 b2sums=(

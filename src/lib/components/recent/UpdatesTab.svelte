@@ -1,7 +1,9 @@
 <script lang="ts">
-  import { BookOpen, CircleNotch } from 'phosphor-svelte'
+  import { BookOpen, CircleNotch, Download, Trash, CaretDown, CaretRight } from 'phosphor-svelte'
   import Thumbnail from '$lib/components/shared/manga/Thumbnail.svelte'
   import type { RecentUpdate, UpdateGroup } from './lib/recentUpdates'
+
+  const BUNDLE_THRESHOLD = 3
 
   interface Props {
     loading:              boolean
@@ -10,18 +12,59 @@
     updatesSearch:        string
     totalCount:           number
     openingId:            number | null
+    enqueueing:           Set<number>
     updaterRunning:       boolean
     lastUpdatedLabel:     string | null
     updaterProgressLabel: string | null
     onOpenUpdate:         (item: RecentUpdate) => void
     onOpenSeries:         (item: RecentUpdate) => void
+    onEnqueue:            (item: RecentUpdate) => void
+    onDeleteDownload:     (item: RecentUpdate) => void
   }
 
   let {
-    loading, error, groups, updatesSearch, totalCount, openingId,
+    loading, error, groups, updatesSearch, totalCount, openingId, enqueueing,
     updaterRunning, lastUpdatedLabel, updaterProgressLabel,
-    onOpenUpdate, onOpenSeries,
+    onOpenUpdate, onOpenSeries, onEnqueue, onDeleteDownload,
   }: Props = $props()
+
+  // key = `${dayLabel}::${mangaId}`, tracks which bundles are expanded
+  let expandedBundles: Record<string, boolean> = $state({})
+
+  function bundleKey(dayLabel: string, mangaId: number) {
+    return `${dayLabel}::${mangaId}`
+  }
+
+  function toggleBundle(key: string) {
+    expandedBundles = { ...expandedBundles, [key]: !expandedBundles[key] }
+  }
+
+  type SingleRow = { kind: 'single'; item: RecentUpdate }
+  type BundleRow = { kind: 'bundle'; mangaId: number; items: RecentUpdate[]; key: string }
+  type Row       = SingleRow | BundleRow
+
+  // Within a day group, collapse consecutive runs of BUNDLE_THRESHOLD+ chapters from the same manga
+  function bundleRows(dayLabel: string, items: RecentUpdate[]): Row[] {
+    const rows: Row[] = []
+    let i = 0
+    while (i < items.length) {
+      const cur     = items[i]
+      const mangaId = cur.mangaId ?? cur.manga?.id
+      if (mangaId == null) { rows.push({ kind: 'single', item: cur }); i++; continue }
+
+      let j = i + 1
+      while (j < items.length && (items[j].mangaId ?? items[j].manga?.id) === mangaId) j++
+
+      const run = items.slice(i, j)
+      if (run.length >= BUNDLE_THRESHOLD) {
+        rows.push({ kind: 'bundle', mangaId, items: run, key: bundleKey(dayLabel, mangaId) })
+      } else {
+        for (const item of run) rows.push({ kind: 'single', item })
+      }
+      i = j
+    }
+    return rows
+  }
 
   const filteredGroups = $derived(updatesSearch.trim()
     ? groups
@@ -39,6 +82,16 @@
     if (item.name?.trim()) return item.name
     if (Number.isFinite(item.chapterNumber)) return `Chapter ${item.chapterNumber}`
     return 'Chapter'
+  }
+
+  function bundleChapterRange(items: RecentUpdate[]): string {
+    const nums = items
+      .map(i => i.chapterNumber)
+      .filter(n => Number.isFinite(n)) as number[]
+    if (!nums.length) return `${items.length} chapters`
+    const min = Math.min(...nums)
+    const max = Math.max(...nums)
+    return min === max ? `Ch. ${min}` : `Ch. ${min}–${max}`
   }
 </script>
 
@@ -63,7 +116,7 @@
           <div class="bar-sep"></div>
         {/if}
         {#if !loading && totalCount > 0}
-          <span class="status-count">{totalCount} chapter{totalCount === 1 ? '' : 's'}</span>
+          <span class="status-count">{totalCount} unread</span>
         {/if}
       </div>
     </div>
@@ -121,39 +174,135 @@
             <div class="day-rule"></div>
           </div>
           <div class="updates-list">
-            {#each items as item (item.id)}
-              <div class="update-row" class:read={item.isRead}>
-                <button class="thumb-btn" onclick={() => onOpenSeries(item)} title="View series">
-                  <Thumbnail
-                    src={item.manga?.thumbnailUrl ?? ''}
-                    alt={item.manga?.title ?? 'Series cover'}
-                    class="thumb"
-                  />
-                </button>
-                <button
-                  class="info-btn"
-                  onclick={() => onOpenUpdate(item)}
-                  disabled={openingId === item.id}
-                >
-                  <div class="update-info">
-                    <div class="title-row">
-                      <span class="series-title">{item.manga?.title ?? 'Unknown series'}</span>
-                      {#if !item.isRead}<span class="pill">Unread</span>{/if}
+            {#each bundleRows(label, items) as row (row.kind === 'single' ? row.item.id : row.key)}
+
+              {#if row.kind === 'single'}
+                {@const item = row.item}
+                <div class="update-row" class:read={item.isRead}>
+                  <button class="thumb-btn" onclick={() => onOpenSeries(item)} title="View series">
+                    <Thumbnail
+                      src={item.manga?.thumbnailUrl ?? ''}
+                      alt={item.manga?.title ?? 'Series cover'}
+                      class="thumb"
+                    />
+                  </button>
+                  <button
+                    class="info-btn"
+                    onclick={() => onOpenUpdate(item)}
+                    disabled={openingId === item.id}
+                  >
+                    <div class="update-info">
+                      <div class="title-row">
+                        <span class="series-title">{item.manga?.title ?? 'Unknown series'}</span>
+                        {#if !item.isRead}<span class="pill" title="Unread"></span>{/if}
+                      </div>
+                      <span class="chapter-title">{chapterLabel(item)}</span>
+                      {#if (item.lastPageRead ?? 0) > 0 && !item.isRead}
+                        <div class="meta-row"><span>Resume p.{item.lastPageRead}</span></div>
+                      {/if}
                     </div>
-                    <span class="chapter-title">{chapterLabel(item)}</span>
-                    {#if (item.lastPageRead ?? 0) > 0 && !item.isRead}
-                      <div class="meta-row"><span>Resume p.{item.lastPageRead}</span></div>
-                    {/if}
+                    <div class="row-end">
+                      {#if enqueueing.has(item.id)}
+                        <CircleNotch size={14} weight="light" class="anim-spin" />
+                      {:else if item.isDownloaded}
+                        <button class="dl-btn dl-btn-delete" onclick={(e) => { e.stopPropagation(); onDeleteDownload(item) }} title="Delete download">
+                          <Trash size={13} weight="light" />
+                        </button>
+                      {:else}
+                        <button class="dl-btn" onclick={(e) => { e.stopPropagation(); onEnqueue(item) }} title="Download">
+                          <Download size={13} weight="light" />
+                        </button>
+                      {/if}
+                      {#if openingId === item.id}
+                        <CircleNotch size={14} weight="light" class="anim-spin" />
+                      {:else}
+                        <BookOpen size={14} weight="light" />
+                      {/if}
+                    </div>
+                  </button>
+                </div>
+
+              {:else}
+                {@const bundle   = row}
+                {@const expanded = expandedBundles[bundle.key] ?? false}
+                {@const first    = bundle.items[0]}
+                {@const hasUnread = bundle.items.some(i => !i.isRead)}
+                <div class="bundle" class:expanded>
+                  <!-- collapsed header -->
+                  <div class="bundle-header" class:read={!hasUnread}>
+                    <button class="thumb-btn" onclick={() => onOpenSeries(first)} title="View series">
+                      <Thumbnail
+                        src={first.manga?.thumbnailUrl ?? ''}
+                        alt={first.manga?.title ?? 'Series cover'}
+                        class="thumb"
+                      />
+                    </button>
+                    <button class="bundle-summary" onclick={() => toggleBundle(bundle.key)}>
+                      <div class="update-info">
+                        <div class="title-row">
+                          <span class="series-title">{first.manga?.title ?? 'Unknown series'}</span>
+                          {#if hasUnread}<span class="pill" title="Unread"></span>{/if}
+                        </div>
+                        <span class="chapter-title">{bundleChapterRange(bundle.items)}</span>
+                        <div class="meta-row"><span>{bundle.items.length} chapters</span></div>
+                      </div>
+                      <div class="row-end">
+                        <span class="caret">
+                          {#if expanded}
+                            <CaretDown size={13} weight="bold" />
+                          {:else}
+                            <CaretRight size={13} weight="bold" />
+                          {/if}
+                        </span>
+                      </div>
+                    </button>
                   </div>
-                  <div class="row-end">
-                    {#if openingId === item.id}
-                      <CircleNotch size={14} weight="light" class="anim-spin" />
-                    {:else}
-                      <BookOpen size={14} weight="light" />
-                    {/if}
-                  </div>
-                </button>
-              </div>
+
+                  <!-- expanded chapter list -->
+                  {#if expanded}
+                    <div class="bundle-items">
+                      {#each bundle.items as item (item.id)}
+                        <div class="update-row bundle-child" class:read={item.isRead}>
+                          <button
+                            class="info-btn"
+                            onclick={() => onOpenUpdate(item)}
+                            disabled={openingId === item.id}
+                          >
+                            <div class="update-info">
+                              <div class="title-row">
+                                <span class="chapter-title">{chapterLabel(item)}</span>
+                                {#if !item.isRead}<span class="pill" title="Unread"></span>{/if}
+                              </div>
+                              {#if (item.lastPageRead ?? 0) > 0 && !item.isRead}
+                                <div class="meta-row"><span>Resume p.{item.lastPageRead}</span></div>
+                              {/if}
+                            </div>
+                            <div class="row-end">
+                              {#if enqueueing.has(item.id)}
+                                <CircleNotch size={14} weight="light" class="anim-spin" />
+                              {:else if item.isDownloaded}
+                                <button class="dl-btn dl-btn-delete" onclick={(e) => { e.stopPropagation(); onDeleteDownload(item) }} title="Delete download">
+                                  <Trash size={13} weight="light" />
+                                </button>
+                              {:else}
+                                <button class="dl-btn" onclick={(e) => { e.stopPropagation(); onEnqueue(item) }} title="Download">
+                                  <Download size={13} weight="light" />
+                                </button>
+                              {/if}
+                              {#if openingId === item.id}
+                                <CircleNotch size={14} weight="light" class="anim-spin" />
+                              {:else}
+                                <BookOpen size={14} weight="light" />
+                              {/if}
+                            </div>
+                          </button>
+                        </div>
+                      {/each}
+                    </div>
+                  {/if}
+                </div>
+              {/if}
+
             {/each}
           </div>
         </section>
@@ -258,12 +407,62 @@
   .chapter-title { font-family: var(--font-ui); font-size: var(--text-xs); color: var(--text-muted); }
   .meta-row { font-family: var(--font-ui); font-size: var(--text-2xs); color: var(--text-faint); letter-spacing: var(--tracking-wide); }
   .pill {
-    padding: 2px 6px; border-radius: var(--radius-full);
-    background: var(--accent-muted); color: var(--accent-fg);
-    font-family: var(--font-ui); font-size: var(--text-2xs);
-    letter-spacing: var(--tracking-wide); text-transform: uppercase; flex-shrink: 0;
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--color-success, #22c55e); flex-shrink: 0;
   }
-  .row-end { color: var(--text-faint); display: flex; align-items: center; justify-content: center; width: 24px; flex-shrink: 0; }
+  .row-end { color: var(--text-faint); display: flex; align-items: center; gap: var(--sp-1); justify-content: center; flex-shrink: 0; }
+
+  .dl-btn {
+    display: flex; align-items: center; justify-content: center;
+    width: 24px; height: 24px; border-radius: var(--radius-sm);
+    border: none; background: none; color: var(--text-faint); cursor: pointer;
+    transition: color var(--t-base), background var(--t-base);
+  }
+  .dl-btn:hover { color: var(--text-muted); background: var(--bg-overlay); }
+  .dl-btn-delete { color: var(--color-error); }
+  .dl-btn-delete:hover { background: var(--color-error-bg); }
+
+  /* ── Bundle styles ── */
+  .bundle {
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-dim);
+    background: var(--bg-raised);
+    overflow: hidden;
+    transition: border-color var(--t-fast), background var(--t-fast);
+  }
+  .bundle.expanded { border-color: var(--border-strong); }
+
+  .bundle-header {
+    display: flex; align-items: stretch;
+    transition: opacity var(--t-base);
+  }
+  .bundle-header.read { opacity: 0.5; }
+  .bundle-header:has(.bundle-summary:hover) { background: var(--bg-elevated); }
+
+  .bundle-summary {
+    flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--sp-3);
+    padding: var(--sp-2) var(--sp-3); background: none; border: none;
+    cursor: pointer; text-align: left;
+  }
+
+  .caret { color: var(--text-faint); display: flex; align-items: center; }
+
+  .bundle-items {
+    border-top: 1px solid var(--border-dim);
+    display: flex; flex-direction: column;
+  }
+
+  .bundle-child {
+    border-radius: 0; border: none;
+    border-bottom: 1px solid var(--border-dim);
+    background: var(--bg-overlay, var(--bg-elevated));
+    padding-left: var(--sp-6);
+  }
+  .bundle-child:last-child { border-bottom: none; }
+  .bundle-child:has(.info-btn:hover:not(:disabled)) {
+    background: var(--bg-elevated);
+    border-color: transparent;
+  }
 
   .empty {
     flex: 1; display: flex; flex-direction: column; align-items: center;

@@ -25,7 +25,7 @@
 
   let { pkgName, extensionName, iconUrl, cols, cropCovers, statsAlways, anims, sources, onBack, onSettings }: Props = $props();
 
-  const isLocal = pkgName === '__local__';
+  const isLocal = $derived(pkgName === '__local__');
 
   let groups:  SourceLibrary[] = $state([]);
   let sourceNodes: SourceNode[] = $state([]);
@@ -409,7 +409,7 @@
   .badge-done { background: rgba(255,255,255,0.18); color: rgba(255,255,255,0.9); border: 1px solid rgba(255,255,255,0.25); }
   .badge-dl { background: rgba(0,0,0,0.55); color: rgba(255,255,255,0.8); border: 1px solid rgba(255,255,255,0.18); margin-left: auto; }
 
-  .card-title { margin-top: var(--sp-2); font-size: var(--text-sm); color: var(--text-secondary); line-height: var(--leading-snug); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; height: 2lh; }
+  .card-title { margin-top: var(--sp-2); font-size: var(--text-sm); color: var(--text-secondary); line-height: var(--leading-snug); display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; height: 2lh; }
   .card.anims .card-title { transition: color var(--t-base); }
 
   .card-skeleton { padding: 0; }

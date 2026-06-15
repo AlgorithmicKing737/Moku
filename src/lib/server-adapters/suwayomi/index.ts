@@ -116,7 +116,7 @@ import {
   RESTORE_BACKUP,
   VALIDATE_BACKUP,
 } from './meta'
-import { authHeaders } from '$lib/core/auth'
+import { authHeaders, reportUnauthorized } from '$lib/core/auth'
 import {
   type GQLResponse,
   mapManga,
@@ -171,9 +171,9 @@ export class SuwayomiAdapter implements ServerAdapter {
   }
 
   private async gql<T>(
-    query: string,
+    query:      string,
     variables?: Record<string, unknown>,
-    signal?: AbortSignal,
+    signal?:    AbortSignal,
   ): Promise<T> {
     const res = await fetch(`${this.baseUrl}/api/graphql`, {
       method:  'POST',
@@ -181,10 +181,38 @@ export class SuwayomiAdapter implements ServerAdapter {
       body:    JSON.stringify({ query, variables }),
       signal,
     })
+    if (res.status === 401 || res.status === 403) {
+      reportUnauthorized()
+      throw new Error(`Suwayomi HTTP ${res.status}`)
+    }
     if (!res.ok) throw new Error(`Suwayomi HTTP ${res.status}`)
     const json: GQLResponse<T> = await res.json()
-    if (json.errors?.length) throw new Error(json.errors[0].message)
+    if (json.errors?.length) {
+      if (/unauthorized|unauthenticated/i.test(json.errors[0].message)) reportUnauthorized()
+      throw new Error(json.errors[0].message)
+    }
     return json.data
+  }
+
+  private multipartGql<T>(query: string, file: File): Promise<T> {
+    const form = new FormData()
+    form.append('operations', JSON.stringify({ query, variables: { backup: null } }))
+    form.append('map', JSON.stringify({ '0': ['variables.backup'] }))
+    form.append('0', file, file.name)
+    const headers: Record<string, string> = { Accept: 'application/json', ...authHeaders() }
+    return fetch(`${this.baseUrl}/api/graphql`, { method: 'POST', headers, body: form })
+      .then(r => {
+        if (r.status === 401 || r.status === 403) { reportUnauthorized(); throw new Error(`Suwayomi HTTP ${r.status}`) }
+        if (!r.ok) throw new Error(`Suwayomi HTTP ${r.status}`)
+        return r.json()
+      })
+      .then((json: GQLResponse<T>) => {
+        if (json.errors?.length) {
+          if (/unauthorized|unauthenticated/i.test(json.errors[0].message)) reportUnauthorized()
+          throw new Error(json.errors[0].message)
+        }
+        return json.data
+      })
   }
 
   async getAboutServer(): Promise<AboutServer> {
@@ -270,9 +298,9 @@ export class SuwayomiAdapter implements ServerAdapter {
     await this.gql(DELETE_MANGA_META, { mangaId: Number(id), key })
   }
 
-  async getChapters(mangaId: string): Promise<Chapter[]> {
+  async getChapters(mangaId: string, signal?: AbortSignal): Promise<Chapter[]> {
     const data = await this.gql<{ chapters: { nodes: Record<string, unknown>[] } }>(
-      GET_CHAPTERS, { mangaId: Number(mangaId) }
+      GET_CHAPTERS, { mangaId: Number(mangaId) }, signal
     )
     return data.chapters.nodes.map(mapChapter)
   }
@@ -291,9 +319,9 @@ export class SuwayomiAdapter implements ServerAdapter {
     return data.fetchChapterPages.pages.map((url, index) => ({ index, url }))
   }
 
-  async fetchChapters(mangaId: string): Promise<Chapter[]> {
+  async fetchChapters(mangaId: string, signal?: AbortSignal): Promise<Chapter[]> {
     const data = await this.gql<{ fetchChapters: { chapters: Record<string, unknown>[] } }>(
-      FETCH_CHAPTERS, { mangaId: Number(mangaId) }
+      FETCH_CHAPTERS, { mangaId: Number(mangaId) }, signal
     )
     return data.fetchChapters.chapters.map(mapChapter)
   }
@@ -491,6 +519,20 @@ export class SuwayomiAdapter implements ServerAdapter {
     await this.gql(DELETE_CATEGORY, { id })
   }
 
+  async updateCategory(id: number, patch: { name?: string; includeInUpdate?: string; includeInDownload?: string }): Promise<Category> {
+    const data = await this.gql<{ updateCategory: { category: Record<string, unknown> } }>(
+      UPDATE_CATEGORY, { id, ...patch }
+    )
+    return mapCategory(data.updateCategory.category)
+  }
+
+  async updateCategories(
+    ids:   number[],
+    patch: { includeInUpdate?: 'INCLUDE' | 'EXCLUDE'; includeInDownload?: 'INCLUDE' | 'EXCLUDE' },
+  ): Promise<void> {
+    await Promise.all(ids.map(id => this.gql(UPDATE_CATEGORY, { id, ...patch })))
+  }
+
   async updateCategoryOrder(id: number, position: number): Promise<Category[]> {
     const data = await this.gql<{ updateCategoryOrder: { categories: Record<string, unknown>[] } }>(
       UPDATE_CATEGORY_ORDER, { id, position }
@@ -631,17 +673,6 @@ export class SuwayomiAdapter implements ServerAdapter {
     return data.createBackup
   }
 
-  private multipartGql<T>(query: string, file: File): Promise<T> {
-    const form = new FormData()
-    form.append('operations', JSON.stringify({ query, variables: { backup: null } }))
-    form.append('map', JSON.stringify({ '0': ['variables.backup'] }))
-    form.append('0', file, file.name)
-    const headers: Record<string, string> = { Accept: 'application/json', ...authHeaders() }
-    return fetch(`${this.baseUrl}/api/graphql`, { method: 'POST', headers, body: form })
-      .then(r => { if (!r.ok) throw new Error(`Suwayomi HTTP ${r.status}`); return r.json() })
-      .then((json: GQLResponse<T>) => { if (json.errors?.length) throw new Error(json.errors[0].message); return json.data })
-  }
-
   async restoreBackup(file: File): Promise<{ id: string; status: RestoreStatus }> {
     const data = await this.multipartGql<{ restoreBackup: { id: string; status: RestoreStatus } }>(RESTORE_BACKUP, file)
     return data.restoreBackup
@@ -676,6 +707,10 @@ export class SuwayomiAdapter implements ServerAdapter {
     return []
   }
 
+  async startLibraryUpdate(): Promise<void> {
+    await this.gql(UPDATE_LIBRARY)
+  }
+
   async stopLibraryUpdate(): Promise<void> {
     await this.gql(UPDATE_STOP)
   }
@@ -685,9 +720,11 @@ export class SuwayomiAdapter implements ServerAdapter {
       libraryUpdateStatus: {
         jobsInfo: { isRunning: boolean; finishedJobs: number; totalJobs: number }
       }
+      lastUpdateTimestamp: { timestamp: string } | null
     }>(LIBRARY_UPDATE_STATUS)
     const { isRunning, finishedJobs, totalJobs } = data.libraryUpdateStatus.jobsInfo
-    return { isRunning, finishedJobs, totalJobs }
+    const lastUpdated = data.lastUpdateTimestamp ? Number(data.lastUpdateTimestamp.timestamp) : undefined
+    return { isRunning, finishedJobs, totalJobs, lastUpdated }
   }
 
   clearPageCache(chapterId?: number): void {
