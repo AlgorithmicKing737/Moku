@@ -1,5 +1,5 @@
 {
-  moku = "0.10.0";
+  moku = "0.10.1";
 
   suwayomi = {
     version = "2.2.2196";
@@ -13,7 +13,7 @@
   frontend = {
     pnpmHash   = "sha256-fBkNpQXEeGZNbrpx7+0xVYYtQ6dGvpgRflCGPoxvnVY=";
     distHash   = "7db288b4b54277aa82b6ec5b21fc31a1e71f8246c50a74777500083b806c1fa5";
-    distHashSri = "sha256-Z27CJz/9mmkkiEnF1R3E1ZpdW2j7unpP5+e1cqXyXxQ=";
+    distHashSri = "sha256-lR00QjVP+htsQQk0mypQVOUvA891Y4stRU6Tc0G8k7o=";
   };
 
   gitDeps = {

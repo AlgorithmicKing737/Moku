@@ -254,7 +254,7 @@ modules:
         commit: baece20f467d2c7d4cebaa9ea8892980aa93aa10
       - type: file
         path: packaging/frontend-dist.tar.gz
-        sha256: 676ec2273ffd9a69248849c5d51dc4d59a5d5b68fbba7a4fe7e7b572a5f25f14
+        sha256: 951d3442354ffa1b6c4109349b2a5054e52f03cf75638b2d454e937341bc93ba
       - packaging/cargo-sources.json
       - type: inline
         dest: src-tauri/.cargo
