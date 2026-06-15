@@ -251,7 +251,7 @@ modules:
     sources:
       - type: git
         url: https://github.com/moku-project/Moku.git
-        commit: baece20f467d2c7d4cebaa9ea8892980aa93aa10
+        commit: e54338aff73d7a68b1dd6c5a9aca82b07e3bcecb
       - type: file
         path: packaging/frontend-dist.tar.gz
         sha256: 951d3442354ffa1b6c4109349b2a5054e52f03cf75638b2d454e937341bc93ba
