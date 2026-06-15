@@ -105,6 +105,15 @@
   }
 
   async function doRemove(m: Manga) {
+    // Remove from every category first, then remove from library
+    const catIds = libraryState.categories
+      .filter(c => (libraryState.categoryMangaMap.get(c.id) ?? []).some(x => x.id === m.id))
+      .map(c => c.id)
+    if (catIds.length) {
+      try {
+        await getAdapter().updateMangaCategories(String(m.id), [], catIds)
+      } catch (e) { console.error(e) }
+    }
     await getAdapter().removeFromLibrary(String(m.id))
     libraryState.items = libraryState.items.filter(x => x.id !== m.id)
     await loadCategories()
@@ -211,8 +220,17 @@
   async function onBulkRemove() {
     bulkWorking = true
     try {
+      // For each selected manga, remove from all its categories first
       await Promise.allSettled(
-        [...libraryState.selected].map(id => getAdapter().removeFromLibrary(String(id)))
+        [...libraryState.selected].map(async (id) => {
+          const catIds = libraryState.categories
+            .filter(c => (libraryState.categoryMangaMap.get(c.id) ?? []).some(x => x.id === id))
+            .map(c => c.id)
+          if (catIds.length) {
+            try { await getAdapter().updateMangaCategories(String(id), [], catIds) } catch {}
+          }
+          return getAdapter().removeFromLibrary(String(id))
+        })
       )
       libraryState.items = libraryState.items.filter(m => !libraryState.selected.has(m.id))
       libraryState.exitSelect()
