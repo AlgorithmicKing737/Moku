@@ -66,7 +66,9 @@
   let wheelTimer: ReturnType<typeof setTimeout> | null = null
 
   function onTabsWheel(e: WheelEvent) {
+    if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return
     e.preventDefault()
+    tabsEl?.scrollBy({ left: e.deltaY * 0.5, behavior: "instant" })
     if (wheelTimer) return
     wheelTimer = setTimeout(() => { wheelTimer = null }, 180)
     const ids = visibleTabIds.filter(id => id === "library" || id === "downloaded" || visibleCategories.some(c => String(c.id) === id));

@@ -2,6 +2,7 @@
   import { FolderSimple, Plus, Trash, Star, Eye, EyeSlash, ArrowsClockwise, ArrowsCounterClockwise, DownloadSimple, DotsSixVertical, BookmarkSimple, Lock, CheckSquare } from 'phosphor-svelte'
   import { getAdapter } from '$lib/request-manager'
   import { settingsState, updateSettings } from '$lib/state/settings.svelte'
+  import { libraryState } from '$lib/state/library.svelte'
   import type { Category } from '$lib/types'
 
   let categories    = $state<Category[]>([])
@@ -206,7 +207,7 @@
                     <DotsSixVertical size={14} weight="bold" />
                   </span>
                   <span class="s-folder-name">{cat?.name ?? 'Completed'}</span>
-                  <span class="s-folder-count">{cat?.mangas?.length ?? 0} manga</span>
+                  <span class="s-folder-count">{libraryState.counts[String(cat?.id)] ?? 0} manga</span>
                   <span class="s-folder-badge">built-in</span>
                   <div class="s-folder-actions">
                     <button class="s-btn-icon" class:muted={hidden} onclick={() => toggleHidden(id)} title={hidden ? 'Show tab in library' : 'Hide tab from library'}>
@@ -246,7 +247,7 @@
                       </span>
                       <button class="s-folder-name" onclick={(e) => { e.stopPropagation(); startEdit(cat.id, cat.name) }} title="Click to rename">{cat.name}</button>
                     </div>
-                    <span class="s-folder-count">{cat.mangas?.length ?? 0} manga</span>
+                    <span class="s-folder-count">{libraryState.counts[String(cat.id)] ?? 0} manga</span>
                     <div class="s-folder-actions">
                       <button class="s-btn-icon"
                         class:active={(settingsState.settings.defaultLibraryCategoryId ?? null) === cat.id}
