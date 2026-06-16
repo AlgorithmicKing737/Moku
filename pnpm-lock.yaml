@@ -54,8 +54,8 @@ importers:
         specifier: ^2.1.1
         version: 2.1.1
       tauri-plugin-discord-rpc-api:
-        specifier: github:frozenkelp/tauri-plugin-discord-rpc
-        version: https://codeload.github.com/frozenkelp/tauri-plugin-discord-rpc/tar.gz/1bcf97e5af9a257273c873f00b7f830e7d3d2316
+        specifier: github:Youwes09/tauri-plugin-discord-rpc
+        version: https://codeload.github.com/Youwes09/tauri-plugin-discord-rpc/tar.gz/d2fd312945d0573153e0e7e2d2dfb131acecc52c
     devDependencies:
       '@sveltejs/adapter-node':
         specifier: ^5.5.4
@@ -860,8 +860,8 @@ packages:
     resolution: {integrity: sha512-eArsJmvl3xZVuTYD852PzIEdg2wgDdIZ1NEsIPbzAukHwi284B18No4nK2rCO9AwsWUDza4Cjvmoa4HaojTl5g==}
     engines: {node: '>=18'}
 
-  tauri-plugin-discord-rpc-api@https://codeload.github.com/frozenkelp/tauri-plugin-discord-rpc/tar.gz/1bcf97e5af9a257273c873f00b7f830e7d3d2316:
-    resolution: {gitHosted: true, tarball: https://codeload.github.com/frozenkelp/tauri-plugin-discord-rpc/tar.gz/1bcf97e5af9a257273c873f00b7f830e7d3d2316}
+  tauri-plugin-discord-rpc-api@https://codeload.github.com/Youwes09/tauri-plugin-discord-rpc/tar.gz/d2fd312945d0573153e0e7e2d2dfb131acecc52c:
+    resolution: {gitHosted: true, integrity: sha512-AJjH7YxWI7jxprZFMR3CM4t55KrmPQQVUYD+1TyhoEXT0gvvU44qPy9KDVIbQaw9b+bI+lfZazyBCp8Ev9PEQg==, tarball: https://codeload.github.com/Youwes09/tauri-plugin-discord-rpc/tar.gz/d2fd312945d0573153e0e7e2d2dfb131acecc52c}
     version: 0.1.0
 
   tinyglobby@0.2.17:
@@ -1577,7 +1577,7 @@ snapshots:
     transitivePeerDependencies:
       - '@typescript-eslint/types'
 
-  tauri-plugin-discord-rpc-api@https://codeload.github.com/frozenkelp/tauri-plugin-discord-rpc/tar.gz/1bcf97e5af9a257273c873f00b7f830e7d3d2316:
+  tauri-plugin-discord-rpc-api@https://codeload.github.com/Youwes09/tauri-plugin-discord-rpc/tar.gz/d2fd312945d0573153e0e7e2d2dfb131acecc52c:
     dependencies:
       '@tauri-apps/api': 2.11.0
 

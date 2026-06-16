@@ -44,6 +44,6 @@
     "@tauri-apps/plugin-store": "^2.4.3",
     "capacitor-native-biometric": "^4.2.2",
     "clsx": "^2.1.1",
-    "tauri-plugin-discord-rpc-api": "github:frozenkelp/tauri-plugin-discord-rpc"
+    "tauri-plugin-discord-rpc-api": "github:Youwes09/tauri-plugin-discord-rpc"
   }
 }

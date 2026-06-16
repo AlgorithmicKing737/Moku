@@ -2009,7 +2009,7 @@ dependencies = [
  "reqwest 0.12.28",
  "serde",
  "serde_json",
- "sysinfo",
+ "sysinfo 0.32.1",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",
@@ -2276,6 +2276,16 @@ dependencies = [
  "block2",
  "libc",
  "objc2",
+ "objc2-core-foundation",
+]
+
+[[package]]
+name = "objc2-io-kit"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "33fafba39597d6dc1fb709123dfa8289d39406734be322956a69f0931c73bb15"
+dependencies = [
+ "libc",
  "objc2-core-foundation",
 ]
 
@@ -3693,6 +3703,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "sysinfo"
+version = "0.36.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "252800745060e7b9ffb7b2badbd8b31cfa4aa2e61af879d0a3bf2a317c20217d"
+dependencies = [
+ "libc",
+ "memchr",
+ "ntapi",
+ "objc2-core-foundation",
+ "objc2-io-kit",
+ "windows 0.61.3",
+]
+
+[[package]]
 name = "system-configuration"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3933,12 +3957,14 @@ dependencies = [
 [[package]]
 name = "tauri-plugin-discord-rpc"
 version = "0.1.0"
-source = "git+https://github.com/frozenkelp/tauri-plugin-discord-rpc#1bcf97e5af9a257273c873f00b7f830e7d3d2316"
+source = "git+https://github.com/Youwes09/tauri-plugin-discord-rpc#d2fd312945d0573153e0e7e2d2dfb131acecc52c"
 dependencies = [
  "discord-rich-presence",
+ "libc",
  "log",
  "serde",
  "serde_json",
+ "sysinfo 0.36.1",
  "tauri",
  "tauri-plugin",
  "thiserror 2.0.18",

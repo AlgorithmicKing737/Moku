@@ -23,10 +23,9 @@ async function boot() {
     appState.platform = platformAdapter.platform
     appState.version  = await platformAdapter.getVersion()
 
-    // Apply settings the moment they're read (a fast local-store load) — BEFORE the library load.
-    // loadLibrary blocks on the Suwayomi server, which can take ~15s to cold-start; gating settings
-    // behind it delayed everything driven by settings (Discord presence, theme, …) until the
-    // server answered. Settings don't depend on the library, so there's no reason to wait.
+    // Apply settings BEFORE the library load.
+    // loadLibrary after Suwayomi server, can take long time
+    // delaying everything until the server answered.
     const settingsData = await loadSettings()
     await loadSettingsIntoState(settingsData.settings)
 
