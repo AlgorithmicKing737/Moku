@@ -152,10 +152,21 @@
 
   $effect(() => {
     if (settingsState.settings.discordRpc) {
-      discord.initRpc().then(() => discord.setIdle())
+      discord.initRpc().then(() => discord.setIdle()).catch(() => {})
     } else {
-      discord.destroyRpc()
+      discord.destroyRpc().catch(() => {})
     }
+  })
+
+  // Route changes reset reader presence to "Browsing". setIdle() is harmless when RPC is off.
+  $effect(() => {
+    if (!isReaderRoute) discord.setIdle().catch(() => {})
+  })
+
+  // Idle splash → show "Away". on return, restore prior card.
+  $effect(() => {
+    if (appState.idleSplash || appState.devSplash) discord.setAway().catch(() => {})
+    else discord.clearAway().catch(() => {})
   })
 
   let idleTimer:       ReturnType<typeof setTimeout> | null = null

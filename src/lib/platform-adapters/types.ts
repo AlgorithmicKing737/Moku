@@ -17,8 +17,10 @@ export interface ServerLaunchConfig {
 export interface DiscordAssets {
   largeImage?: string
   largeText?:  string
+  largeUrl?:   string
   smallImage?: string
   smallText?:  string
+  smallUrl?:   string
 }
 
 export interface DiscordButton {
@@ -32,6 +34,8 @@ export interface DiscordPresence {
   assets?:     DiscordAssets
   buttons?:    DiscordButton[]
   timestamps?: { start?: number; end?: number }
+  activityType?:      number   // 0 Playing, 2 Listening, 3 Watching, 5 Competing
+  statusDisplayType?: number   // 0 Name, 1 State, 2 Details (member-list headline)
 }
 
 export interface AppUpdateInfo {

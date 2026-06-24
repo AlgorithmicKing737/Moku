@@ -23,12 +23,15 @@ async function boot() {
     appState.platform = platformAdapter.platform
     appState.version  = await platformAdapter.getVersion()
 
-    const [settingsData, libraryData] = await Promise.all([
-      loadSettings(),
+    // Apply settings BEFORE the library load.
+    // loadLibrary after Suwayomi server, can take long time
+    // delaying everything until the server answered.
+    const settingsData = await loadSettings()
+    await loadSettingsIntoState(settingsData.settings)
+
+    const [libraryData] = await Promise.all([
       loadLibrary(),
     ])
-
-    await loadSettingsIntoState(settingsData.settings)
 
     seriesState.bookmarks = libraryData.bookmarks
     readerState.markers   = libraryData.markers

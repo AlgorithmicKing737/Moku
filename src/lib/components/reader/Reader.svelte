@@ -14,7 +14,7 @@
   import { historyState }                                    from "$lib/state/history.svelte";
   import { setPreviewManga, seriesState }                   from "$lib/state/series.svelte";
   import { getAdapter }                                      from "$lib/request-manager";
-  import { setReading, clearReading }                        from "$lib/core/discord";
+  import { setReading }                                      from "$lib/core/discord";
   import { revokeBlobUrl, cancelQueuedFetches, preloadBlobUrls } from "$lib/core/cache/imageCache";
   import type { ReaderSettings }                             from "$lib/state/reader.svelte";
   import ReaderControls                                      from "$lib/components/reader/ReaderControls.svelte";
@@ -228,7 +228,6 @@
     : () => goBack(style, adjacent, startAtLast));
 
   function handleCloseReader() {
-    clearReading().catch(() => {});
     for (const url of readerState.pageUrls) revokeBlobUrl(url);
     readerState.closeReader();
   }
@@ -331,8 +330,9 @@
     }
   });
 
+  // Track the *visible* chapter, not activeChapter or Discord will show the wrong chapter.
   $effect(() => {
-    const ch    = readerState.activeChapter;
+    const ch    = displayChapter;
     const manga = readerState.activeManga;
     const idle  = appState.idleSplash;
     if (ch && manga && !idle) {
