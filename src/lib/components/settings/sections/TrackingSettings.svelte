@@ -1,7 +1,7 @@
 <script lang="ts">
   import Thumbnail from '$lib/components/shared/manga/Thumbnail.svelte';
   import { settingsState, updateSettings } from "$lib/state/settings.svelte";
-  import { toast } from "$lib/state/notifications.svelte";
+  import { addToast as toast } from "$lib/state/notifications.svelte";
   import { getAdapter } from "$lib/request-manager";
   import { platformService } from "$lib/platform-service";
   import { syncBackFromTracker } from "$lib/components/tracking/lib/trackingSync";

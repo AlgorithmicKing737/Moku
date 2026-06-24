@@ -1,7 +1,7 @@
 <script lang="ts">
   import ThreeDCard from '$lib/components/shared/manga/ThreeDCard.svelte'
   import { appState } from '$lib/state/app.svelte'
-  import { toast } from '$lib/state/notifications.svelte'
+  import { addToast as toast } from '$lib/state/notifications.svelte'
   import { settingsState } from '$lib/state/settings.svelte'
   import { cache } from '$lib/core/cache/queryCache'
   import { getUiAuthDebugStatus, refreshUiAccessToken, type UiAuthDebugStatus } from '$lib/core/auth'

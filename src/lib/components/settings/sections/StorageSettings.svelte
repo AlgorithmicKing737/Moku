@@ -2,7 +2,7 @@
   import { Trash, ClockCounterClockwise } from 'phosphor-svelte'
   import { untrack } from 'svelte'
   import { platformService } from '$lib/platform-service'
-  import { toast } from '$lib/state/notifications.svelte'
+  import { addToast as toast } from '$lib/state/notifications.svelte'
   import { settingsState, updateSettings } from '$lib/state/settings.svelte'
   import { exportAppData, importAppData } from '$lib/core/backup'
   import { loadBackups, saveBackups, saveSettings, saveLibrary } from '$lib/core/persistence/persist'

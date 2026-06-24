@@ -1,6 +1,5 @@
 import { detectAdapter }      from '$lib/platform-adapters'
-import { initPlatformService } from '$lib/platform-service'
-import { platformService }     from '$lib/platform-service'
+import { initPlatformService, platformService } from '$lib/platform-service'
 import { probeServer, loginBasic, loginUI, verifyBasicAuth, configureAuth } from '$lib/core/auth'
 import { authVerifiedState }   from '$lib/state/auth.svelte'
 import { appState }            from '$lib/state/app.svelte'
@@ -61,7 +60,6 @@ function handleAuthRequired(
   appState.authMode = authMode
 
   if (authMode === 'BASIC_AUTH' && user && pass) {
-    // Saved creds — set optimistically; a real 401 will re-prompt via reportUnauthorized
     loginBasic(user, pass)
     handleProbeSuccess(gen)
     return

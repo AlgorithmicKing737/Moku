@@ -3,9 +3,6 @@ import { clientFor, DEFAULT_ORDER } from './trackers'
 import type { TrackRecord }         from '$lib/types'
 import type { Manga }               from '$lib/types/manga'
 
-// Cache mangaCover for 24h: found URL, or '' for no-match (all sources answered, none had it).
-// failures are left uncached so retry.
-// what if a tracker is down? enjoy green leaf. touch grass. check back later.
 const coverCache = new MemoryCache<string>(200, 24 * 60 * 60 * 1000)
 
 export interface CoverInput {
@@ -16,7 +13,6 @@ export interface CoverInput {
   coversArePublic:      boolean
 }
 
-// Suwayomi thumbnails are relative paths; make them absolute against the (declared-public) server.
 function suwayomiCover(thumbnailUrl: string, base: string): string | null {
   if (!thumbnailUrl) return null
   if (thumbnailUrl.startsWith('http')) return thumbnailUrl
@@ -26,19 +22,16 @@ function suwayomiCover(thumbnailUrl: string, base: string): string | null {
 async function resolve(input: CoverInput): Promise<string | null> {
   const { manga, linkedRecords, configuredTrackerIds, serverBaseUrl, coversArePublic } = input
 
-  // Step 1 — server's own thumbnail, when declared reachable by Discord (lowest latency, exact cover).
   if (coversArePublic) {
     const url = suwayomiCover(manga.thumbnailUrl, serverBaseUrl)
     if (url) return url
   }
 
-  // A source throws error skip caching and retry.
   let errored = false
   const attempt = async (fn: () => Promise<string | null>): Promise<string | null> => {
     try { return await fn() } catch { errored = true; return null }
   }
 
-  // Step 2 — linked tracker, precise by-id (AniList before MAL. anilist has better quality).
   const linkedOrder = [...linkedRecords]
     .filter(r => clientFor(r.trackerId) && r.remoteId)
     .sort((a, b) => DEFAULT_ORDER.indexOf(a.trackerId) - DEFAULT_ORDER.indexOf(b.trackerId))
@@ -47,7 +40,6 @@ async function resolve(input: CoverInput): Promise<string | null> {
     if (url) return url
   }
 
-  // Steps 3 — title search: configured trackers or the public AniList/MAL,
   const linkedIds  = new Set(linkedRecords.map(r => r.trackerId))
   const titleOrder = [...new Set([...configuredTrackerIds.filter(id => !linkedIds.has(id)), ...DEFAULT_ORDER])]
     .filter(id => clientFor(id))
@@ -56,21 +48,20 @@ async function resolve(input: CoverInput): Promise<string | null> {
     if (url) return url
   }
 
-  if (errored) throw new Error('cover lookup inconclusive') // error: don't cache this
+  if (errored) throw new Error('cover lookup inconclusive')
   return null
 }
 
-// Public entry: Returns null when nothing is found use fallback image.
 export async function resolvePublicCover(input: CoverInput): Promise<string | null> {
   const key    = String(input.manga.id)
   const cached = coverCache.get(key)
   if (cached !== undefined) return cached || null
 
   try {
-    const url = await resolve(input)   // every source errored
-    coverCache.set(key, url ?? '')     // cache a hit OR a confirmed no-match
+    const url = await resolve(input)
+    coverCache.set(key, url ?? '')
     return url
   } catch {
-    return null                        // failure: leave uncached so the next read retries
+    return null               
   }
 }

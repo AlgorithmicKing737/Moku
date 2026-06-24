@@ -23,9 +23,6 @@ async function boot() {
     appState.platform = platformAdapter.platform
     appState.version  = await platformAdapter.getVersion()
 
-    // Apply settings BEFORE the library load.
-    // loadLibrary after Suwayomi server, can take long time
-    // delaying everything until the server answered.
     const settingsData = await loadSettings()
     await loadSettingsIntoState(settingsData.settings)
 
@@ -38,12 +35,13 @@ async function boot() {
     historyState.load(libraryData.sessions, libraryData.dailyReadCounts)
 
     const savedUrl  = settingsState.settings.serverUrl      ?? 'http://127.0.0.1:4567'
-    const authMode  = settingsState.settings.serverAuthMode ?? 'NONE'
+    const rawMode   = settingsState.settings.serverAuthMode ?? 'NONE'
+    const authMode  = rawMode === 'SIMPLE_LOGIN' ? 'UI_LOGIN' : rawMode
     const authUser  = settingsState.settings.serverAuthUser || undefined
     const authPass  = settingsState.settings.serverAuthPass || undefined
 
     appState.serverUrl = savedUrl
-    appState.authMode  = authMode === 'SIMPLE_LOGIN' ? 'UI_LOGIN' : authMode
+    appState.authMode  = authMode
 
     configureAuth(savedUrl, authMode, authUser, authPass)
 
@@ -65,7 +63,7 @@ async function boot() {
 
     const probe = await probeServer()
 
-    if (probe === 'auth_required') { appState.status = 'auth'; return }
+    if (probe === 'auth_required') { appState.authRequired = true; return }
     if (probe === 'unreachable') {
       appState.error  = `Could not reach server at ${savedUrl}`
       appState.status = 'error'

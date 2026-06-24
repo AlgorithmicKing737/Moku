@@ -8,7 +8,7 @@ export function getHistoryStats()       { return historyState.stats }
 export function getHistorySessions()    { return historyState.sessions }
 export function getHistoryDailyCounts() { return historyState.dailyReadCounts }
 
-export function setHeroSlot(i: 1 | 2 | 3, mangaId: number | null) {
+export function setHeroSlot(i: 0 | 1 | 2 | 3, mangaId: number | null) {
   homeState.heroSlots[i] = mangaId
 }
 

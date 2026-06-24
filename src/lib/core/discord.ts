@@ -19,22 +19,15 @@ const FALLBACK_IMAGE = 'moku_logo'
 // so its own thumbnail URL can be used directly.
 const SUWAYOMI_COVERS_PUBLIC = false
 
-// Discord activity verb. only set Playing(0)/Listening(2)/Watching(3)/Competing(5)
-// Type 4 is justa status and doesnt show in activity [and therefor none of the details]
 const ACTIVITY_TYPE          = 3
-// status-display 2 = use `details` as the member-list headline → "Playing <manga title>" while reading.
+
 const STATUS_DISPLAY_DETAILS = 2
 
 let sessionStart: number | null = null
 
-// Every command supersedes any in-flight one,
-// so a slow cover lookup from setReading can't stop a later idle/clear that ran while it was still resolving.
 let presenceEpoch = 0
 const supersede = () => ++presenceEpoch
 
-// Ambient presence = the last rpc card. While the idle is up we show "Away"
-// and restore this exact card on return.
-// `applyAmbient` caches the ambient payload but suppresses the push while `away`, so setReading updates can't override the Away frame.
 let lastAmbient: DiscordPresence | null = null
 let away = false
 
@@ -53,11 +46,8 @@ function formatChapter(chapter: Chapter): string {
   return `Chapter ${Number.isInteger(n) ? n : n.toFixed(1)}`
 }
 
-// Resolve a public cover URL from tracker or public api AniList/MAL by-title
-// Falls back to logo
 async function resolveCover(manga: Manga): Promise<string> {
   try {
-    // Ensure this manga's linked records are loaded so step 2 (by-id) can fire.
     await trackingState.loadForManga(manga.id)
     const cover = await resolvePublicCover({
       manga,
@@ -71,12 +61,6 @@ async function resolveCover(manga: Manga): Promise<string> {
   return FALLBACK_IMAGE
 }
 
-// Reading presence.
-
-// Discord validates an activity ATOMICALLY: a frame with both URL asset and uploaded asse is silently dropped
-// the presence just freezes on the previous frame.
-// A URL small image asset logo, however, renders alongside a URL large image
-// `largeUrl` is left unset (reserved for linking to a traker).
 function buildReadingPresence(manga: Manga, chapter: Chapter, cover: string) {
   return {
     details:    trunc(manga.title),
@@ -85,7 +69,6 @@ function buildReadingPresence(manga: Manga, chapter: Chapter, cover: string) {
     assets: {
       largeImage: cover,
       largeText:  trunc(manga.title),
-      // largeUrl is left unset (reserved for linking to a traker).
       smallImage: 'https://raw.githubusercontent.com/frozenkelp/Moku/sidestep-DRPC-cover-img/static/moku_logo.png', // NOTe: switch to moku-project/Moku/main in the PR
       smallText:  'Moku',
       smallUrl:   REPO_URL,

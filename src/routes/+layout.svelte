@@ -73,7 +73,7 @@
     async function init() {
       const { detectAdapter }       = await import('$lib/platform-adapters')
       const { initPlatformService } = await import('$lib/platform-service')
-      const { loadSettings }        = await import('$lib/core/persistence/persist')
+      const { loadSettings, loadLibrary } = await import('$lib/core/persistence/persist')
       const { startProbe }          = await import('$lib/state/boot.svelte')
 
       const adapter = detectAdapter()
@@ -83,9 +83,18 @@
       appState.version  = await platformService.getVersion().catch(() => '')
       appState.appDir   = await platformService.getAppDir().catch(() => '')
 
-      const persisted = await loadSettings()
-      const raw       = persisted?.settings ?? persisted ?? null
+      const [persistedSettings, persistedLibrary] = await Promise.all([loadSettings(), loadLibrary()])
+
+      const raw = persistedSettings?.settings ?? persistedSettings ?? null
       await loadSettingsIntoState(raw)
+
+      const { historyState }              = await import('$lib/state/history.svelte')
+      const { seriesState: _seriesState } = await import('$lib/state/series.svelte')
+      const { readerState }               = await import('$lib/state/reader.svelte')
+
+      historyState.load(persistedLibrary.sessions, persistedLibrary.dailyReadCounts)
+      _seriesState.bookmarks = persistedLibrary.bookmarks
+      readerState.markers    = persistedLibrary.markers
 
       const s = (raw ?? {}) as Record<string, unknown>
       appState.serverUrl = (s.serverUrl      as string) ?? ''
@@ -158,12 +167,10 @@
     }
   })
 
-  // Route changes reset reader presence to "Browsing". setIdle() is harmless when RPC is off.
   $effect(() => {
     if (!isReaderRoute) discord.setIdle().catch(() => {})
   })
 
-  // Idle splash → show "Away". on return, restore prior card.
   $effect(() => {
     if (appState.idleSplash || appState.devSplash) discord.setAway().catch(() => {})
     else discord.clearAway().catch(() => {})

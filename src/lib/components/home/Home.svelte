@@ -5,7 +5,10 @@
   import { getAdapter } from '$lib/request-manager'
   import { libraryState } from '$lib/state/library.svelte'
   import { homeState, setHeroSlot } from '$lib/state/home.svelte'
-  import { openReaderForChapter }   from '$lib/state/series.svelte'
+  import { openReaderForChapter, seriesState }   from '$lib/state/series.svelte'
+  import { buildChapterList }       from '$lib/components/series/lib/chapterList'
+  import { settingsState }          from '$lib/state/settings.svelte'
+  import { DEFAULT_MANGA_PREFS } from '$lib/types/settings'
   import { historyState } from '$lib/state/history.svelte'
   import type { ReadSession } from '$lib/types/history'
   import HeroStage       from '$lib/components/home/HeroStage.svelte'
@@ -102,9 +105,18 @@
     heroChapters        = []
     heroAllChapters     = []
     try {
-      const chapters = await getAdapter().getChapters(String(mangaId))
+      await seriesState.loadChapters(mangaId)
       if (heroChaptersFor !== mangaId) return
-      const all = [...chapters].sort((a, b) => a.sourceOrder - b.sourceOrder)
+      const chapters = seriesState.chaptersFor(mangaId)
+      const prefs = settingsState.settings.mangaPrefs?.[mangaId] ?? {}
+      const all = buildChapterList(chapters, {
+        sortMode:           'source',
+        sortDir:            'asc',
+        preferredScanlator: prefs.preferredScanlator  ?? DEFAULT_MANGA_PREFS.preferredScanlator,
+        scanlatorFilter:    prefs.scanlatorFilter     ?? DEFAULT_MANGA_PREFS.scanlatorFilter,
+        scanlatorBlacklist: prefs.scanlatorBlacklist  ?? DEFAULT_MANGA_PREFS.scanlatorBlacklist,
+        scanlatorForce:     prefs.scanlatorForce      ?? DEFAULT_MANGA_PREFS.scanlatorForce,
+      })
       heroAllChapters = all
       const lastReadIdx = heroEntry
         ? all.findLastIndex(c => c.id === heroEntry!.endChapterId)
@@ -165,6 +177,7 @@
       {loadingHeroChapters}
       {resuming}
       onresume={resumeActive}
+      onviewseries={() => heroMangaId && goto(`/series/${heroMangaId}`)}
       onopenchapter={openChapter}
       oncyclenext={cycleNext}
       oncycleprev={cyclePrev}

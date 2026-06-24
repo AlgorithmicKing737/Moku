@@ -2,7 +2,8 @@ import type { Manga, Chapter }      from "$lib/types";
 import type { MarkerEntry, MarkerColor } from "$lib/types/history";
 import type { MangaPrefs, ReaderSettings, ReaderPreset } from "$lib/types/settings";
 import { settingsState, updateSettings }                 from "$lib/state/settings.svelte";
-import { seriesState }                                   from "$lib/state/series.svelte";
+import { seriesState } from "$lib/state/series.svelte";
+import { DEFAULT_MANGA_PREFS } from "$lib/types/settings";
 import { goto }                                          from "$app/navigation";
 
 export const PAGE_STYLES   = ["single", "fade", "double", "longstrip"] as const;
@@ -205,14 +206,6 @@ class ReaderState {
     updateSettings({ readerPresets: (settingsState.settings.readerPresets ?? []).filter(p => p.id !== id) });
   }
 }
-
-export const DEFAULT_MANGA_PREFS: MangaPrefs = {
-  autoDownload: false, downloadAhead: 0, deleteOnRead: false,
-  deleteDelayHours: 0, maxKeepChapters: 0, pauseUpdates: false,
-  refreshInterval: "global", preferredScanlator: "", scanlatorFilter: [],
-  scanlatorBlacklist: [], scanlatorForce: false, autoDownloadScanlators: [],
-  sortMode: "source", sortDir: "asc", coverUrl: "",
-};
 
 export const readerState = new ReaderState();
 

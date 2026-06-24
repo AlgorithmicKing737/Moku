@@ -9,7 +9,16 @@
   import LibraryToolbar  from '$lib/components/library/LibraryToolbar.svelte'
   import LibraryGrid     from '$lib/components/library/LibraryGrid.svelte'
   import ContextMenu     from '$lib/components/shared/ui/ContextMenu.svelte'
-  import type { MenuEntry } from '$lib/components/shared/ui/ContextMenu.svelte'
+
+  interface MenuEntry {
+    label?:    string
+    icon?:     unknown
+    onClick?:  () => void
+    children?: MenuEntry[]
+    separator?: boolean
+    danger?:   boolean
+    disabled?: boolean
+  }
   import type { Manga, Category } from '$lib/types'
   import {
     Books, Folder, FolderSimple, FolderSimplePlus,
@@ -28,6 +37,7 @@
 
   const UPDATE_STATUS_POLL_MS = 2_000
 
+  let tabsEl: HTMLDivElement = $state() as HTMLDivElement
   let ctx:      { x: number; y: number; manga: Manga } | null = $state(null)
   let emptyCtx: { x: number; y: number } | null              = $state(null)
 
@@ -43,7 +53,6 @@
     libraryState.syncFromSettings(settingsState.settings)
     loadLibrary()
   })
-  $effect(() => { libraryState.syncFromSettings(settingsState.settings) })
   $effect(() => { libraryState.tab; libraryState.exitSelect() })
   $effect(() => { libraryState.guardTab() })
   $effect(() => {
@@ -83,7 +92,7 @@
             (m as any).categoryIds?.includes(c.id)
           )
           return { ...c, mangas: { nodes } }
-        })
+        }) as unknown as Category[]
       }
 
       libraryState.setCategories(cats)
@@ -105,7 +114,6 @@
   }
 
   async function doRemove(m: Manga) {
-    // Remove from every category first, then remove from library
     const catIds = libraryState.categories
       .filter(c => (libraryState.categoryMangaMap.get(c.id) ?? []).some(x => x.id === m.id))
       .map(c => c.id)
@@ -168,7 +176,7 @@
           ? existing.filter((m: Manga) => m.id !== manga.id)
           : [...existing, manga]
         return { ...c, mangas: { nodes: updated } }
-      })
+      }) as unknown as Category[]
     )
     if (!inCat) libraryState.bumpCategoryFrecency(cat.id)
     try {
@@ -220,7 +228,6 @@
   async function onBulkRemove() {
     bulkWorking = true
     try {
-      // For each selected manga, remove from all its categories first
       await Promise.allSettled(
         [...libraryState.selected].map(async (id) => {
           const catIds = libraryState.categories
@@ -433,6 +440,7 @@
       hasActiveFilters={libraryState.hasActiveFilters}
       visibleCategories={libraryState.visibleCategories}
       visibleTabIds={libraryState.visibleTabIds}
+      completedCatId={libraryState.completedCatId}
       counts={libraryState.counts}
       search={libraryState.filter.query}
       refreshing={libraryState.refreshing}
@@ -445,6 +453,7 @@
       {dragOverTabId}
       {sortPanelOpen}
       {filterPanelOpen}
+      bind:tabsEl
       onTabChange={(t) => libraryState.tab = t}
       onSearchChange={(q) => libraryState.filter.query = q}
       onSortChange={(mode) => libraryState.setTabSort(libraryState.tab, mode)}

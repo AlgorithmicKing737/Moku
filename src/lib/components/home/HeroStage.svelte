@@ -27,6 +27,7 @@
     loadingHeroChapters,
     resuming,
     onresume,
+    onviewseries,
     onopenchapter,
     oncyclenext,
     oncycleprev,
@@ -47,6 +48,7 @@
     loadingHeroChapters: boolean
     resuming:            boolean
     onresume:            () => void
+    onviewseries:        () => void
     onopenchapter:       (ch: Chapter) => void
     oncyclenext:         () => void
     oncycleprev:         () => void
@@ -72,14 +74,14 @@
 
   <button
     class="hero-cover-col"
-    onclick={onresume}
-    disabled={resuming || activeSlot?.kind === 'empty'}
-    aria-label={heroTitle ? `Resume ${heroTitle}` : 'No manga selected'}
+    onclick={onviewseries}
+    disabled={activeSlot?.kind === 'empty'}
+    aria-label={heroTitle ? `View ${heroTitle}` : 'No manga selected'}
   >
     {#if heroThumb}
       <Thumbnail src={heroThumb} alt={heroTitle} class="hero-cover" />
       {#if activeSlot?.kind === 'continue'}
-        <div class="cover-resume-hint"><Play size={20} weight="fill" /></div>
+        <div class="cover-resume-hint"><BookOpen size={20} weight="light" /></div>
       {/if}
     {:else}
       <div class="hero-cover-empty"><BookOpen size={28} weight="light" /></div>

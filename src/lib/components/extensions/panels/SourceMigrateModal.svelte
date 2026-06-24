@@ -149,8 +149,6 @@
 
         const toMarkRead: number[] = [];
 
-        // LibraryManga has no chapter detail — use unreadCount as a proxy:
-        // if unreadCount < total fetched, the user had read some, so carry them all over.
         const hadReads = entries[idx].manga.unreadCount < newChaps.length;
         if (hadReads) {
           for (const nc of newChaps) toMarkRead.push(nc.id);

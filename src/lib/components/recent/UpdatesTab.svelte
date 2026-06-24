@@ -28,7 +28,6 @@
     onOpenUpdate, onOpenSeries, onEnqueue, onDeleteDownload,
   }: Props = $props()
 
-  // key = `${dayLabel}::${mangaId}`, tracks which bundles are expanded
   let expandedBundles: Record<string, boolean> = $state({})
 
   function bundleKey(dayLabel: string, mangaId: number) {
@@ -43,7 +42,6 @@
   type BundleRow = { kind: 'bundle'; mangaId: number; items: RecentUpdate[]; key: string }
   type Row       = SingleRow | BundleRow
 
-  // Within a day group, collapse consecutive runs of BUNDLE_THRESHOLD+ chapters from the same manga
   function bundleRows(dayLabel: string, items: RecentUpdate[]): Row[] {
     const rows: Row[] = []
     let i = 0

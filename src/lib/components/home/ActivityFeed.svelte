@@ -15,7 +15,6 @@
     onopenlibrary: () => void
   } = $props()
 
-  // Deduplicate by manga — keep the most recent session per manga (sessions are newest-first)
   const entries = $derived(
     historyState.sessions
       .filter((s, i, arr) => arr.findIndex(x => x.mangaId === s.mangaId) === i)

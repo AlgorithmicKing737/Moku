@@ -32,6 +32,5 @@ class NotificationStore {
 export const notifications = new NotificationStore();
 
 export function addToast(t: Omit<Toast, "id">)             { notifications.addToast(t); }
-export function toast(t: Omit<Toast, "id">)                { notifications.addToast(t); }
 export function dismissToast(id: string)                    { notifications.dismissToast(id); }
 export function setActiveDownloads(next: ActiveDownload[])  { notifications.setActiveDownloads(next); }

@@ -1,4 +1,5 @@
-import { readerState, DEFAULT_MANGA_PREFS } from "$lib/state/reader.svelte";
+import { readerState } from "$lib/state/reader.svelte";
+import { DEFAULT_MANGA_PREFS } from "$lib/types/settings";;
 import { seriesState }                      from "$lib/state/series.svelte";
 import { settingsState }                    from "$lib/state/settings.svelte";
 import { getAdapter }                       from "$lib/request-manager";

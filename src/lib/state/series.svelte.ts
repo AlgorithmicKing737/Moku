@@ -1,6 +1,7 @@
 import type { Manga, Chapter }                      from '$lib/types'
 import type { BookmarkEntry, MarkerEntry, MarkerColor } from '$lib/types/history'
-import type { MangaPrefs }                            from '$lib/types/settings'
+import type { MangaPrefs } from '$lib/types/settings'
+import { DEFAULT_MANGA_PREFS }                            from '$lib/types/settings'
 import { settingsState, updateSettings }              from '$lib/state/settings.svelte'
 import { getAdapter }                                 from '$lib/request-manager'
 import { buildChapterList }                           from '$lib/components/series/lib/chapterList'
@@ -8,21 +9,8 @@ import { goto }                                       from '$app/navigation'
 
 export type { BookmarkEntry, MarkerEntry, MarkerColor } from '$lib/types/history'
 export type { MangaPrefs }                              from '$lib/types/settings'
+export { DEFAULT_MANGA_PREFS }                           from '$lib/types/settings'
 
-export const DEFAULT_MANGA_PREFS: MangaPrefs = {
-  autoDownload:           false,
-  downloadAhead:          0,
-  deleteOnRead:           false,
-  deleteDelayHours:       0,
-  maxKeepChapters:        0,
-  pauseUpdates:           false,
-  refreshInterval:        'global',
-  preferredScanlator:     '',
-  scanlatorFilter:        [],
-  scanlatorBlacklist:     [],
-  scanlatorForce:         false,
-  autoDownloadScanlators: [],
-}
 
 const CHAPTER_TTL_MS = 2 * 60 * 1000
 
@@ -183,8 +171,6 @@ class SeriesStore {
     ].slice(0, 200)
   }
 
-  /** Sets the single "resume" bookmark for a manga, replacing any bookmark
-   *  that exists for that manga in a different chapter. */
   setBookmark(entry: Omit<BookmarkEntry, 'savedAt'>, label?: string) {
     const other = this.bookmarks.find(b => b.mangaId === entry.mangaId && b.chapterId !== entry.chapterId)
     if (other) this.removeBookmark(other.chapterId)
@@ -215,7 +201,6 @@ class SeriesStore {
 }
 
 export const seriesState = new SeriesStore()
-export const seriesStore  = seriesState
 
 export function setActiveManga(next: Manga | null)                                                  { seriesState.setActiveManga(next) }
 export function setPreviewManga(next: Manga | null)                                                 { seriesState.setPreviewManga(next) }

@@ -3,7 +3,7 @@
   import Thumbnail   from "$lib/components/manga/Thumbnail.svelte";
   import { appState } from "$lib/state/app.svelte";
   import { requestManager } from "$lib/request-manager/index";
-  import { toast } from "$lib/state/notifications.svelte";
+  import { addToast as toast } from "$lib/state/notifications.svelte";
   import type { Manga, Category } from "$lib/types/index";
   import ContextMenu, { type MenuEntry } from "$lib/components/common/ContextMenu.svelte";
 
