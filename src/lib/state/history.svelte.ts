@@ -179,7 +179,7 @@ class HistoryStore {
     }
 
     const day = dateKey(endedAt)
-    this.dailyReadCounts[day] = (this.dailyReadCounts[day] ?? 0) + 1
+    this.dailyReadCounts[day] = (this.dailyReadCounts[day] ?? 0) + session.chaptersSpanned
 
     this.sessions = [session, ...this.sessions].slice(0, MAX_SESSIONS)
     this.stats    = computeStats(this.sessions)
