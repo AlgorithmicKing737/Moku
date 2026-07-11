@@ -59,7 +59,7 @@
       <MagnifyingGlass size={12} class="search-icon" weight="light" />
       <input class="search" placeholder="Search" value={search} oninput={(e) => onSearch((e.target as HTMLInputElement).value)} />
     </div>
-    <button class="icon-btn" class:active={panel === "repos"} onclick={() => onPanel("repos")} title="Manage repos">
+    <button class="icon-btn" class:active={panel === "repos"} data-tour="add-source" onclick={() => onPanel("repos")} title="Manage repos">
       <Plus size={14} weight="light" />
     </button>
     <button class="icon-btn" class:active={panel === "apk"} onclick={() => onPanel("apk")} title="Install from URL">

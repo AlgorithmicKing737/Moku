@@ -43,6 +43,7 @@
       <button
         class="tab"
         class:active={activeIndex === TABS.indexOf(tab)}
+        data-tour="sidebar-nav"
         title={tab.label}
         onclick={() => goto(tab.path)}
       >

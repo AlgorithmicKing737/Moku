@@ -5,6 +5,7 @@
   import { settingsState } from '$lib/state/settings.svelte'
   import { cache } from '$lib/core/cache/queryCache'
   import { getUiAuthDebugStatus, refreshUiAccessToken, type UiAuthDebugStatus } from '$lib/core/auth'
+  import { replayOnboarding }                                          from '$lib/state/onboarding.svelte'
   import { invoke } from '@tauri-apps/api/core'
 
   interface PerfSnapshot { cacheEntries: number; cacheKeys: string[]; oldestEntryMs: number | null; newestEntryMs: number | null }
@@ -134,6 +135,16 @@
             <button class="s-dev-pill {kind}" onclick={() => toast({ kind, title, body })}>{label}</button>
           {/each}
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="s-section">
+    <p class="s-section-title">Onboarding</p>
+    <div class="s-section-body">
+      <div class="s-row">
+        <div class="s-row-info"><span class="s-label">Replay onboarding</span><span class="s-desc">Reopens the welcome flow</span></div>
+        <button class="s-btn" onclick={replayOnboarding}>Replay</button>
       </div>
     </div>
   </div>

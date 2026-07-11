@@ -10,6 +10,10 @@
   import * as discord                                                   from '$lib/core/discord'
   import SplashScreen                                                   from '$lib/components/chrome/SplashScreen.svelte'
   import AuthGate                                                       from '$lib/components/chrome/AuthGate.svelte'
+  import Onboarding                                                     from '$lib/components/onboarding/Onboarding.svelte'
+  import TourOverlay                                                    from '$lib/components/onboarding/TourOverlay.svelte'
+  import TourFinish                                                     from '$lib/components/onboarding/TourFinish.svelte'
+  import { maybeStartOnboarding }                                       from '$lib/state/onboarding.svelte'
   import Sidebar                                                        from '$lib/components/chrome/Sidebar.svelte'
   import TitleBar                                                       from '$lib/components/chrome/TitleBar.svelte'
   import Toaster                                                        from '$lib/components/chrome/Toaster.svelte'
@@ -156,6 +160,10 @@
   })
 
   $effect(() => {
+    if (appState.status === 'ready' && settingsLoaded) maybeStartOnboarding()
+  })
+
+  $effect(() => {
     if (appState.status === 'booting') splashDismissed = false
   })
 
@@ -282,6 +290,9 @@
 {/if}
 
 <AuthGate />
+<Onboarding />
+<TourOverlay />
+<TourFinish />
 <Toaster toasts={notifications.toasts} />
 {#if seriesState.previewManga}
   <MangaPreview />
