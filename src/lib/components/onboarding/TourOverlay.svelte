@@ -154,6 +154,6 @@
   .title { font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--text-primary); margin: 0 0 4px; }
   .body  { font-size: var(--text-xs); color: var(--text-muted); line-height: 1.5; margin: 0 0 var(--sp-3); }
 
-  .btn       { width: 100%; padding: 7px; border-radius: var(--radius-md); background: var(--accent); border: 1px solid var(--accent); color: var(--accent-fg); font-size: var(--text-xs); font-family: var(--font-ui); cursor: pointer; transition: opacity var(--t-base); }
-  .btn:hover { opacity: 0.85; }
+  .btn       { width: 100%; padding: 7px; border-radius: var(--radius-md); background: var(--accent-muted); border: 1px solid var(--accent-dim); color: var(--accent-fg); font-size: var(--text-xs); font-family: var(--font-ui); cursor: pointer; transition: filter var(--t-base); }
+  .btn:hover { filter: brightness(1.12); }
 </style>

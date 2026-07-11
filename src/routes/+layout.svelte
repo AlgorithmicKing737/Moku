@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount }                                                    from 'svelte'
   import { page }                                                       from '$app/stores'
-  import { appState, app, type AppStatus }                             from '$lib/state/app.svelte'
+  import { appState, app, type AppStatus, checkForChangelog }         from '$lib/state/app.svelte'
   import { boot }                                                        from '$lib/state/boot.svelte'
   import { notifications }                                              from '$lib/state/notifications.svelte'
   import { settingsState, loadSettingsIntoState, updateSettings }       from '$lib/state/settings.svelte'
@@ -13,6 +13,7 @@
   import Onboarding                                                     from '$lib/components/onboarding/Onboarding.svelte'
   import TourOverlay                                                    from '$lib/components/onboarding/TourOverlay.svelte'
   import TourFinish                                                     from '$lib/components/onboarding/TourFinish.svelte'
+  import ChangelogModal                                                 from '$lib/components/chrome/ChangelogModal.svelte'
   import { maybeStartOnboarding }                                       from '$lib/state/onboarding.svelte'
   import Sidebar                                                        from '$lib/components/chrome/Sidebar.svelte'
   import TitleBar                                                       from '$lib/components/chrome/TitleBar.svelte'
@@ -107,6 +108,8 @@
       appState.authPass  = (s.serverAuthPass as string) ?? ''
 
       settingsLoaded = true
+
+      checkForChangelog()
 
       applyTheme(
         settingsState.settings.theme        ?? 'dark',
@@ -293,6 +296,7 @@
 <Onboarding />
 <TourOverlay />
 <TourFinish />
+<ChangelogModal />
 <Toaster toasts={notifications.toasts} />
 {#if seriesState.previewManga}
   <MangaPreview />

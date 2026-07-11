@@ -7,6 +7,7 @@
   import { getUiAuthDebugStatus, refreshUiAccessToken, type UiAuthDebugStatus } from '$lib/core/auth'
   import { replayOnboarding }                                          from '$lib/state/onboarding.svelte'
   import { invoke } from '@tauri-apps/api/core'
+  import { devTestChangelog } from '$lib/state/app.svelte'
 
   interface PerfSnapshot { cacheEntries: number; cacheKeys: string[]; oldestEntryMs: number | null; newestEntryMs: number | null }
 
@@ -18,6 +19,8 @@
   let helloBusy       = $state(false)
   let authStatus      = $state<UiAuthDebugStatus | null>(null)
   let authRefreshBusy = $state(false)
+  let changelogTestVersion = $state('')
+  let changelogTestError   = $state('')
 
   $effect(() => {
     import('@tauri-apps/api/app').then(m => m.getVersion()).then(v => appVersion = v).catch(() => {})
@@ -109,6 +112,26 @@
     appState.devSplash = true
   }
 
+  async function testChangelogCurrent() {
+    changelogTestError = ''
+    try {
+      const entry = await devTestChangelog(appVersion)
+      if (!entry) changelogTestError = `No release found for tag v${appVersion}`
+    } catch (e: any) {
+      changelogTestError = String(e?.message ?? e)
+    }
+  }
+
+  async function testChangelogVersion() {
+    changelogTestError = ''
+    try {
+      const entry = await devTestChangelog(changelogTestVersion.trim())
+      if (!entry) changelogTestError = `No release found for tag v${changelogTestVersion.trim()}`
+    } catch (e: any) {
+      changelogTestError = String(e?.message ?? e)
+    }
+  }
+
   async function testWindowsHello() {
     helloBusy = true
     try {
@@ -146,6 +169,36 @@
         <div class="s-row-info"><span class="s-label">Replay onboarding</span><span class="s-desc">Reopens the welcome flow</span></div>
         <button class="s-btn" onclick={replayOnboarding}>Replay</button>
       </div>
+    </div>
+  </div>
+
+  <div class="s-section">
+    <p class="s-section-title">Changelog</p>
+    <div class="s-section-body">
+      <div class="s-row">
+        <div class="s-row-info">
+          <span class="s-label">Fetch &amp; show for current version</span>
+          <span class="s-desc">Pulls the release matching {appVersion}</span>
+        </div>
+        <button class="s-btn" disabled={appState.changelogLoading} onclick={testChangelogCurrent}>
+          {appState.changelogLoading ? '…' : 'Test'}
+        </button>
+      </div>
+      <div class="s-row">
+        <div class="s-row-info">
+          <span class="s-label">Fetch &amp; show for version</span>
+          <span class="s-desc">Enter a tag like 0.10.1</span>
+        </div>
+        <div class="s-btn-row">
+          <input class="s-dev-input" bind:value={changelogTestVersion} placeholder="0.10.1" />
+          <button class="s-btn s-btn-accent" disabled={appState.changelogLoading || !changelogTestVersion} onclick={testChangelogVersion}>
+            {appState.changelogLoading ? '…' : 'Fetch'}
+          </button>
+        </div>
+      </div>
+      {#if changelogTestError}
+        <div class="s-row"><span class="s-desc" style="color:var(--danger)">{changelogTestError}</span></div>
+      {/if}
     </div>
   </div>
 
@@ -251,3 +304,20 @@
   </div>
 
 </div>
+
+<style>
+  .s-dev-input {
+    width: 90px;
+    padding: 6px 8px;
+    border-radius: var(--radius-md);
+    background: var(--bg-raised);
+    border: 1px solid var(--border-dim);
+    color: var(--text-primary);
+    font-size: var(--text-sm);
+    font-family: var(--font-ui);
+  }
+  .s-dev-input:focus {
+    outline: none;
+    border-color: var(--border-strong);
+  }
+</style>

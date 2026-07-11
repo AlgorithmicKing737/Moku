@@ -25,8 +25,8 @@
   .title { font-family:var(--font-ui); font-size:11px; font-weight:500; letter-spacing:0.26em; text-transform:uppercase; color:var(--text-secondary); margin:-6px 0 0; user-select:none; }
   .body  { font-family:var(--font-ui); font-size:var(--text-sm); color:var(--text-faint); margin:0; }
 
-  .btn                              { width:100%; padding:9px; border-radius:var(--radius-md); background:var(--accent); border:1px solid var(--accent); color:var(--accent-fg); font-size:var(--text-sm); font-family:var(--font-ui); letter-spacing:var(--tracking-wide); cursor:pointer; transition:opacity var(--t-base); }
-  .btn:hover                        { opacity:0.85; }
+  .btn                              { width:100%; padding:9px; border-radius:var(--radius-md); background:var(--accent-muted); border:1px solid var(--accent-dim); color:var(--accent-fg); font-size:var(--text-sm); font-family:var(--font-ui); letter-spacing:var(--tracking-wide); cursor:pointer; transition:filter var(--t-base); }
+  .btn:hover                        { filter:brightness(1.12); }
   .btn--ghost                       { background:none; border-color:transparent; color:var(--text-faint); font-size:var(--text-xs); padding:4px; }
   .btn--ghost:hover                 { color:var(--text-muted); opacity:1; }
 

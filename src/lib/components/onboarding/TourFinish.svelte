@@ -121,8 +121,8 @@
   }
   .discord:hover { border-color:var(--border-strong); color:var(--text-primary); }
 
-  .btn                              { width:100%; padding:9px; border-radius:var(--radius-md); background:var(--accent); border:1px solid var(--accent); color:var(--accent-fg); font-size:var(--text-sm); font-family:var(--font-ui); letter-spacing:var(--tracking-wide); cursor:pointer; transition:opacity var(--t-base); }
-  .btn:hover                        { opacity:0.85; }
+  .btn                              { width:100%; padding:9px; border-radius:var(--radius-md); background:var(--accent-muted); border:1px solid var(--accent-dim); color:var(--accent-fg); font-size:var(--text-sm); font-family:var(--font-ui); letter-spacing:var(--tracking-wide); cursor:pointer; transition:filter var(--t-base); }
+  .btn:hover                        { filter:brightness(1.12); }
 
   @keyframes overlayIn { from { opacity:0 } to { opacity:1 } }
   @keyframes cardIn    { from { opacity:0; transform:translateY(28px) scale(0.97) } to { opacity:1; transform:translateY(0) scale(1) } }

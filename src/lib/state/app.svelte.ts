@@ -1,4 +1,6 @@
 import type { Platform } from '$lib/platform-adapters/types'
+import { fetchChangelogForVersion, type ChangelogEntry } from '$lib/core/changelog'
+import { settingsState, updateSettings } from '$lib/state/settings.svelte'
 
 export type AppStatus = 'booting' | 'not-configured' | 'locked' | 'ready' | 'error'
 
@@ -22,24 +24,27 @@ class AppStore {
 export const app = new AppStore()
 
 export const appState = $state({
-  status:        'booting' as AppStatus,
-  authRequired:  false     as boolean,
-  error:         null      as string | null,
-  serverUrl:     '',
-  authenticated: false,
-  authMode:      'NONE'    as 'NONE' | 'BASIC_AUTH' | 'UI_LOGIN',
-  platform:      'web'     as Platform,
-  version:       '',
-  libraryFilter: '',
-  navPage:       '',
-  categories:    [] as { id: number; name: string }[],
-  history:       [] as unknown[],
-  toasts:        [] as unknown[],
-  appDir:        '',
-  authUser:      '',
-  authPass:      '',
-  idleSplash:    false,
-  devSplash:     false,
+  status:            'booting' as AppStatus,
+  authRequired:      false     as boolean,
+  error:             null      as string | null,
+  serverUrl:         '',
+  authenticated:     false,
+  authMode:          'NONE'    as 'NONE' | 'BASIC_AUTH' | 'UI_LOGIN',
+  platform:          'web'     as Platform,
+  version:           '',
+  libraryFilter:     '',
+  navPage:           '',
+  categories:        [] as { id: number; name: string }[],
+  history:           [] as unknown[],
+  toasts:            [] as unknown[],
+  appDir:            '',
+  authUser:          '',
+  authPass:          '',
+  idleSplash:        false,
+  devSplash:         false,
+  changelogVisible:  false,
+  changelogLoading:  false,
+  changelogEntry:    null as ChangelogEntry | null,
 })
 
 export function setSettingsOpen(next: boolean)        { app.setSettingsOpen(next) }
@@ -47,3 +52,51 @@ export function saveScroll(key: string, top: number)  { app.saveScroll(key, top)
 export function getScroll(key: string): number        { return app.getScroll(key) }
 export function setGenreFilter(genre: string)         { appState.libraryFilter = genre }
 export function setNavPage(page: string)              { app.setNavPage(page); appState.navPage = page }
+
+export async function checkForChangelog() {
+  const currentVersion = appState.version
+  if (!currentVersion) return
+
+  const lastRunVersion = settingsState.settings.lastRunVersion
+
+  if (!lastRunVersion) {
+    updateSettings({ lastRunVersion: currentVersion })
+    return
+  }
+
+  if (lastRunVersion === currentVersion) return
+
+  appState.changelogLoading = true
+  try {
+    const entry = await fetchChangelogForVersion(currentVersion)
+    appState.changelogLoading = false
+    if (entry) {
+      appState.changelogEntry   = entry
+      appState.changelogVisible = true
+    }
+  } catch {
+    appState.changelogLoading = false
+  }
+
+  updateSettings({ lastRunVersion: currentVersion })
+}
+
+export async function devTestChangelog(version: string) {
+  appState.changelogLoading = true
+  try {
+    const entry = await fetchChangelogForVersion(version)
+    appState.changelogLoading = false
+    if (entry) {
+      appState.changelogEntry   = entry
+      appState.changelogVisible = true
+    }
+    return entry
+  } catch (e) {
+    appState.changelogLoading = false
+    throw e
+  }
+}
+
+export function dismissChangelog() {
+  appState.changelogVisible = false
+}
