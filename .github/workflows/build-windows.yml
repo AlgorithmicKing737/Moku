@@ -62,7 +62,7 @@ jobs:
         shell: bash
         run: |
           curl -fsSL \
-            "https://github.com/Suwayomi/Suwayomi-Server-preview/releases/download/v${SUWA_VERSION}/Suwayomi-Server-v${SUWA_VERSION}-windows-x64.zip" \
+            "https://github.com/Suwayomi/Suwayomi-Server/releases/download/v${SUWA_VERSION}/Suwayomi-Server-v${SUWA_VERSION}-windows-x64.zip" \
             -o suwayomi-windows.zip
           echo "${SUWA_HASH}  suwayomi-windows.zip" | sha256sum -c -
           unzip -q suwayomi-windows.zip -d suwayomi-raw

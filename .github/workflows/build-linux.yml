@@ -70,7 +70,7 @@ jobs:
       - name: Download Suwayomi (Linux x64)
         run: |
           curl -fsSL \
-            "https://github.com/Suwayomi/Suwayomi-Server-preview/releases/download/v${SUWA_VERSION}/Suwayomi-Server-v${SUWA_VERSION}-linux-x64.tar.gz" \
+            "https://github.com/Suwayomi/Suwayomi-Server/releases/download/v${SUWA_VERSION}/Suwayomi-Server-v${SUWA_VERSION}-linux-x64.tar.gz" \
             -o suwayomi-linux.tar.gz
           echo "${SUWA_HASH}  suwayomi-linux.tar.gz" | sha256sum -c -
           mkdir -p suwayomi-extracted

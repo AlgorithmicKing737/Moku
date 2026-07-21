@@ -64,7 +64,7 @@ jobs:
           dl() {
             local asset="$1" sha="$2" outdir="$3"
             curl -fsSL \
-              "https://github.com/Suwayomi/Suwayomi-Server-preview/releases/download/v${SUWA_VERSION}/${asset}" \
+              "https://github.com/Suwayomi/Suwayomi-Server/releases/download/v${SUWA_VERSION}/${asset}" \
               -o "${outdir}.tar.gz"
             echo "${sha}  ${outdir}.tar.gz" | shasum -a 256 -c -
             mkdir -p "${outdir}"
