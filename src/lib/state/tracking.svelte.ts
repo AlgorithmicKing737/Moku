@@ -170,7 +170,7 @@ class TrackingState {
     const filtered = buildChapterList(chapterList, { ...prefs, sortDir: 'asc' })
     const idx      = filtered.findIndex((c) => c.id === chapter.id)
     if (idx < 0) return
-    const position = idx + 1
+    const position = Math.floor(chapter.chapterNumber)
 
     const records = this.recordsFor(mangaId)
     for (const record of records) {
@@ -200,7 +200,7 @@ class TrackingState {
   ) {
     const filtered = buildChapterList(chapterList, { ...prefs, sortDir: 'asc' })
     const lastRead = [...filtered].reverse().find((c) => c.read)
-    const position = lastRead ? filtered.findIndex((c) => c.id === lastRead.id) + 1 : 0
+    const position = lastRead ? Math.floor(lastRead.chapterNumber) : 0
 
     const records = this.recordsFor(mangaId)
     for (const record of records.filter((r) => (r.lastChapterRead ?? 0) > position)) {
