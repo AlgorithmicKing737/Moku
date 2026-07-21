@@ -32,11 +32,6 @@
   const DT_TAB         = 'application/x-moku-tab'
   const COMPLETED_NAME = 'Completed'
 
-  let statusPollTimer:  ReturnType<typeof setTimeout> | null = null
-  let refreshDoneTimer: ReturnType<typeof setTimeout> | null = null
-
-  const UPDATE_STATUS_POLL_MS = 2_000
-
   let tabsEl: HTMLDivElement = $state() as HTMLDivElement
   let ctx:      { x: number; y: number; manga: Manga } | null = $state(null)
   let emptyCtx: { x: number; y: number } | null              = $state(null)
@@ -244,62 +239,6 @@
     } finally { bulkWorking = false }
   }
 
-  function stopStatusPolling() {
-    if (!statusPollTimer) return
-    clearTimeout(statusPollTimer)
-    statusPollTimer = null
-  }
-
-  async function startRefresh() {
-    if (libraryState.refreshing) return
-    libraryState.refreshing = true
-    libraryState.refreshProgress = { finished: 0, total: 0 }
-
-    try {
-      await getAdapter().checkForUpdates()
-    } catch (e) {
-      libraryState.refreshing = false
-      addToast({ kind: 'error', title: 'Update failed', body: String(e) })
-      return
-    }
-
-    const tick = async () => {
-      statusPollTimer = null
-      try {
-        const statusRes = await getAdapter().getLibraryUpdateStatus()
-        const wasRunning = libraryState.refreshing
-
-        libraryState.refreshProgress = {
-          finished: statusRes.finishedJobs ?? 0,
-          total:    statusRes.totalJobs    ?? 0,
-        }
-
-        if (statusRes.isRunning) {
-          statusPollTimer = setTimeout(tick, UPDATE_STATUS_POLL_MS)
-        } else if (wasRunning) {
-          libraryState.refreshing = false
-          libraryState.refreshDone = true
-          if (refreshDoneTimer) clearTimeout(refreshDoneTimer)
-          refreshDoneTimer = setTimeout(() => { libraryState.refreshDone = false }, 2500)
-          await loadLibrary()
-          addToast({ kind: 'info', title: 'Library updated' })
-        }
-      } catch {
-        if (libraryState.refreshing) statusPollTimer = setTimeout(tick, UPDATE_STATUS_POLL_MS)
-      }
-    }
-
-    statusPollTimer = setTimeout(tick, UPDATE_STATUS_POLL_MS)
-  }
-
-  async function cancelRefresh() {
-    if (!libraryState.refreshing) return
-    stopStatusPolling()
-    try { await getAdapter().stopLibraryUpdate() } catch {}
-    libraryState.refreshing = false
-    libraryState.refreshProgress = { finished: 0, total: 0 }
-  }
-
   async function refreshCategory(catId: number) {
     if (libraryState.refreshingCatId !== null || libraryState.refreshing) return
     libraryState.refreshingCatId = catId
@@ -443,10 +382,7 @@
       completedCatId={libraryState.completedCatId}
       counts={libraryState.counts}
       search={libraryState.filter.query}
-      refreshing={libraryState.refreshing}
-      refreshProgress={libraryState.refreshProgress}
-      refreshDone={libraryState.refreshDone}
-      refreshingCatId={libraryState.refreshingCatId}
+      viewMode={libraryState.viewMode}
       {activeDragKind}
       {dragInsertIdx}
       {dragTabId}
@@ -463,8 +399,7 @@
       onFilterToggle={(f) => libraryState.toggleTabFilter(libraryState.tab, f)}
       onFiltersClear={() => libraryState.clearTabFilters(libraryState.tab)}
       onFilterPanelToggle={() => filterPanelOpen = !filterPanelOpen}
-      onRefresh={startRefresh}
-      onCancelRefresh={cancelRefresh}
+      onViewModeChange={(mode) => libraryState.setViewMode(mode)}
       onOpenDownloadsFolder={openDownloadsFolder}
       onTabDragStart={onTabDragStart}
       onTabDragOver={onTabDragOver}
@@ -472,13 +407,6 @@
       onTabDrop={onTabDrop}
       onTabDragEnd={onTabDragEnd}
     />
-
-    {#if libraryState.refreshing && libraryState.refreshProgress.total > 0}
-      {@const pct = Math.round((libraryState.refreshProgress.finished / libraryState.refreshProgress.total) * 100)}
-      <div class="refresh-bar-wrap" aria-hidden="true">
-        <div class="refresh-bar-fill" style="width:{pct}%"></div>
-      </div>
-    {/if}
 
     <LibraryGrid
       items={libraryState.filteredItems}
@@ -488,6 +416,7 @@
       tab={libraryState.tab}
       visibleCategories={libraryState.visibleCategories}
       {bulkWorking}
+      viewMode={libraryState.viewMode}
       onCardClick={onCardClick}
       onCardContextMenu={openCtx}
       onSelectAll={() => libraryState.selectAll(libraryState.filteredItems.map(m => m.id))}
@@ -495,6 +424,7 @@
       onBulkRemove={onBulkRemove}
       onBulkRemoveFromFolder={bulkRemoveFromFolder}
       onBulkMove={bulkMove}
+      onViewModeChange={(mode) => libraryState.setViewMode(mode)}
     />
   {/if}
 </div>
@@ -526,7 +456,5 @@
     cursor: pointer; font-family: var(--font-ui);
     font-size: var(--text-xs); letter-spacing: var(--tracking-wide);
   }
-  .refresh-bar-wrap { height: 2px; background: var(--border-dim); flex-shrink: 0; overflow: hidden; }
-  .refresh-bar-fill { height: 100%; background: var(--accent); border-radius: 0 2px 2px 0; transition: width 0.6s ease; }
   @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
 </style>

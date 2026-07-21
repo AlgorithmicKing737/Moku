@@ -3,6 +3,7 @@
   import Thumbnail from '$lib/components/shared/manga/Thumbnail.svelte'
   import { settingsState } from '$lib/state/settings.svelte'
   import type { Manga, Category } from '$lib/types'
+  import type { LibraryViewMode } from '$lib/state/library.svelte'
 
   interface Props {
     items:                  Manga[]
@@ -12,6 +13,7 @@
     tab:                    string
     visibleCategories:      Category[]
     bulkWorking:            boolean
+    viewMode:               LibraryViewMode
     onCardClick:            (e: MouseEvent, m: Manga) => void
     onCardContextMenu:      (e: MouseEvent, m: Manga) => void
     onSelectAll:            () => void
@@ -23,7 +25,7 @@
 
   let {
     items, loading, selectMode, selected, tab,
-    visibleCategories, bulkWorking,
+    visibleCategories, bulkWorking, viewMode,
     onCardClick, onCardContextMenu, onSelectAll, onExitSelect,
     onBulkRemove, onBulkRemoveFromFolder, onBulkMove,
   }: Props = $props()
@@ -149,6 +151,51 @@
         : 'No manga in this library — browse sources to add some.'}
     </div>
 
+  {:else if viewMode === 'list'}
+    <div class="list">
+    {#each renderedItems as m (m.id)}
+      {@const isSelected  = selected.has(m.id)}
+      {@const isCompleted = m.status === 'COMPLETED' || (!m.unreadCount && (m.chapters?.totalCount ?? 0) > 0)}
+        <button
+          class="row"
+          class:row-selected={isSelected}
+          class:select-mode={selectMode}
+          onclick={(e) => onCardClick(e, m)}
+          oncontextmenu={(e) => onCardContextMenu(e, m)}
+        >
+          <div class="thumb" class:cover-contain={!cropCovers}>
+            <Thumbnail src={m.thumbnailUrl} alt={m.title} class="thumb-img" id={m.id} />
+          </div>
+          <div class="info">
+            <span class="row-title">{m.title}</span>
+            <div class="row-badges">
+              {#if isCompleted}
+                <span class="badge badge-done">✓ Done</span>
+              {:else if m.unreadCount}
+                <span class="badge badge-unread">{m.unreadCount} new</span>
+              {/if}
+              {#if m.downloadCount}
+                <span class="badge badge-dl">↓ {m.downloadCount}</span>
+              {/if}
+            </div>
+          </div>
+          {#if selectMode}
+            <div class="row-select" aria-hidden="true">
+              <div class="select-check" class:checked={isSelected}>
+                {#if isSelected}
+                  <CheckSquare size={18} weight="fill" />
+                {:else}
+                  <div class="check-empty"></div>
+                {/if}
+              </div>
+            </div>
+          {/if}
+        </button>
+      {/each}
+    </div>
+    {#if hasMore}
+      <div bind:this={sentinel} class="sentinel" aria-hidden="true"></div>
+    {/if}
   {:else}
     <div class="grid">
     {#each renderedItems as m (m.id)}
@@ -264,6 +311,37 @@
     grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
     gap: var(--sp-4);
   }
+
+  .list { display: flex; flex-direction: column; gap: var(--sp-2); }
+
+  .row {
+    display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-3);
+    background: var(--bg-raised); border: 1px solid var(--border-dim); border-radius: var(--radius-md);
+    width: 100%; cursor: pointer; text-align: left;
+    transition: border-color var(--t-fast), background var(--t-fast);
+  }
+  .row:not(.select-mode):hover { border-color: var(--border-strong); background: var(--bg-elevated); }
+  .row.select-mode { cursor: default; }
+  .row.row-selected { background: color-mix(in srgb, var(--accent) 8%, transparent); border-color: var(--accent-dim); }
+  .row.row-selected .row-title { color: var(--accent-fg); }
+
+  .thumb {
+    width: 36px; height: 54px; border-radius: var(--radius-sm); overflow: hidden;
+    background: var(--bg-overlay); flex-shrink: 0; border: 1px solid var(--border-dim);
+  }
+  :global(.thumb-img) { width: 100%; height: 100%; object-fit: cover; }
+  .thumb.cover-contain :global(.thumb-img) { object-fit: contain; }
+
+  .info { flex: 1; display: flex; flex-direction: column; gap: 4px; overflow: hidden; min-width: 0; }
+  .row-title {
+    font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--text-secondary);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    transition: color var(--t-base);
+  }
+
+  .row-badges { display: flex; align-items: center; gap: 6px; }
+
+  .row-select { flex-shrink: 0; display: flex; align-items: center; }
 
   .card { background: none; border: none; padding: 0; cursor: pointer; text-align: left; }
   .card:not(.select-mode):hover .cover-wrap {

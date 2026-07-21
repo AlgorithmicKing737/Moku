@@ -1,12 +1,12 @@
 <script lang="ts">
   import {
     MagnifyingGlass, Books, DownloadSimple, Folder, FolderSimple,
-    SortAscending, CaretUp, CaretDown, ArrowsClockwise, Star, X, CheckSquare,
+    SortAscending, CaretUp, CaretDown, Star, X, CheckSquare, SquaresFour, Rows,
   } from "phosphor-svelte";
   import { canOpenFolder }  from "$lib/core/filesystem";
   import LibraryFilters from "./LibraryFilters.svelte";
   import type { Category } from "$lib/types";
-  import type { LibrarySortOption, LibrarySortDir, LibraryStatusFilter, LibraryContentFilter } from "$lib/state/library.svelte";
+  import type { LibrarySortOption, LibrarySortDir, LibraryStatusFilter, LibraryContentFilter, LibraryViewMode } from "$lib/state/library.svelte";
 
   interface Props {
     tab:              string;
@@ -21,10 +21,7 @@
     completedCatId:   number | null;
     counts:           Record<string, number>;
     search:           string;
-    refreshing:        boolean;
-    refreshProgress:   { finished: number; total: number };
-    refreshDone:       boolean;
-    refreshingCatId:   number | null;
+    viewMode:          LibraryViewMode;
     activeDragKind:   "tab" | null;
     dragInsertIdx:    number;
     dragTabId:        string | null;
@@ -41,8 +38,7 @@
     onFiltersClear:      () => void;
     onSortPanelToggle:   () => void;
     onFilterPanelToggle: () => void;
-    onRefresh:           () => void;
-    onCancelRefresh:     () => void;
+    onViewModeChange:    (mode: LibraryViewMode) => void;
     onOpenDownloadsFolder: () => void;
     onTabDragStart:      (e: DragEvent, id: string) => void;
     onTabDragOver:       (e: DragEvent, id: string, idx: number) => void;
@@ -54,12 +50,12 @@
   let {
     tab, tabSortMode, tabSortDir, tabStatus, tabFilters, hasActiveFilters,
     anims = false, visibleCategories, visibleTabIds, completedCatId,
-    counts, search, refreshing, refreshProgress, refreshDone, refreshingCatId,
+    counts, search, viewMode,
     activeDragKind, dragInsertIdx, dragTabId, dragOverTabId, sortPanelOpen, filterPanelOpen,
     tabsEl = $bindable(),
     onSearchChange, onTabChange, onSortChange, onSortDirToggle, onStatusChange,
     onFilterToggle, onFiltersClear, onSortPanelToggle, onFilterPanelToggle,
-    onRefresh, onCancelRefresh, onOpenDownloadsFolder,
+    onViewModeChange, onOpenDownloadsFolder,
     onTabDragStart, onTabDragOver, onTabDragLeave, onTabDrop, onTabDragEnd,
   }: Props = $props();
 
@@ -151,27 +147,14 @@
       <input class="search" placeholder="Search" value={search} oninput={(e) => onSearchChange((e.target as HTMLInputElement).value)} />
     </div>
 
-    {#if refreshing}
-      <button
-        class="icon-btn refresh-btn icon-btn-active"
-        title={`Checking… ${refreshProgress.finished}/${refreshProgress.total}`}
-        onclick={onCancelRefresh}
-      >
-        <ArrowsClockwise size={15} weight="bold" class="anim-spin" />
-        {#if refreshProgress.total > 0}
-          <span class="refresh-progress">{refreshProgress.finished}/{refreshProgress.total}</span>
-        {/if}
-      </button>
-    {:else}
-      <button
-        class="icon-btn refresh-btn"
-        class:refresh-btn-done={refreshDone}
-        title={refreshDone ? "Library updated" : "Check for updates"}
-        onclick={onRefresh}
-      >
-        <ArrowsClockwise size={15} weight="bold" />
-      </button>
-    {/if}
+    <button
+      class="icon-btn"
+      title={viewMode === "grid" ? "Switch to list view" : "Switch to grid view"}
+      onclick={() => onViewModeChange(viewMode === "grid" ? "list" : "grid")}
+    >
+      {#if viewMode === "grid"}<Rows size={15} weight="bold" />
+      {:else}<SquaresFour size={15} weight="bold" />{/if}
+    </button>
 
     {#if canOpenFolder()}
       <button class="icon-btn" title="Open downloads folder" onclick={onOpenDownloadsFolder}>
@@ -252,10 +235,6 @@
   .icon-btn:hover { color: var(--text-primary); border-color: var(--border-strong); }
   .icon-btn-active { color: var(--accent-fg); border-color: var(--accent-dim); background: var(--accent-muted); }
 
-  .refresh-btn { gap: var(--sp-1); width: auto; padding: 0 8px; }
-  .refresh-btn:disabled { cursor: default; }
-  .refresh-progress { font-family: var(--font-ui); font-size: var(--text-2xs); letter-spacing: var(--tracking-wide); color: var(--accent-fg); }
-  .refresh-btn-done { color: var(--color-success, #5cae6e) !important; border-color: color-mix(in srgb, var(--color-success, #5cae6e) 40%, transparent) !important; background: color-mix(in srgb, var(--color-success, #5cae6e) 10%, transparent) !important; }
   .sort-panel-wrap { position: relative; }
   .dropdown-panel { position: absolute; top: calc(100% + 6px); right: 0; z-index: 9999; min-width: 220px; background: var(--bg-raised); border: 1px solid var(--border-base); border-radius: var(--radius-lg); padding: var(--sp-1); box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
   .panel-label { font-family: var(--font-ui); font-size: var(--text-2xs); letter-spacing: var(--tracking-wider); text-transform: uppercase; color: var(--text-faint); padding: 4px 8px 8px; }

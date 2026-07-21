@@ -16,6 +16,8 @@ export type LibrarySortDir = "asc" | "desc";
 
 export type LibraryContentFilter = "unread" | "started" | "downloaded" | "bookmarked";
 
+export type LibraryViewMode = "grid" | "list";
+
 export type LibraryStatusFilter =
   | "ALL"
   | "ONGOING"
@@ -43,6 +45,7 @@ class LibraryState {
   showAllInSaved        = $state(true);
   hideCompletedInSaved  = $state(false);
   categoryFrecency      = $state<Record<number, number>>({});
+  viewMode              = $state<LibraryViewMode>("grid");
 
   filter = $state({ query: "" });
 
@@ -210,12 +213,19 @@ class LibraryState {
     defaultLibraryCategoryId?:   number | null;
     libraryShowAllInSaved?:      boolean;
     libraryHideCompletedInSaved?: boolean;
+    libraryViewMode?:            LibraryViewMode;
   }) {
     if (s.hiddenLibraryTabs)                        this.hiddenTabs          = new Set(s.hiddenLibraryTabs);
     if (s.libraryPinnedTabOrder)                    this.pinnedTabOrder      = s.libraryPinnedTabOrder;
     if (s.defaultLibraryCategoryId !== undefined)   this.defaultCategoryId   = s.defaultLibraryCategoryId ?? null;
     if (s.libraryShowAllInSaved !== undefined)       this.showAllInSaved      = s.libraryShowAllInSaved;
     if (s.libraryHideCompletedInSaved !== undefined) this.hideCompletedInSaved = s.libraryHideCompletedInSaved;
+    if (s.libraryViewMode !== undefined)             this.viewMode            = s.libraryViewMode;
+  }
+
+  setViewMode(mode: LibraryViewMode) {
+    this.viewMode = mode;
+    updateSettings({ libraryViewMode: mode });
   }
 
   setCategories(cats: Category[]) {
