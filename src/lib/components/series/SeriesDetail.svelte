@@ -18,7 +18,7 @@
   import { getCategories, updateMangaCategories, createCategory as createCategoryReq, updateManga } from '$lib/request-manager/manga'
   import { saveScroll, getScroll }     from '$lib/state/app.svelte'
   import { seriesState, openReaderForChapter, acknowledgeUpdate, addBookmark, clearMarkersForManga } from '$lib/state/series.svelte'
-  import { updateSettings } from '$lib/state/settings.svelte'
+  import { settingsState, updateSettings } from '$lib/state/settings.svelte'
   import { DEFAULT_MANGA_PREFS }       from '$lib/state/series.svelte'
   import type { MangaPrefs }           from '$lib/types/settings'
   import { addToast }                  from '$lib/state/notifications.svelte'
@@ -47,7 +47,7 @@
   let enqueueing:      Set<number>  = $state(new Set())
   let togglingLibrary: boolean      = $state(false)
   let chapterPage:     number       = $state(1)
-  let viewMode: 'list' | 'grid'    = $state('list')
+  const viewMode = $derived(settingsState.settings.chapterViewMode ?? 'list')
   let deletingAll:     boolean      = $state(false)
   let refreshing:      boolean      = $state(false)
   let selectedIds:     Set<number>  = $state(new Set())
@@ -542,7 +542,7 @@
       {mangaCategories}
       {catsLoading}
       {refreshing}
-      onViewModeToggle={() => viewMode = viewMode === 'list' ? 'grid' : 'list'}
+      onViewModeToggle={() => updateSettings({ chapterViewMode: viewMode === 'list' ? 'grid' : 'list' })}
       onPageChange={(p) => chapterPage = p}
       onDownloadSelected={downloadSelected}
       onDeleteSelected={deleteSelected}
