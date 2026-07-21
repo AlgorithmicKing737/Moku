@@ -61,7 +61,7 @@ PYEOF
 
   update = pkgs.writeShellApplication {
     name = "moku-update";
-    runtimeInputs = with pkgs; [ gnused coreutils git curl nix xxd ];
+    runtimeInputs = with pkgs; [ gnused coreutils git curl nix xxd python3 ];
     text = ''
       REPO="$(git rev-parse --show-toplevel)"
       VERSIONS="$REPO/nix/versions.nix"

@@ -21,5 +21,5 @@
   };
 
   gitCommit  = "239960683b6c7f1347e1798b0e179a8a46628728";
-  tarballHash = "dd4807d1c1d7fe7baa8ea27d049c787072e71ec80d5ce9aac21c74ecb43b476d";
+  tarballHash = "28623370a75ce6e0e741605eedba9ed4f3ba9115556c22bafe8312e8fed95d95";
 }
