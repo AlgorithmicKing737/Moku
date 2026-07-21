@@ -83,11 +83,11 @@ export const TRACK_PROGRESS = `
 `
 
 export const UPDATE_TRACK = `
-  mutation UpdateTrack($recordId: Int!, $status: Int, $score: Float, $lastChapterRead: Float, $startDate: LongString, $finishDate: LongString, $private: Boolean) {
+  mutation UpdateTrack($recordId: Int!, $status: Int, $scoreString: String, $lastChapterRead: Float, $startDate: LongString, $finishDate: LongString, $private: Boolean) {
     updateTrack(input: {
       recordId: $recordId
       status: $status
-      score: $score
+      scoreString: $scoreString
       lastChapterRead: $lastChapterRead
       startDate: $startDate
       finishDate: $finishDate

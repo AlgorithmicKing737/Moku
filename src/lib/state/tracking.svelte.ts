@@ -107,8 +107,7 @@ class TrackingState {
   }
 
   async updateScore(mangaId: number, record: TrackRecord, scoreString: string): Promise<TrackRecord> {
-    const score = parseFloat(scoreString)
-    const fresh = await getAdapter().updateTrackRecord(String(record.id), { score: isNaN(score) ? undefined : score })
+    const fresh = await getAdapter().updateTrackRecord(String(record.id), { scoreString })
     this.patchFor(mangaId, fresh)
     return fresh
   }
