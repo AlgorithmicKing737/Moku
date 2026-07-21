@@ -86,7 +86,7 @@ PYEOF
 
       if [[ $# -ge 2 ]]; then
         SUWA_VER="$2"
-        BASE="https://github.com/Suwayomi/Suwayomi-Server-preview/releases/download/v''${SUWA_VER}"
+        BASE="https://github.com/Suwayomi/Suwayomi-Server/releases/download/v''${SUWA_VER}"
 
         echo "Fetching Suwayomi v''${SUWA_VER} hashes (5 downloads)..."
 
@@ -108,15 +108,15 @@ PYEOF
         sed -i "s|macosArm64Hash = \"[^\"]*\"|macosArm64Hash = \"''${ARM64_SHA}\"|" "$VERSIONS"
         sed -i "s|macosX64Hash = \"[^\"]*\"|macosX64Hash = \"''${X64_SHA}\"|" "$VERSIONS"
 
-        sed -i "s|Suwayomi-Server-preview/releases/download/v[^/]*/|Suwayomi-Server-preview/releases/download/v''${SUWA_VER}/|" "$MANIFEST"
+        sed -i "s|Suwayomi-Server\(-preview\)\?/releases/download/v[^/]*/|Suwayomi-Server/releases/download/v''${SUWA_VER}/|" "$MANIFEST"
         sed -i "s|Suwayomi-Server-v[0-9.]*\.jar|Suwayomi-Server-v''${SUWA_VER}.jar|g" "$MANIFEST"
         python3 - "$MANIFEST" "$JAR_SHA" <<'PYEOF'
 import re, sys
 path, sha = sys.argv[1], sys.argv[2]
 text = open(path).read()
 updated, n = re.subn(
-  r'(dest-filename:\s*Suwayomi-Server\.jar\s*\n\s*sha256:\s*)[0-9a-f]+',
-  r'\g<1>' + sha, text)
+  r'(sha256:\s*)[0-9a-f]+(\s*\n\s*dest-filename:\s*Suwayomi-Server\.jar)',
+  r'\g<1>' + sha + r'\g<2>', text)
 if n == 0:
     sys.exit("ERROR: could not find Suwayomi jar sha256 in manifest")
 open(path, 'w').write(updated)

@@ -15,7 +15,7 @@ stdenvNoCC.mkDerivation {
   version = ver.version;
 
   src = fetchurl {
-    url = "https://github.com/Suwayomi/Suwayomi-Server-preview/releases/download/v${ver.version}/Suwayomi-Server-v${ver.version}.jar";
+    url = "https://github.com/Suwayomi/Suwayomi-Server/releases/download/v${ver.version}/Suwayomi-Server-v${ver.version}.jar";
     hash = ver.hash;
   };
 
@@ -38,8 +38,8 @@ stdenvNoCC.mkDerivation {
   meta = {
     description = "Free and open source manga reader server that runs extensions built for Mihon (Tachiyomi)";
     homepage = "https://github.com/Suwayomi/Suwayomi-Server";
-    downloadPage = "https://github.com/Suwayomi/Suwayomi-Server-preview/releases";
-    changelog = "https://github.com/Suwayomi/Suwayomi-Server-preview/releases/tag/v${ver.version}";
+    downloadPage = "https://github.com/Suwayomi/Suwayomi-Server/releases";
+    changelog = "https://github.com/Suwayomi/Suwayomi-Server/releases/tag/v${ver.version}";
     license = lib.licenses.mpl20;
     platforms = jdk.meta.platforms;
     sourceProvenance = [ lib.sourceTypes.binaryBytecode ];

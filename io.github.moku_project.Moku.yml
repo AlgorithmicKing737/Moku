@@ -226,8 +226,8 @@ modules:
 
     sources:
       - type: file
-        url: https://github.com/Suwayomi/Suwayomi-Server-preview/releases/download/v2.2.2196/Suwayomi-Server-v2.2.2196.jar
-        sha256: 8e7244c269456661a87705f746f0d87275770aa976bab7c6920e4d513e97c3f6
+        url: https://github.com/Suwayomi/Suwayomi-Server/releases/download/v2.3.2243/Suwayomi-Server-v2.3.2243.jar
+        sha256: 821141b32e170d4a02d3cbdfed577ed8f07bd22383ff5f4132ebb5ae40e98dd5
         dest-filename: Suwayomi-Server.jar
 
   - name: moku

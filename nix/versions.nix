@@ -2,16 +2,16 @@
   moku = "0.10.1";
 
   suwayomi = {
-    version = "2.2.2196";
-    hash = "sha256-jnJEwmlFZmGodwX3RvDYcnV3Cql2urfGkg5NUT6Xw/Y=";
-    windowsHash = "457ca4a64a57e0d274a87203d25e962103bcb456ee30ada3ea47328a3093329d";
-    linuxHash   = "e13d63ceb7e2b15e83d0a78281e8c1c04ac4a833caa73e5a2b68fbaf0cb20c1f";
-    macosArm64Hash = "9e3dbebc7475707e8d11c56a473385c00b09bde0103d013bc1cb3d06c89e5c43";
-    macosX64Hash   = "eadee02060b780a5febfb8dada2f89c7bd7db5905cfd20d47eaca02fcde8c9c5";
+    version = "2.3.2243";
+    hash = "sha256-ghFBsy4XDUoC08vf7Vd+2PB70iOD/19BMuu1rkDpjdU=";
+    windowsHash = "895843f48d5735e01bdc43d79ab66e600d6f507076a9b792ffa418a9bbcc32c2";
+    linuxHash   = "7ed20b7890a6720c4d5dd51fe9c3247f537ffcab01a1cba5c2a75626743236c3";
+    macosArm64Hash = "884df50945c9c052ec55bea8bb6fd232f9258a5a0bb8a95d2e07850337b2481b";
+    macosX64Hash   = "3021ce25ed0366bd91899621ff5e4f0ac0e11be292daa37a9c3dfac9bd7c9591";
   };
 
   frontend = {
-    pnpmHash   = "sha256-fBkNpQXEeGZNbrpx7+0xVYYtQ6dGvpgRflCGPoxvnVY=";
+    pnpmHash   = "sha256-/faEmma6meikz1FMBkjeHfyG18H0j7JHVLM57XQ9MNM=";
     distHash   = "7db288b4b54277aa82b6ec5b21fc31a1e71f8246c50a74777500083b806c1fa5";
     distHashSri = "sha256-lR00QjVP+htsQQk0mypQVOUvA891Y4stRU6Tc0G8k7o=";
   };
