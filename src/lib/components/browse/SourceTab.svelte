@@ -20,7 +20,7 @@
 
   const preferredLang = $derived(settingsState.settings.preferredExtensionLang ?? "en");
 
-  let src_selectedLang  = $state(settingsState.settings.preferredExtensionLang || "all");
+  let src_selectedLang  = $state("all");
   let src_activeSource: Source | null = $state(null);
   let src_browseResults: Manga[]      = $state([]);
   let src_loadingBrowse               = $state(false);
@@ -50,7 +50,9 @@
   $effect(() => {
     if (!allSources.length) return;
     const langs = new Set(allSources.map((s) => s.lang));
-    if (src_selectedLang !== "all" && !langs.has(src_selectedLang)) {
+    if (src_selectedLang === "all") {
+      if (langs.has(preferredLang)) src_selectedLang = preferredLang;
+    } else if (!langs.has(src_selectedLang)) {
       src_selectedLang = langs.has(preferredLang) ? preferredLang : "all";
     }
   });

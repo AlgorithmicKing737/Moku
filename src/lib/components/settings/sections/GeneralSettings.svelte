@@ -1,5 +1,7 @@
 <script lang="ts">
   import { settingsState, updateSettings } from '$lib/state/settings.svelte'
+  import { extensionsState } from '$lib/state/extensions.svelte'
+  import { addToast } from '$lib/state/notifications.svelte'
   import { platformService } from '$lib/platform-service'
 
   const isTauri = platformService.platform === 'tauri'
@@ -21,6 +23,91 @@
   let triggerIdleTimeout = $state<HTMLButtonElement>(null!)
   $effect(() => { if (triggerIdleTimeout) registerTrigger('idle-timeout', triggerIdleTimeout) })
   let serverAdvancedOpen = $state(false)
+
+  // Known Tachiyomi/Mihon extension language codes — used as a stable validation
+  // baseline independent of which sources happen to be installed/loaded right now.
+  const CANONICAL_LANGS = [
+    'en','ja','ko','zh','zh-hans','zh-hant','es','es-419','pt','pt-br','fr','de','it','ru',
+    'id','vi','th','ar','tr','pl','nl','uk','ro','hu','cs','sv','fi','da','no','nb','el','he',
+    'hi','bn','ta','te','ms','fil','tl','ca','gl','eu','af','sq','hy','az','be','bg','hr','et',
+    'ka','is','kk','lv','lt','mk','mn','ne','sr','sk','sl','sw','fa','ur','km','lo','my','si',
+    'am','ku','ha','ig','yo','zu','xh'
+  ]
+
+  const availableLangs = $derived(
+    [...new Set(extensionsState.sources.map((s) => s.lang))].sort()
+  )
+
+  const knownLangs = $derived(
+    [...new Set([...CANONICAL_LANGS, ...availableLangs])]
+  )
+
+  let langDraft   = $state(settingsState.settings.preferredExtensionLang ?? '')
+  let langInvalid = $state(false)
+
+  function normLang(s: string) { return s.toLowerCase().replace(/[^a-z0-9]/g, '') }
+
+  function levenshtein(a: string, b: string): number {
+    const dp = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)])
+    for (let j = 0; j <= b.length; j++) dp[0][j] = j
+    for (let i = 1; i <= a.length; i++) {
+      for (let j = 1; j <= b.length; j++) {
+        dp[i][j] = a[i - 1] === b[j - 1]
+          ? dp[i - 1][j - 1]
+          : 1 + Math.min(dp[i - 1][j - 1], dp[i - 1][j], dp[i][j - 1])
+      }
+    }
+    return dp[a.length][b.length]
+  }
+
+  function closestLang(input: string): string | null {
+    const n = normLang(input)
+    if (!n || knownLangs.length === 0) return null
+    let best: string | null = null
+    let bestDist = Infinity
+    for (const lang of knownLangs) {
+      const d = levenshtein(n, normLang(lang))
+      if (d < bestDist) { bestDist = d; best = lang }
+    }
+    return bestDist <= 2 ? best : null
+  }
+
+  function commitLangDraft() {
+    const trimmed = langDraft.trim()
+
+    if (trimmed === '') {
+      langInvalid = false
+      updateSettings({ preferredExtensionLang: undefined })
+      return
+    }
+
+    const normed = normLang(trimmed)
+
+    if (normed === 'en') {
+      langInvalid = false
+      langDraft   = 'EN'
+      updateSettings({ preferredExtensionLang: undefined })
+      return
+    }
+
+    const exact = knownLangs.find((l) => normLang(l) === normed)
+    if (exact) {
+      langInvalid = false
+      langDraft   = exact.toUpperCase()
+      updateSettings({ preferredExtensionLang: exact })
+      return
+    }
+
+    langInvalid = true
+    updateSettings({ preferredExtensionLang: undefined })
+    const suggestion = closestLang(trimmed)
+    addToast({
+      kind:  'error',
+      title: `Unknown language "${trimmed.toUpperCase()}"`,
+      body:  suggestion ? `Did you mean "${suggestion.toUpperCase()}"? Defaulted to EN.` : 'Defaulted to EN.',
+      duration: 4500,
+    })
+  }
 
   async function pickServerBinary() {
     const path = await platformService.pickFolder()
@@ -184,9 +271,12 @@
           <span class="s-label">Preferred source language</span>
           <span class="s-desc">Used to pre-select languages in Search and deduplicate sources</span>
         </div>
-        <input class="s-input" style="width:72px;text-align:center;text-transform:uppercase"
-          value={settingsState.settings.preferredExtensionLang ?? ''}
-          oninput={(e) => updateSettings({ preferredExtensionLang: e.currentTarget.value.trim().toLowerCase() })}
+        <input class="s-input" class:s-input-invalid={langInvalid}
+          style="width:72px;text-align:center;text-transform:uppercase"
+          value={langDraft}
+          oninput={(e) => { langDraft = e.currentTarget.value; langInvalid = false }}
+          onblur={commitLangDraft}
+          onkeydown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
           placeholder="en" spellcheck="false" />
       </div>
     </div>
@@ -212,4 +302,5 @@
   .srv-path-input { width: 160px; }
   .srv-file-btn { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex-shrink: 0; border-radius: var(--radius-md); border: 1px solid var(--border-dim); background: var(--bg-surface); color: var(--text-faint); cursor: pointer; transition: background var(--t-base), color var(--t-base), border-color var(--t-base); }
   .srv-file-btn:hover { background: var(--bg-overlay); color: var(--text-muted); border-color: var(--border-strong); }
+  .s-input-invalid { border-color: var(--color-error, #c47a7a) !important; color: var(--color-error, #c47a7a); }
 </style>
