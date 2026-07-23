@@ -7,6 +7,12 @@
   function handleBypass() {
     bypassBoot(appState.authMode, boot.loginUser, boot.loginPass)
   }
+
+  function setMode(mode: 'BASIC_AUTH' | 'UI_LOGIN') {
+    if (boot.loginBusy) return
+    boot.loginMode  = mode
+    boot.loginError = null
+  }
 </script>
 
 {#if appState.authRequired && !authVerifiedState.value}
@@ -14,9 +20,22 @@
     <div class="card anim-scale-in">
       <img src={logoUrl} alt="Moku" class="logo" />
       <p class="title">moku</p>
-      <span class="mode-badge">
-        {appState.authMode === 'UI_LOGIN' ? 'UI Login' : 'Basic Auth'}
-      </span>
+
+      <div class="mode-toggle">
+        <button
+          class="mode-btn"
+          class:active={boot.loginMode === 'BASIC_AUTH'}
+          onclick={() => setMode('BASIC_AUTH')}
+          disabled={boot.loginBusy}
+        >Basic Auth</button>
+        <button
+          class="mode-btn"
+          class:active={boot.loginMode === 'UI_LOGIN'}
+          onclick={() => setMode('UI_LOGIN')}
+          disabled={boot.loginBusy}
+        >UI Login</button>
+      </div>
+
       <p class="host">{appState.serverUrl || 'localhost:4567'}</p>
 
       {#if boot.loginError}
@@ -66,7 +85,12 @@
   .logo         { width:56px; height:56px; border-radius:14px; display:block; position:relative; }
 
   .title      { font-family:var(--font-ui); font-size:11px; font-weight:500; letter-spacing:0.26em; text-transform:uppercase; color:var(--text-secondary); margin:-6px 0 0; user-select:none; }
-  .mode-badge { font-family:var(--font-ui); font-size:var(--text-2xs); letter-spacing:var(--tracking-wider); text-transform:uppercase; color:var(--accent-fg); background:var(--accent-muted); border:1px solid var(--accent-dim); border-radius:var(--radius-full); padding:2px 10px; }
+
+  .mode-toggle { display:flex; gap:2px; background:var(--bg-raised); border:1px solid var(--border-strong); border-radius:var(--radius-full); padding:2px; }
+  .mode-btn    { font-family:var(--font-ui); font-size:var(--text-2xs); letter-spacing:var(--tracking-wider); text-transform:uppercase; color:var(--text-faint); background:none; border:none; border-radius:var(--radius-full); padding:4px 10px; cursor:pointer; transition:color var(--t-base), background var(--t-base); }
+  .mode-btn.active   { color:var(--accent-fg); background:var(--accent-muted); }
+  .mode-btn:disabled { opacity:0.5; cursor:default; }
+
   .host       { font-family:var(--font-ui); font-size:var(--text-xs); color:var(--text-faint); letter-spacing:var(--tracking-wide); margin:-4px 0 0; }
   .error      { font-family:var(--font-ui); font-size:var(--text-xs); color:var(--color-error); background:var(--color-error-bg); border:1px solid var(--color-error); border-radius:var(--radius-sm); padding:var(--sp-2) var(--sp-3); width:100%; box-sizing:border-box; }
 

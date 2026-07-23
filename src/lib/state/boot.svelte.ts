@@ -3,7 +3,7 @@ import { initPlatformService, platformService } from '$lib/platform-service'
 import { probeServer, loginBasic, loginUI, verifyBasicAuth, configureAuth } from '$lib/core/auth'
 import { authVerifiedState }   from '$lib/state/auth.svelte'
 import { appState }            from '$lib/state/app.svelte'
-import { settingsState }       from '$lib/state/settings.svelte'
+import { settingsState, updateSettings } from '$lib/state/settings.svelte'
 
 const MAX_ATTEMPTS     = 40
 const WEB_MAX_ATTEMPTS = 1
@@ -17,6 +17,7 @@ export const boot = $state({
   loginBusy:      false,
   loginUser:      '',
   loginPass:      '',
+  loginMode:      'BASIC_AUTH' as 'BASIC_AUTH' | 'UI_LOGIN',
   sessionExpired: false,
   skipped:        false,
   serverProbeOk:  false,
@@ -66,10 +67,11 @@ function handleAuthRequired(
   }
 
   boot.loginUser          = user
+  boot.loginMode          = authMode === 'UI_LOGIN' ? 'UI_LOGIN' : 'BASIC_AUTH'
   boot.loginRequired      = true
   authVerifiedState.value = false
   appState.authRequired   = true
-  appState.status         = 'ready'   // let layout render, AuthGate overlay will block
+  appState.status         = 'ready'
 }
 
 export async function startProbe(
@@ -144,12 +146,22 @@ export async function submitLogin(): Promise<void> {
   }
   boot.loginBusy  = true
   boot.loginError = null
+  const user = boot.loginUser.trim()
+  const pass = boot.loginPass.trim()
   try {
-    if (appState.authMode === 'UI_LOGIN') {
-      await loginUI(boot.loginUser.trim(), boot.loginPass.trim())
+    if (boot.loginMode === 'UI_LOGIN') {
+      await loginUI(user, pass)
     } else {
-      await verifyBasicAuth(boot.loginUser.trim(), boot.loginPass.trim())
+      await verifyBasicAuth(user, pass)
     }
+
+    updateSettings({
+      serverAuthMode: boot.loginMode,
+      serverAuthUser: user,
+      serverAuthPass: boot.loginMode === 'BASIC_AUTH' ? pass : '',
+    })
+    appState.authMode = boot.loginMode
+
     boot.loginRequired      = false
     boot.sessionExpired     = false
     boot.skipped            = false
@@ -187,7 +199,7 @@ export function bypassBoot(
   boot.loginRequired      = false
   boot.sessionExpired     = false
   boot.skipped            = true
-  authVerifiedState.value = true   // user explicitly opted out of the auth gate
+  authVerifiedState.value = true
   appState.authRequired   = false
   appState.status         = 'ready'
   startBackgroundProbe(probeGeneration, authMode, user, pass)

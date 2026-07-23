@@ -20,7 +20,7 @@ export const GET_CHAPTER = `
 
 export const GET_RECENTLY_UPDATED = `
   query GetRecentlyUpdated {
-    chapters(orderBy: FETCHED_AT, orderByType: DESC, first: 300, filter: { inLibrary: { equalTo: true } }) {
+    chapters(order: [{ by: FETCHED_AT, byType: DESC }], first: 300, filter: { inLibrary: { equalTo: true } }) {
       nodes {
         id name chapterNumber sourceOrder isRead isDownloaded lastPageRead mangaId fetchedAt
         manga { id title thumbnailUrl inLibrary }
@@ -29,9 +29,9 @@ export const GET_RECENTLY_UPDATED = `
   }
 `
 
-export const FETCH_CHAPTERS = `
-  mutation FetchChapters($mangaId: Int!) {
-    fetchChapters(input: { mangaId: $mangaId }) {
+export const FETCH_MANGA_AND_CHAPTERS = `
+  mutation FetchMangaAndChapters($id: Int!) {
+    fetchMangaAndChapters(input: { id: $id, fetchChapters: true, fetchManga: false }) {
       chapters {
         id name chapterNumber sourceOrder isRead isDownloaded isBookmarked
         pageCount mangaId uploadDate realUrl lastPageRead lastReadAt scanlator

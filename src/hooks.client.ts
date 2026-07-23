@@ -1,13 +1,9 @@
-import { detectAdapter }                          from '$lib/platform-adapters'
-import { initPlatformService }                    from '$lib/platform-service'
-import { initRequestManager }                     from '$lib/request-manager'
-import { appState }                               from '$lib/state/app.svelte'
-import { configureAuth, probeServer }             from '$lib/core/auth'
-import { loadSettings, loadLibrary }              from '$lib/core/persistence/persist'
-import { loadSettingsIntoState, settingsState }   from '$lib/state/settings.svelte'
-import { historyState }                           from '$lib/state/history.svelte'
-import { readerState }                            from '$lib/state/reader.svelte'
-import { seriesState }                            from '$lib/state/series.svelte'
+import { detectAdapter }                        from '$lib/platform-adapters'
+import { initPlatformService }                  from '$lib/platform-service'
+import { initRequestManager }                   from '$lib/request-manager'
+import { appState }                             from '$lib/state/app.svelte'
+import { loadSettings }                         from '$lib/core/persistence/persist'
+import { loadSettingsIntoState }                from '$lib/state/settings.svelte'
 
 async function boot() {
   try {
@@ -26,24 +22,13 @@ async function boot() {
     const settingsData = await loadSettings()
     await loadSettingsIntoState(settingsData.settings)
 
-    const [libraryData] = await Promise.all([
-      loadLibrary(),
-    ])
+    const raw = (settingsData?.settings ?? {}) as Record<string, unknown>
 
-    seriesState.bookmarks = libraryData.bookmarks
-    readerState.markers   = libraryData.markers
-    historyState.load(libraryData.sessions, libraryData.dailyReadCounts)
-
-    const savedUrl  = settingsState.settings.serverUrl      ?? 'http://127.0.0.1:4567'
-    const rawMode   = settingsState.settings.serverAuthMode ?? 'NONE'
-    const authMode  = rawMode === 'SIMPLE_LOGIN' ? 'UI_LOGIN' : rawMode
-    const authUser  = settingsState.settings.serverAuthUser || undefined
-    const authPass  = settingsState.settings.serverAuthPass || undefined
-
-    appState.serverUrl = savedUrl
-    appState.authMode  = authMode
-
-    configureAuth(savedUrl, authMode, authUser, authPass)
+    const savedUrl = (raw.serverUrl as string) ?? 'http://127.0.0.1:4567'
+    const rawMode  = (raw.serverAuthMode as string) ?? 'NONE'
+    const authMode = rawMode === 'SIMPLE_LOGIN' ? 'UI_LOGIN' : (rawMode as 'NONE' | 'BASIC_AUTH' | 'UI_LOGIN')
+    const authUser = (raw.serverAuthUser as string) || undefined
+    const authPass = (raw.serverAuthPass as string) || undefined
 
     await serverAdapter.connect({
       baseUrl: savedUrl,
@@ -52,26 +37,6 @@ async function boot() {
           ? { username: authUser, password: authPass }
           : undefined,
     })
-
-    const isTauri         = platformAdapter.platform === 'tauri'
-    const autoStartServer = settingsState.settings.autoStartServer
-
-    if (isTauri && autoStartServer) {
-      appState.status = 'booting'
-      return
-    }
-
-    const probe = await probeServer()
-
-    if (probe === 'auth_required') { appState.authRequired = true; return }
-    if (probe === 'unreachable') {
-      appState.error  = `Could not reach server at ${savedUrl}`
-      appState.status = 'error'
-      return
-    }
-
-    appState.authenticated = true
-    appState.status        = 'ready'
   } catch (e) {
     appState.error  = String(e)
     appState.status = 'error'

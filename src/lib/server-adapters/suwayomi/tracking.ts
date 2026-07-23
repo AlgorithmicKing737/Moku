@@ -99,9 +99,17 @@ export const UPDATE_TRACK = `
 `
 
 export const UNLINK_TRACK = `
-  mutation UnlinkTrack($trackRecordId: Int!) {
-    unlinkTrack(input: { trackRecordId: $trackRecordId }) {
+  mutation UnbindTrack($trackRecordId: Int!) {
+    unbindTrack(input: { trackRecordId: $trackRecordId }) {
       trackRecord { id }
+    }
+  }
+`
+
+export const BIND_TRACK_RECORD = `
+  mutation BindTrackRecord($trackRecordId: Int!, $mangaId: Int!) {
+    bindTrackRecord(input: { trackRecordId: $trackRecordId, mangaId: $mangaId }) {
+      trackRecord { id trackerId remoteId }
     }
   }
 `

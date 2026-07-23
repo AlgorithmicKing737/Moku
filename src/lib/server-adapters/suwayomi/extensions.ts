@@ -2,8 +2,10 @@ export const GET_EXTENSIONS = `
   query GetExtensions {
     extensions {
       nodes {
-        apkName pkgName name lang versionName
+        apkName pkgName name lang versionName versionCodeLong
         isInstalled isObsolete hasUpdate iconUrl
+        apkUrl jarUrl contentWarning
+        extensionStore { indexUrl }
       }
     }
   }

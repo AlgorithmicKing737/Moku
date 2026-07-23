@@ -101,11 +101,12 @@
       _seriesState.bookmarks = persistedLibrary.bookmarks
       readerState.markers    = persistedLibrary.markers
 
-      const s = (raw ?? {}) as Record<string, unknown>
-      appState.serverUrl = (s.serverUrl      as string) ?? ''
-      appState.authMode  = (s.serverAuthMode as 'NONE' | 'BASIC_AUTH' | 'UI_LOGIN') ?? 'NONE'
-      appState.authUser  = (s.serverAuthUser as string) ?? ''
-      appState.authPass  = (s.serverAuthPass as string) ?? ''
+      const s              = (raw ?? {}) as Record<string, unknown>
+      const rawAuthMode    = (s.serverAuthMode as string) ?? 'NONE'
+      appState.serverUrl   = (s.serverUrl as string) ?? ''
+      appState.authMode    = rawAuthMode === 'SIMPLE_LOGIN' ? 'UI_LOGIN' : (rawAuthMode as 'NONE' | 'BASIC_AUTH' | 'UI_LOGIN')
+      appState.authUser    = (s.serverAuthUser as string) ?? ''
+      appState.authPass    = (s.serverAuthPass as string) ?? ''
 
       settingsLoaded = true
 

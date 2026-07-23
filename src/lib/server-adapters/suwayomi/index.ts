@@ -51,7 +51,7 @@ import {
   GET_CHAPTERS,
   GET_CHAPTER,
   GET_RECENTLY_UPDATED,
-  FETCH_CHAPTERS,
+  FETCH_MANGA_AND_CHAPTERS,
   FETCH_CHAPTER_PAGES,
   MARK_CHAPTER_READ,
   MARK_CHAPTERS_READ,
@@ -320,10 +320,10 @@ export class SuwayomiAdapter implements ServerAdapter {
   }
 
   async fetchChapters(mangaId: string, signal?: AbortSignal): Promise<Chapter[]> {
-    const data = await this.gql<{ fetchChapters: { chapters: Record<string, unknown>[] } }>(
-      FETCH_CHAPTERS, { mangaId: Number(mangaId) }, signal
+    const data = await this.gql<{ fetchMangaAndChapters: { chapters: Record<string, unknown>[] } }>(
+      FETCH_MANGA_AND_CHAPTERS, { id: Number(mangaId) }, signal
     )
-    return data.fetchChapters.chapters.map(mapChapter)
+    return data.fetchMangaAndChapters.chapters.map(mapChapter)
   }
 
   async getRecentlyUpdated(): Promise<Chapter[]> {
