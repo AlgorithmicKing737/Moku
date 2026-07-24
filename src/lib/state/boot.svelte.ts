@@ -49,6 +49,20 @@ function handleProbeSuccess(gen: number) {
   appState.status         = pinLockEnabled() ? 'locked' : 'ready'
 }
 
+function showLoginForm(
+  gen:      number,
+  authMode: 'NONE' | 'BASIC_AUTH' | 'UI_LOGIN',
+  user:     string,
+) {
+  if (gen !== probeGeneration) return
+  boot.loginUser          = user
+  boot.loginMode          = authMode === 'UI_LOGIN' ? 'UI_LOGIN' : 'BASIC_AUTH'
+  boot.loginRequired      = true
+  authVerifiedState.value = false
+  appState.authRequired   = true
+  appState.status         = 'ready'
+}
+
 function handleAuthRequired(
   gen:      number,
   authMode: 'NONE' | 'BASIC_AUTH' | 'UI_LOGIN',
@@ -66,12 +80,14 @@ function handleAuthRequired(
     return
   }
 
-  boot.loginUser          = user
-  boot.loginMode          = authMode === 'UI_LOGIN' ? 'UI_LOGIN' : 'BASIC_AUTH'
-  boot.loginRequired      = true
-  authVerifiedState.value = false
-  appState.authRequired   = true
-  appState.status         = 'ready'
+  if (authMode === 'UI_LOGIN' && user && pass) {
+    loginUI(user, pass)
+      .then(() => handleProbeSuccess(gen))
+      .catch(() => showLoginForm(gen, authMode, user))
+    return
+  }
+
+  showLoginForm(gen, authMode, user)
 }
 
 export async function startProbe(
@@ -158,7 +174,7 @@ export async function submitLogin(): Promise<void> {
     updateSettings({
       serverAuthMode: boot.loginMode,
       serverAuthUser: user,
-      serverAuthPass: boot.loginMode === 'BASIC_AUTH' ? pass : '',
+      serverAuthPass: pass,
     })
     appState.authMode = boot.loginMode
 

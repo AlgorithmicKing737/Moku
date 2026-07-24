@@ -86,8 +86,8 @@
 
   .title      { font-family:var(--font-ui); font-size:11px; font-weight:500; letter-spacing:0.26em; text-transform:uppercase; color:var(--text-secondary); margin:-6px 0 0; user-select:none; }
 
-  .mode-toggle { display:flex; gap:2px; background:var(--bg-raised); border:1px solid var(--border-strong); border-radius:var(--radius-full); padding:2px; }
-  .mode-btn    { font-family:var(--font-ui); font-size:var(--text-2xs); letter-spacing:var(--tracking-wider); text-transform:uppercase; color:var(--text-faint); background:none; border:none; border-radius:var(--radius-full); padding:4px 10px; cursor:pointer; transition:color var(--t-base), background var(--t-base); }
+  .mode-toggle { display:flex; gap:2px; background:var(--bg-raised); border:1px solid var(--border-strong); border-radius:var(--radius-md); padding:2px; }
+  .mode-btn    { font-family:var(--font-ui); font-size:var(--text-2xs); letter-spacing:var(--tracking-wider); text-transform:uppercase; color:var(--text-faint); background:none; border:none; border-radius:var(--radius-sm); padding:4px 10px; cursor:pointer; transition:color var(--t-base), background var(--t-base); }
   .mode-btn.active   { color:var(--accent-fg); background:var(--accent-muted); }
   .mode-btn:disabled { opacity:0.5; cursor:default; }
 

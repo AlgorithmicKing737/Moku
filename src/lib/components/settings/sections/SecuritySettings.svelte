@@ -111,7 +111,7 @@
       const newPass = authPassword.trim()
       await requestManager.extensions.setServerAuth({ authMode, authUsername: newUser, authPassword: newPass })
       authSession.clearTokens()
-      updateSettings({ serverAuthMode: authMode as any, serverAuthUser: newUser, serverAuthPass: authMode === 'BASIC_AUTH' ? newPass : '' })
+      updateSettings({ serverAuthMode: authMode as any, serverAuthUser: newUser, serverAuthPass: newPass })
       configureAuth(settingsState.settings.serverUrl ?? '', authMode as any, newUser, authMode === 'BASIC_AUTH' ? newPass : undefined)
       authPassword = ''
       authDirty    = false
