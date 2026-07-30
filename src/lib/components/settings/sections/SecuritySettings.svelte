@@ -3,6 +3,7 @@
   import { requestManager } from '$lib/request-manager'
   import { retryBoot } from '$lib/state/boot.svelte'
   import { authSession, configureAuth } from '$lib/core/auth'
+  import { invoke } from '@tauri-apps/api/core'
 
   interface Props { selectOpen: string | null; toggleSelect: (id: string) => void }
   let { selectOpen, toggleSelect }: Props = $props()
@@ -174,6 +175,11 @@
     } catch (e: any) {
       secError = e?.message ?? 'Failed to save FlareSolverr'
     } finally { secLoading = false }
+  }
+
+  async function pickFlareSolverrBinary() {
+    const path = await invoke<string | null>('pick_flaresolverr_binary')
+    if (path) updateSettings({ flareSolverrBinary: path })
   }
 
   function forceResetAuth() {
@@ -395,6 +401,30 @@
             onclick={() => flareFallback = !flareFallback}><span class="s-toggle-thumb"></span></button>
         </label>
         <div class="s-row">
+          <div class="s-row-info"><span class="s-label">FlareSolverr binary</span><span class="s-desc">Path to the FlareSolverr executable — leave blank to manage it yourself</span></div>
+          <div class="srv-file-group">
+            <input class="s-input srv-path-input" value={settingsState.settings.flareSolverrBinary ?? ''}
+              oninput={(e) => updateSettings({ flareSolverrBinary: e.currentTarget.value })}
+              placeholder="flaresolverr.exe" spellcheck="false" />
+            <button class="srv-file-btn" onclick={pickFlareSolverrBinary} title="Browse">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <path d="M1.5 4.5h11v7a1 1 0 01-1 1h-9a1 1 0 01-1-1v-7z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+                <path d="M1.5 4.5l1.8-2.5h3.4l1.3 2.5" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+        {#if settingsState.settings.flareSolverrBinary}
+        <label class="s-row">
+          <div class="s-row-info"><span class="s-label">Auto-start with Moku</span><span class="s-desc">Launch FlareSolverr on startup if it isn't already running</span></div>
+          <button role="switch" aria-checked={settingsState.settings.flareSolverrAutoStart ?? false} aria-label="Auto-start FlareSolverr"
+            class="s-toggle" class:on={settingsState.settings.flareSolverrAutoStart ?? false}
+            onclick={() => updateSettings({ flareSolverrAutoStart: !(settingsState.settings.flareSolverrAutoStart ?? false) })}>
+            <span class="s-toggle-thumb"></span>
+          </button>
+        </label>
+        {/if}
+        <div class="s-row">
           <div class="s-row-info"></div>
           <button class="s-btn s-btn-accent" onclick={saveFlareSolverr} disabled={secLoading}>
             {secLoading ? 'Saving…' : secSaved === 'flare' ? 'Saved ✓' : 'Save'}
@@ -411,4 +441,8 @@
   .s-ghost-btn:hover:not(:disabled) { color: var(--color-error); }
   .s-ghost-btn:disabled { opacity: 0.35; cursor: default; }
   .s-pin-row { display: flex; align-items: center; gap: 8px; }
+  .srv-file-group { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .srv-path-input { width: 160px; }
+  .srv-file-btn { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex-shrink: 0; border-radius: var(--radius-md); border: 1px solid var(--border-dim); background: var(--bg-surface); color: var(--text-faint); cursor: pointer; transition: background var(--t-base), color var(--t-base), border-color var(--t-base); }
+  .srv-file-btn:hover { background: var(--bg-overlay); color: var(--text-muted); border-color: var(--border-strong); }
 </style>

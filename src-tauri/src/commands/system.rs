@@ -81,6 +81,34 @@ pub async fn pick_server_binary(app: tauri::AppHandle) -> Option<String> {
 }
 
 #[tauri::command]
+pub async fn pick_flaresolverr_binary(app: tauri::AppHandle) -> Option<String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    #[cfg(target_os = "windows")]
+    let dialog = app
+        .dialog()
+        .file()
+        .set_title("Choose FlareSolverr Executable")
+        .add_filter("Executable", &["exe"]);
+
+    #[cfg(target_os = "macos")]
+    let dialog = app
+        .dialog()
+        .file()
+        .set_title("Choose FlareSolverr Executable")
+        .add_filter("Executable", &["command", "sh", "app"]);
+
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    let dialog = app
+        .dialog()
+        .file()
+        .set_title("Choose FlareSolverr Executable")
+        .add_filter("Executable", &["sh", ""]);
+
+    dialog.blocking_pick_file().map(|p| p.to_string())
+}
+
+#[tauri::command]
 pub fn exit_app(app: tauri::AppHandle) {
     app.exit(0);
 }

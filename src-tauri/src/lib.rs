@@ -12,6 +12,7 @@ use tauri::{
 use tauri_plugin_shell::process::CommandChild;
 
 pub struct ServerState(pub Mutex<Option<CommandChild>>);
+pub struct FlareSolverrState(pub Mutex<Option<CommandChild>>);
 
 const IPC_PORT: u16 = 47823;
 const HANDSHAKE: &[u8] = b"MOKU:1\n";
@@ -19,6 +20,7 @@ const FOCUS_CMD: &[u8] = b"focus\n";
 
 fn do_quit(app: &tauri::AppHandle) {
     server::kill_tachidesk(app);
+    commands::flaresolverr::kill_flaresolverr_internal(app);
     app.exit(0);
 }
 
@@ -86,6 +88,7 @@ pub fn run() {
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_process::init())
         .manage(ServerState(Mutex::new(None)))
+        .manage(FlareSolverrState(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![
             commands::storage::get_storage_info,
             commands::storage::get_default_downloads_path,
@@ -94,6 +97,8 @@ pub fn run() {
             commands::storage::migrate_downloads,
             commands::server::spawn_server,
             commands::server::kill_server,
+            commands::flaresolverr::spawn_flaresolverr,
+            commands::flaresolverr::kill_flaresolverr,
             commands::system::get_platform_ui_scale,
             commands::system::restart_app,
             commands::system::exit_app,
@@ -103,6 +108,7 @@ pub fn run() {
             commands::system::open_path,
             commands::system::pick_downloads_folder,
             commands::system::pick_server_binary,
+            commands::system::pick_flaresolverr_binary,
             commands::backup::export_app_data,
             commands::backup::import_app_data,
             commands::backup::auto_backup_app_data,
@@ -160,6 +166,7 @@ pub fn run() {
         .on_window_event(|window, event| {
             if let WindowEvent::Destroyed = event {
                 server::kill_tachidesk(window.app_handle());
+                commands::flaresolverr::kill_flaresolverr_internal(window.app_handle());
             }
         })
         .run(tauri::generate_context!())

@@ -220,7 +220,7 @@
       </div>
 
       <label class="s-row">
-        <div class="s-row-info"><span class="s-label">Window controls</span><span class="s-desc">Show Moku's title bar with minimize/maximize/close — turn off for a clean, chrome-free window</span></div>
+        <div class="s-row-info"><span class="s-label">Window controls</span><span class="s-desc">Show Moku's title bar with minimize/maximize/close</span></div>
         <button role="switch" aria-checked={settingsState.settings.windowControls ?? true} aria-label="Window controls"
           class="s-toggle" class:on={settingsState.settings.windowControls ?? true}
           onclick={() => updateSettings({ windowControls: !(settingsState.settings.windowControls ?? true) })}>
