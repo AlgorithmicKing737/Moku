@@ -25,6 +25,8 @@ finish-args:
   - --filesystem=xdg-run/discord-ipc-0:ro
   - --filesystem=xdg-data/moku:create
   - --filesystem=xdg-download
+  
+  - --env=WEBKIT_DISABLE_DMABUF_RENDERER=1
 
 build-options:
   append-path: /usr/lib/sdk/rust-stable/bin
