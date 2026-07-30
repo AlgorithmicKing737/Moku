@@ -242,6 +242,7 @@
     authRequired={appState.authRequired && !authVerifiedState.value}
     pinLen={settingsState.settings.appLockPin?.length ?? 0}
     pinCorrect={settingsState.settings.appLockPin ?? ''}
+    windowsHelloEnabled={settingsState.settings.appLockWindowsHello ?? false}
     onReady={onSplashReady}
     onUnlock={onSplashUnlock}
     onBypass={onSplashBypass}

@@ -53,6 +53,7 @@
     showDevOverlay?: boolean
     pinLen?:         number
     pinCorrect?:     string
+    windowsHelloEnabled?: boolean
     onReady?:        () => void
     onUnlock?:       () => void
     onRetry?:        () => void
@@ -64,7 +65,7 @@
   let {
     mode = 'loading', ringFull = false, failed = false,
     notConfigured = false, authRequired = false, showCards = true, showFps = false, showDevOverlay = false,
-    pinLen = 4, pinCorrect = '',
+    pinLen = 4, pinCorrect = '', windowsHelloEnabled = false,
     onReady, onUnlock, onRetry, onBypass, onSkip, onDismiss,
   }: Props = $props()
 
@@ -76,6 +77,10 @@
 
   let pinEntry = $state('')
   let pinShake = $state(false)
+
+  let helloAvailable = $state(false)
+  let helloBusy       = $state(false)
+  let helloError       = $state(false)
 
   const logoLoadingSize = 140
   const logoIdleSize    = 128
@@ -163,6 +168,31 @@
     window.addEventListener('keydown', onPinKey)
     return () => window.removeEventListener('keydown', onPinKey)
   })
+
+  $effect(() => {
+    if (mode !== 'locked' || !isTauri || !windowsHelloEnabled) return
+    let cancelled = false
+    import('@tauri-apps/api/core').then(({ invoke }) =>
+      invoke<boolean>('windows_hello_available')
+    ).then(v => { if (!cancelled) helloAvailable = v }).catch(() => { if (!cancelled) helloAvailable = false })
+    return () => { cancelled = true }
+  })
+
+  async function tryWindowsHello() {
+    if (helloBusy || exitLock) return
+    helloBusy  = true
+    helloError = false
+    try {
+      const { invoke } = await import('@tauri-apps/api/core')
+      await invoke('windows_hello_authenticate', { reason: 'Unlock Moku' })
+      triggerExit(onUnlock)
+    } catch {
+      helloError = true
+      setTimeout(() => (helloError = false), 2000)
+    } finally {
+      helloBusy = false
+    }
+  }
 
   onMount(() => {
     const iv = setInterval(() => { dots = dots.length >= 3 ? '' : dots + '.' }, 420)
@@ -508,6 +538,11 @@
           <div class="pin-dot" class:filled={i < pinEntry.length}></div>
         {/each}
       </div>
+      {#if windowsHelloEnabled && helloAvailable}
+        <button class="hello-btn" class:hello-btn--error={helloError} disabled={helloBusy} onclick={tryWindowsHello}>
+          {helloBusy ? 'Waiting…' : helloError ? 'Try again' : 'Use Windows Hello'}
+        </button>
+      {/if}
     </div>
 
   {:else if isTauri || failed || notConfigured || ringFull}
@@ -571,6 +606,11 @@
   .pin-dot   { width:10px; height:10px; border-radius:50%; border:1px solid var(--border-strong); background:transparent; transition:background 0.12s, border-color 0.12s; }
   .pin-dot.filled { background:var(--accent); border-color:var(--accent); }
   .pin-shake { animation:pinShake 0.42s ease; }
+
+  .hello-btn { margin-top:var(--sp-1); padding:6px 14px; border-radius:var(--radius-md); border:1px solid var(--border-base); background:transparent; color:var(--text-faint); cursor:pointer; font-family:var(--font-ui); font-size:11px; letter-spacing:0.04em; transition:border-color 0.15s, color 0.15s; }
+  .hello-btn:hover:not(:disabled) { border-color:var(--border-strong); color:var(--text-secondary); }
+  .hello-btn:disabled { opacity:0.5; cursor:default; }
+  .hello-btn--error { border-color:color-mix(in srgb, var(--color-error) 40%, transparent); color:var(--color-error); }
 
   @keyframes cardIn  { from { opacity:0; transform:translateY(28px) scale(0.97) } to { opacity:1; transform:translateY(0) scale(1) } }
   @keyframes cardOut { from { opacity:1; transform:translateY(0) scale(1) } to { opacity:0; transform:translateY(18px) scale(0.97) } }

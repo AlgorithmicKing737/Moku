@@ -104,6 +104,7 @@ export interface Settings {
   flareSolverrEnabled: boolean; flareSolverrUrl: string; flareSolverrTimeout: number
   flareSolverrSessionName: string; flareSolverrSessionTtl: number; flareSolverrAsResponseFallback: boolean
   appLockEnabled: boolean; appLockPin: string
+  appLockWindowsHello: boolean
   customThemes: CustomTheme[]; hiddenCategoryIds: number[]
   defaultLibraryCategoryId: number | null; savedIsDefaultCategory: boolean
   libraryTabSort: Record<string, { mode: LibrarySortMode; dir: LibrarySortDir }>
@@ -152,6 +153,7 @@ export const DEFAULT_SETTINGS: Settings = {
   flareSolverrTimeout: 60, flareSolverrSessionName: 'moku',
   flareSolverrSessionTtl: 15, flareSolverrAsResponseFallback: false,
   appLockEnabled: false, appLockPin: '',
+  appLockWindowsHello: false,
   customThemes: [], hiddenCategoryIds: [], defaultLibraryCategoryId: null,
   savedIsDefaultCategory: false,
   libraryTabSort: {}, libraryTabStatus: {}, libraryTabFilters: {},

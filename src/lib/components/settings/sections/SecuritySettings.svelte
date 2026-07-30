@@ -4,6 +4,7 @@
   import { retryBoot } from '$lib/state/boot.svelte'
   import { authSession, configureAuth } from '$lib/core/auth'
   import { invoke } from '@tauri-apps/api/core'
+  import { platform } from '@tauri-apps/plugin-os'
 
   interface Props { selectOpen: string | null; toggleSelect: (id: string) => void }
   let { selectOpen, toggleSelect }: Props = $props()
@@ -42,6 +43,8 @@
   let lockEnabled = $state(settingsState.settings.appLockEnabled ?? false)
   let lockPin     = $state(settingsState.settings.appLockEnabled ? (settingsState.settings.appLockPin ?? '') : '')
   let lockPinVis  = $state(false)
+
+  const isWindows = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window && platform() === 'windows'
   let lockError   = $state<string | null>(null)
   let lockSaved   = $state(false)
 
@@ -358,6 +361,19 @@
             </button>
           </div>
         </div>
+        {#if isWindows}
+        <label class="s-row">
+          <div class="s-row-info">
+            <span class="s-label">Windows Hello</span>
+            <span class="s-desc">Offer fingerprint/face/PIN unlock as a shortcut on the lock screen</span>
+          </div>
+          <button role="switch" aria-checked={settingsState.settings.appLockWindowsHello ?? false} aria-label="Windows Hello"
+            class="s-toggle" class:on={settingsState.settings.appLockWindowsHello ?? false}
+            onclick={() => updateSettings({ appLockWindowsHello: !(settingsState.settings.appLockWindowsHello ?? false) })}>
+            <span class="s-toggle-thumb"></span>
+          </button>
+        </label>
+        {/if}
       {/if}
     </div>
   </div>
