@@ -121,6 +121,7 @@ export interface Settings {
   autoScroll?: boolean; autoScrollSpeed?: number; disableAutoComplete: boolean
   systemThemeSync?: boolean; systemThemeDark?: string; systemThemeLight?: string
   closeAction?: 'ask' | 'tray' | 'quit'
+  windowControls: boolean
   overlayBars?: boolean; tapToToggleBar?: boolean
   automationEnabled?: boolean; automationEnforceGlobal?: boolean
   automationDefaults?: Partial<MangaPrefs>
@@ -162,4 +163,5 @@ export const DEFAULT_SETTINGS: Settings = {
   downloadToastsEnabled: true, downloadAutoRetry: false,
   hiddenLibraryTabs: [], libraryPinnedTabOrder: [],
   autoScroll: false, autoScrollSpeed: 5, disableAutoComplete: false,
+  windowControls: true,
 }

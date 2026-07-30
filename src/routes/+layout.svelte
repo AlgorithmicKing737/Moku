@@ -73,6 +73,7 @@
   const isReaderRoute       = $derived($page.url.pathname.startsWith('/reader'))
   const readerContainerized = $derived(settingsState.settings.readerContainerized ?? false)
   const strippedLayout      = $derived(isReaderRoute && !readerContainerized)
+  const showTitleBar        = $derived(isTauri && (settingsState.settings.windowControls ?? true))
 
   onMount(() => {
     async function init() {
@@ -262,10 +263,10 @@
     {@render children()}
   {:else}
     <div class="frame">
-      {#if isTauri}
+      {#if showTitleBar}
         <TitleBar onClose={() => platformService.close()} />
       {/if}
-      <div class="padding" class:padding-web={!isTauri}>
+      <div class="padding" class:padding-web={!showTitleBar}>
         <div class="shell">
           <div class="body">
             <Sidebar />
@@ -318,6 +319,7 @@
     flex: 1;
     padding: 0 15px 15px;
     min-height: 0;
+    min-width: 0;
   }
 
   .padding-web {
