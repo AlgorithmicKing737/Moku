@@ -6,8 +6,10 @@ export function buildPageGroups(urls: string[], aspects: number[], offsetSpreads
   let i = offsetSpreads ? 3 : 2;
   while (i <= urls.length) {
     const a = aspects[i - 1];
-    if (a > 1.2 || i === urls.length) { groups.push([i++]); }
-    else { groups.push([i, i + 1]); i += 2; }
+    if (a > 1.2 || i === urls.length) { groups.push([i++]); continue; }
+    const b = aspects[i]; // aspect of the would-be partner page (i + 1)
+    if (b > 1.2) { groups.push([i++]); continue; }
+    groups.push([i, i + 1]); i += 2;
   }
   return groups;
 }
