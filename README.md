@@ -82,7 +82,7 @@ Or download the `.exe` installer from the [releases page](https://github.com/mok
 Suwayomi-Server and a bundled JRE are included — no separate install needed.
 
 ```bash
-flatpak install io.github.moku_app.Moku
+flatpak install io.github.moku_project.Moku
 ```
 
 Or download the latest `moku.flatpak` from the [releases page](https://github.com/moku-project/Moku/releases/latest) and install manually:
