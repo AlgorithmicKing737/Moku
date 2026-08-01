@@ -232,6 +232,7 @@
   $effect(() => { if (style !== "longstrip") readerState.resetInspect(); });
 
   export function onInspectMouseDown(e: MouseEvent) {
+    if (e.button !== 0) return;
     if ((e.target as Element).closest(".bar")) return;
     if (style === "longstrip") { stripRef?.onMouseDown(e); return; }
     if (readerState.inspectScale <= 1) return;
@@ -261,6 +262,7 @@
   }
 
   export function onPointerDown(e: PointerEvent) {
+    if (e.button !== 0) return;
     if ((e.target as Element).closest(".bar")) return;
     pinch?.onPointerDown(e);
     if (style === "longstrip") stripRef?.onPointerDown(e);

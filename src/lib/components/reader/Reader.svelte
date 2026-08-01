@@ -611,7 +611,7 @@
     onPageChange={(p) => { readerState.pageNumber = p; }}
     onChapterChange={(id) => { visibleChapterId = id; }}
     onCenterIdxChange={(idx) => { pageViewRef?.notifyScrollCenter(idx); }}
-    onMarkRead={(id) => markChapterRead(id, markedRead)}
+    onMarkRead={(id) => { if (settingsState.settings.autoMarkRead ?? true) markChapterRead(id, markedRead) }}
     onAppend={() => {
       if (appending) return;
       const chunks    = pageViewRef?.getStripChunks() ?? [];
