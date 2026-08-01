@@ -30,6 +30,26 @@ let accessExpiresAt: number | null = null
 let refreshInFlight                = false
 let authSnoozed                    = false
 
+// Periodic background refresh so the access token never gets far enough from
+// expiry to trigger a 401 mid-request. Checked every minute; the actual
+// network call only fires once we're within SKEW_MS of expiry (see
+// refreshUiAccessToken), so most ticks are free.
+const REFRESH_CHECK_MS = 60_000
+let refreshTimer: ReturnType<typeof setInterval> | null = null
+
+function startRefreshTimer(): void {
+  if (refreshTimer !== null) return
+  refreshTimer = setInterval(() => {
+    if (config.mode === 'UI_LOGIN' && refreshToken) refreshUiAccessToken()
+  }, REFRESH_CHECK_MS)
+}
+
+function stopRefreshTimer(): void {
+  if (refreshTimer === null) return
+  clearInterval(refreshTimer)
+  refreshTimer = null
+}
+
 function parseExpiry(token: string): number | null {
   try {
     const payload = JSON.parse(atob(token.split('.')[1]))
@@ -42,6 +62,7 @@ export const authSession = {
     accessToken     = null
     refreshToken    = null
     accessExpiresAt = null
+    stopRefreshTimer()
   },
 }
 
@@ -89,6 +110,7 @@ export function configureAuth(
   accessExpiresAt        = null
   authSnoozed            = false
   appState.authRequired  = false
+  stopRefreshTimer()
 }
 
 export function authHeaders(): Record<string, string> {
@@ -101,7 +123,7 @@ export function authHeaders(): Record<string, string> {
   return {}
 }
 
-async function gql<T>(query: string, variables?: Record<string, unknown>, bare = false): Promise<T> {
+async function gql<T>(query: string, variables?: Record<string, unknown>, bare = false, isRetry = false): Promise<T> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (!bare) Object.assign(headers, authHeaders())
   const res = await fetch(`${config.baseUrl}/api/graphql`, {
@@ -110,13 +132,23 @@ async function gql<T>(query: string, variables?: Record<string, unknown>, bare =
     body:    JSON.stringify({ query, variables }),
   })
   if (res.status === 401 || res.status === 403) {
+    if (!isRetry && !bare && config.mode === 'UI_LOGIN' && refreshToken) {
+      const refreshed = await refreshUiAccessToken(true)
+      if (refreshed) return gql<T>(query, variables, bare, true)
+    }
     reportUnauthorized()
     throw new Error(`HTTP ${res.status}`)
   }
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   const json = await res.json()
   if (json.errors?.length) {
-    if (/unauthorized|unauthenticated/i.test(json.errors[0].message)) reportUnauthorized()
+    if (/unauthorized|unauthenticated/i.test(json.errors[0].message)) {
+      if (!isRetry && !bare && config.mode === 'UI_LOGIN' && refreshToken) {
+        const refreshed = await refreshUiAccessToken(true)
+        if (refreshed) return gql<T>(query, variables, bare, true)
+      }
+      reportUnauthorized()
+    }
     throw new Error(json.errors[0].message)
   }
   return json.data as T
@@ -144,13 +176,10 @@ export function loginBasic(user: string, pass: string): void {
   config.pass = pass
   config.mode = 'BASIC_AUTH'
   authSnoozed = false
+  stopRefreshTimer()
   reportAuthOk()
 }
 
-/**
- * Verify basic-auth credentials by making a real GQL request with them.
- * Throws if the server returns 401/403 or an auth error.
- */
 export async function verifyBasicAuth(user: string, pass: string): Promise<void> {
   const prev = { user: config.user, pass: config.pass, mode: config.mode }
   config.user = user
@@ -165,6 +194,7 @@ export async function verifyBasicAuth(user: string, pass: string): Promise<void>
     throw new Error('Invalid credentials')
   }
   authSnoozed = false
+  stopRefreshTimer()
   reportAuthOk()
 }
 
@@ -178,6 +208,7 @@ export async function loginUI(user: string, pass: string): Promise<void> {
   config.mode     = 'UI_LOGIN'
   config.user     = user
   authSnoozed     = false
+  startRefreshTimer()
   reportAuthOk()
 }
 
