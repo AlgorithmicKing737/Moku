@@ -58,6 +58,8 @@ class LibraryState {
   refreshingMangaId = $state<number | null>(null);
   refreshingCatId   = $state<number | null>(null);
 
+  private tabInitialized = false;
+
   readonly COMPLETED_NAME = "Completed";
 
   get completedCatId(): number | null {
@@ -230,6 +232,12 @@ class LibraryState {
 
   setCategories(cats: Category[]) {
     this.categories = cats;
+    if (!this.tabInitialized) {
+      this.tabInitialized = true;
+      if (this.defaultCategoryId !== null && cats.some(c => c.id === this.defaultCategoryId)) {
+        this.tab = String(this.defaultCategoryId);
+      }
+    }
   }
 
   bumpCategoryFrecency(catId: number) {

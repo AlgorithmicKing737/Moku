@@ -22,7 +22,8 @@
   import type { Manga, Category } from '$lib/types'
   import {
     Books, Folder, FolderSimple, FolderSimplePlus,
-    Trash, CheckSquare, ArrowSquareOut, ArrowsClockwise,
+    Trash, CheckSquare, ArrowSquareOut, ArrowsClockwise, ArrowsCounterClockwise,
+    PencilSimple, Star, Eye, EyeSlash, DownloadSimple,
   } from 'phosphor-svelte'
   import { openMangaFolder, openDownloadsFolder } from '$lib/core/filesystem'
 
@@ -35,6 +36,7 @@
   let tabsEl: HTMLDivElement = $state() as HTMLDivElement
   let ctx:      { x: number; y: number; manga: Manga } | null = $state(null)
   let emptyCtx: { x: number; y: number } | null              = $state(null)
+  let tabCtx:   { x: number; y: number; id: string } | null  = $state(null)
 
   let bulkWorking:     boolean      = $state(false)
   let sortPanelOpen:   boolean      = $state(false)
@@ -298,6 +300,85 @@
     }]
   }
 
+  function openTabCtx(e: MouseEvent, id: string) {
+    e.preventDefault()
+    tabCtx = { x: e.clientX - SIDEBAR_W, y: e.clientY - TITLEBAR_H + 8, id }
+  }
+
+  function toggleTabHidden(id: string) {
+    const current = settingsState.settings.hiddenLibraryTabs ?? []
+    updateSettings({ hiddenLibraryTabs: current.includes(id) ? current.filter(x => x !== id) : [...current, id] })
+  }
+
+  function toggleDefaultFolder(cat: Category) {
+    const current = settingsState.settings.defaultLibraryCategoryId ?? null
+    const next    = current === cat.id ? null : cat.id
+    updateSettings({ defaultLibraryCategoryId: next })
+    if (next !== null) libraryState.tab = String(next)
+  }
+
+  async function renameFolderTab(cat: Category) {
+    const name = prompt('Rename folder:', cat.name)
+    if (!name?.trim() || name.trim() === cat.name) return
+    try {
+      await (getAdapter() as any).updateCategory(cat.id, { name: name.trim() })
+      libraryState.setCategories(libraryState.categories.map(c => c.id === cat.id ? { ...c, name: name.trim() } : c))
+    } catch (e) { console.error(e) }
+  }
+
+  async function toggleCategoryFlag(cat: Category, flag: 'includeInUpdate' | 'includeInDownload') {
+    const next = !(cat as any)[flag]
+    libraryState.setCategories(libraryState.categories.map(c => c.id === cat.id ? { ...c, [flag]: next } : c))
+    try {
+      await (getAdapter() as any).updateCategories([cat.id], { [flag]: next ? 'INCLUDE' : 'EXCLUDE' })
+    } catch (e) {
+      libraryState.setCategories(libraryState.categories.map(c => c.id === cat.id ? { ...c, [flag]: !next } : c))
+      console.error(e)
+    }
+  }
+
+  async function deleteFolderTab(cat: Category) {
+    if (!confirm(`Delete folder "${cat.name}"? This cannot be undone.`)) return
+    try {
+      await getAdapter().deleteCategory(cat.id)
+      libraryState.setCategories(libraryState.categories.filter(c => c.id !== cat.id))
+      if (libraryState.tab === String(cat.id)) libraryState.tab = 'library'
+    } catch (e) { console.error(e) }
+  }
+
+  function buildTabCtxItems(id: string): MenuEntry[] {
+    const isBuiltin    = id === 'library' || id === 'downloaded'
+    const cat          = libraryState.categories.find(c => String(c.id) === id)
+    const isCompleted  = !!cat && id === String(libraryState.completedCatId)
+    const hidden       = (settingsState.settings.hiddenLibraryTabs ?? []).includes(id)
+
+    const hideItem: MenuEntry = {
+      label:   hidden ? 'Show tab in library' : 'Hide tab from library',
+      icon:    hidden ? Eye : EyeSlash,
+      onClick: () => toggleTabHidden(id),
+    }
+
+    if (isBuiltin || isCompleted || !cat) return [hideItem]
+
+    const isDefault = (settingsState.settings.defaultLibraryCategoryId ?? null) === cat.id
+
+    return [
+      { label: 'Rename folder', icon: PencilSimple, onClick: () => renameFolderTab(cat) },
+      { separator: true },
+      { label: isDefault ? 'Remove as default folder' : 'Set as default folder', icon: Star,
+        onClick: () => toggleDefaultFolder(cat) },
+      hideItem,
+      { label: cat.includeInUpdate !== false ? 'Exclude from updates' : 'Include in updates',
+        icon: cat.includeInUpdate !== false ? ArrowsClockwise : ArrowsCounterClockwise,
+        onClick: () => toggleCategoryFlag(cat, 'includeInUpdate') },
+      { label: cat.includeInDownload !== false ? 'Exclude from auto-downloads' : 'Include in auto-downloads',
+        icon: DownloadSimple,
+        onClick: () => toggleCategoryFlag(cat, 'includeInDownload') },
+      { separator: true },
+      { label: 'Delete folder', icon: Trash, danger: true, onClick: () => deleteFolderTab(cat) },
+    ]
+  }
+
   function onTabDragStart(e: DragEvent, id: string) {
     activeDragKind = 'tab'; dragTabId = id
     e.dataTransfer!.effectAllowed = 'move'
@@ -406,6 +487,7 @@
       onTabDragLeave={onTabDragLeave}
       onTabDrop={onTabDrop}
       onTabDragEnd={onTabDragEnd}
+      onTabContextMenu={openTabCtx}
     />
 
     <LibraryGrid
@@ -434,6 +516,9 @@
 {/if}
 {#if emptyCtx}
   <ContextMenu x={emptyCtx.x} y={emptyCtx.y} items={buildEmptyCtx()} onClose={() => emptyCtx = null} />
+{/if}
+{#if tabCtx}
+  <ContextMenu x={tabCtx.x} y={tabCtx.y} items={buildTabCtxItems(tabCtx.id)} onClose={() => tabCtx = null} />
 {/if}
 
 <style>

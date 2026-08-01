@@ -45,6 +45,7 @@
     onTabDragLeave:      () => void;
     onTabDrop:           (e: DragEvent, id: string) => void;
     onTabDragEnd:        () => void;
+    onTabContextMenu:    (e: MouseEvent, id: string) => void;
   }
 
   let {
@@ -57,6 +58,7 @@
     onFilterToggle, onFiltersClear, onSortPanelToggle, onFilterPanelToggle,
     onViewModeChange, onOpenDownloadsFolder,
     onTabDragStart, onTabDragOver, onTabDragLeave, onTabDrop, onTabDragEnd,
+    onTabContextMenu,
   }: Props = $props();
 
   let wheelTimer: ReturnType<typeof setTimeout> | null = null
@@ -125,6 +127,7 @@
           ondragleave={isDraggable ? onTabDragLeave : undefined}
           ondrop={isDraggable ? (e) => onTabDrop(e, id) : undefined}
           ondragend={isDraggable ? onTabDragEnd : undefined}
+          oncontextmenu={(e) => onTabContextMenu(e, id)}
         >
           {#if id === "library"}<Books size={11} weight="bold" />
           {:else if id === "downloaded"}<DownloadSimple size={11} weight="bold" />

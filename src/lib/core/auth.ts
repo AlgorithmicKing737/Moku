@@ -30,10 +30,6 @@ let accessExpiresAt: number | null = null
 let refreshInFlight                = false
 let authSnoozed                    = false
 
-// Periodic background refresh so the access token never gets far enough from
-// expiry to trigger a 401 mid-request. Checked every minute; the actual
-// network call only fires once we're within SKEW_MS of expiry (see
-// refreshUiAccessToken), so most ticks are free.
 const REFRESH_CHECK_MS = 60_000
 let refreshTimer: ReturnType<typeof setInterval> | null = null
 
