@@ -1,6 +1,6 @@
 import type { PlatformAdapter } from '$lib/platform-adapters/types'
 import type {
-  PlatformFeature, ServerLaunchConfig, DiscordPresence,
+  PlatformFeature, ServerLaunchConfig, FlaresolverrLaunchConfig, DiscordPresence,
   AppUpdateInfo, StorageInfo, ReleaseInfo, UpdateProgress, MigrateProgress,
 } from '$lib/platform-adapters/types'
 
@@ -18,8 +18,6 @@ function get(): PlatformAdapter {
 export const platformService = {
   get platform()                                            { return get().platform },
 
-  // The readiness gate every feature checks first — must never throw before the adapter is wired
-  // up, so report "unsupported" (rather than going through get()) until it exists.
   isSupported: (f: PlatformFeature)                        => adapter?.isSupported(f) ?? false,
   init:        ()                                          => get().init(),
   destroy:     ()                                          => get().destroy(),
@@ -49,6 +47,9 @@ export const platformService = {
   launchServer:    (c: ServerLaunchConfig)                 => get().launchServer(c),
   stopServer:      ()                                      => get().stopServer(),
   getServerStatus: ()                                      => get().getServerStatus(),
+
+  launchFlaresolverr: (c: FlaresolverrLaunchConfig)        => get().launchFlaresolverr(c),
+  stopFlaresolverr:   ()                                   => get().stopFlaresolverr(),
 
   setTitle:         (title: string)                        => get().setTitle(title),
   minimize:         ()                                     => get().minimize(),

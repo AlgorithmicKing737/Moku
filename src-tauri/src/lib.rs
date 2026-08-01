@@ -18,7 +18,19 @@ const IPC_PORT: u16 = 47823;
 const HANDSHAKE: &[u8] = b"MOKU:1\n";
 const FOCUS_CMD: &[u8] = b"focus\n";
 
+fn log_lifecycle(msg: &str) {
+    let data_dir = server::resolve::suwayomi_data_dir();
+    let _ = std::fs::create_dir_all(&data_dir);
+    let mut log = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(data_dir.join("moku-spawn.log"))
+        .ok();
+    server::do_log(&mut log, msg);
+}
+
 fn do_quit(app: &tauri::AppHandle) {
+    log_lifecycle("[lifecycle] quit requested, clearing server + flaresolverr state");
     server::kill_tachidesk(app);
     commands::flaresolverr::kill_flaresolverr_internal(app);
     app.exit(0);
@@ -165,6 +177,7 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             if let WindowEvent::Destroyed = event {
+                log_lifecycle("[lifecycle] window destroyed, clearing server + flaresolverr state");
                 server::kill_tachidesk(window.app_handle());
                 commands::flaresolverr::kill_flaresolverr_internal(window.app_handle());
             }

@@ -123,7 +123,38 @@
           binary:       settingsState.settings.serverBinary,
           binaryArgs:   settingsState.settings.serverBinaryArgs,
           webUiEnabled: settingsState.settings.suwayomiWebUI,
-        }).catch(() => {})
+        }).catch((e) => {
+          notifications.addToast({
+            kind:  'error',
+            title: 'Failed to start Suwayomi server',
+            body:  e instanceof Error ? e.message : String(e),
+          })
+        })
+      }
+
+      if (
+        isTauri &&
+        settingsState.settings.flareSolverrEnabled &&
+        settingsState.settings.flareSolverrAutoStart
+      ) {
+        if (!settingsState.settings.flareSolverrBinary?.trim()) {
+          notifications.addToast({
+            kind:  'error',
+            title: 'FlareSolverr binary not configured',
+            body:  'Set a binary path in Settings → Security, or switch to external mode.',
+          })
+        } else {
+          platformService.launchFlaresolverr({
+            binary:     settingsState.settings.flareSolverrBinary,
+            binaryArgs: settingsState.settings.flareSolverrBinaryArgs,
+          }).catch((e) => {
+            notifications.addToast({
+              kind:  'error',
+              title: 'Failed to start FlareSolverr',
+              body:  e instanceof Error ? e.message : String(e),
+            })
+          })
+        }
       }
 
       startProbe(

@@ -14,6 +14,11 @@ export interface ServerLaunchConfig {
   webUiEnabled?: boolean
 }
 
+export interface FlaresolverrLaunchConfig {
+  binary:      string
+  binaryArgs?: string
+}
+
 export interface DiscordAssets {
   largeImage?: string
   largeText?:  string
@@ -102,6 +107,9 @@ export interface PlatformAdapter {
   launchServer(config: ServerLaunchConfig): Promise<void>
   stopServer():                             Promise<void>
   getServerStatus():                        Promise<'running' | 'stopped' | 'error'>
+
+  launchFlaresolverr(config: FlaresolverrLaunchConfig): Promise<void>
+  stopFlaresolverr():                                   Promise<void>
 
   setTitle(title: string): Promise<void>
   minimize():              Promise<void>

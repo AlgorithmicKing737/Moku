@@ -103,6 +103,7 @@ export interface Settings {
   socksProxyVersion: number; socksProxyUsername: string; socksProxyPassword: string
   flareSolverrEnabled: boolean; flareSolverrUrl: string; flareSolverrTimeout: number
   flareSolverrSessionName: string; flareSolverrSessionTtl: number; flareSolverrAsResponseFallback: boolean
+  flareSolverrBinary: string; flareSolverrBinaryArgs: string; flareSolverrAutoStart: boolean
   appLockEnabled: boolean; appLockPin: string
   appLockWindowsHello: boolean
   customThemes: CustomTheme[]; hiddenCategoryIds: number[]
@@ -152,6 +153,8 @@ export const DEFAULT_SETTINGS: Settings = {
   flareSolverrEnabled: false, flareSolverrUrl: 'http://localhost:8191',
   flareSolverrTimeout: 60, flareSolverrSessionName: 'moku',
   flareSolverrSessionTtl: 15, flareSolverrAsResponseFallback: false,
+  flareSolverrBinary: '', flareSolverrBinaryArgs: '',
+  flareSolverrAutoStart: false,
   appLockEnabled: false, appLockPin: '',
   appLockWindowsHello: false,
   customThemes: [], hiddenCategoryIds: [], defaultLibraryCategoryId: null,

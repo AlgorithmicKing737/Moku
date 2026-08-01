@@ -9,7 +9,7 @@ import { getVersion }                                      from '@tauri-apps/api
 import { connect, disconnect, setActivity, clearActivity } from 'tauri-plugin-discord-rpc-api'
 import type {
   PlatformAdapter, PlatformFeature, Platform,
-  ServerLaunchConfig, DiscordPresence,
+  ServerLaunchConfig, FlaresolverrLaunchConfig, DiscordPresence,
   AppUpdateInfo, StorageInfo, ReleaseInfo,
   UpdateProgress, MigrateProgress,
 } from '$lib/platform-adapters/types'
@@ -137,6 +137,17 @@ export class TauriAdapter implements PlatformAdapter {
 
   async getServerStatus(): Promise<'running' | 'stopped' | 'error'> {
     return 'stopped'
+  }
+
+  async launchFlaresolverr(config: FlaresolverrLaunchConfig): Promise<void> {
+    await invoke('spawn_flaresolverr', {
+      binary:     config.binary,
+      binaryArgs: config.binaryArgs || null,
+    })
+  }
+
+  async stopFlaresolverr(): Promise<void> {
+    await invoke('kill_flaresolverr')
   }
 
   async setTitle(title: string): Promise<void> {

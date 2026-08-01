@@ -240,11 +240,6 @@ modules:
         XDG_DATA_HOME: /run/build/moku/xdg-data
         TAURI_SKIP_DEVSERVER_CHECK: 'true'
         PKG_CONFIG_PATH: /usr/lib/pkgconfig:/usr/share/pkgconfig:/app/lib/pkgconfig
-        # NOTE: TAURI_CONFIG is merged into tauri.conf.json via JSON merge-patch,
-        # which REPLACES arrays wholesale rather than merging them element-wise.
-        # The "windows" array below must therefore mirror every field from
-        # src-tauri/tauri.conf.json's window entry (title/size/decorations/etc.)
-        # or those fields silently fall back to Tauri defaults (e.g. decorations: true).
         TAURI_CONFIG: '{"build":{"devUrl":null,"frontendDist":"../dist"},"app":{"windows":[{"title":"Moku","width":1280,"height":800,"minWidth":800,"minHeight":600,"resizable":true,"fullscreen":false,"decorations":false,"center":true,"devtools":false}]},"bundle":{"externalBin":[]}}'
     build-commands:
       - tar -xzf frontend-dist.tar.gz
@@ -256,19 +251,9 @@ modules:
       - install -Dm644 src-tauri/icons/128x128@2x.png /app/share/icons/hicolor/256x256/apps/io.github.moku_project.Moku.png
       - install -Dm644 packaging/io.github.moku_project.Moku.metainfo.xml /app/share/metainfo/io.github.moku_project.Moku.metainfo.xml
     sources:
-      # TODO: pick ONE of the two options below.
-      #
-      # Option A (floating, always builds current tip of main):
-      # - type: git
-      #   url: https://github.com/moku-project/Moku.git
-      #   branch: main
-      #
-      # Option B (pinned/reproducible — recommended):
-      # run `git ls-remote https://github.com/moku-project/Moku.git HEAD`
-      # and paste the resulting hash below.
       - type: git
         url: https://github.com/moku-project/Moku.git
-        commit: REPLACE_WITH_LATEST_COMMIT_HASH
+        commit: 6f8648094f511bdd210d902718a0c614aa03ddf1
       - type: file
         path: packaging/frontend-dist.tar.gz
         sha256: b8772525e22560c199e7692508de346f0fdcbfba33a2ee06c906fc609ffc7e7e
