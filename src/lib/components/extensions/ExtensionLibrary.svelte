@@ -14,7 +14,6 @@
     pkgName:       string;
     extensionName: string;
     iconUrl:       string;
-    cols:          number;
     cropCovers:    boolean;
     statsAlways:   boolean;
     anims:         boolean;
@@ -23,7 +22,7 @@
     onSettings:    () => void;
   }
 
-  let { pkgName, extensionName, iconUrl, cols, cropCovers, statsAlways, anims, sources, onBack, onSettings }: Props = $props();
+  let { pkgName, extensionName, iconUrl, cropCovers, statsAlways, anims, sources, onBack, onSettings }: Props = $props();
 
   const isLocal = $derived(pkgName === '__local__');
 
@@ -233,7 +232,7 @@
 
   <div class="content">
     {#if loading}
-      <div class="grid" style="--cols:{cols}">
+      <div class="grid">
         {#each Array(12) as _}
           <div class="card-skeleton">
             <div class="cover-skeleton skeleton"></div>
@@ -273,7 +272,7 @@
         </div>
       {/if}
 
-      <div class="grid" style="--cols:{cols}">
+      <div class="grid">
         {#each filtered as m (m.id)}
           {@const isCompleted = !m.unreadCount && m.downloadCount > 0}
           <button class="card" class:anims onclick={() => setPreviewManga(m as any)}>
@@ -387,7 +386,7 @@
   .migrate-btn { display: flex; align-items: center; gap: 5px; margin-left: auto; font-family: var(--font-ui); font-size: var(--text-2xs); letter-spacing: var(--tracking-wide); padding: 3px 9px; border-radius: var(--radius-sm); background: none; color: var(--text-faint); border: 1px solid var(--border-dim); cursor: pointer; flex-shrink: 0; transition: color var(--t-base), border-color var(--t-base), background var(--t-base); }
   .migrate-btn:hover { color: var(--accent-fg); border-color: var(--accent-dim); background: var(--accent-muted); }
 
-  .grid { display: grid; grid-template-columns: repeat(var(--cols, auto-fill), minmax(130px, 1fr)); gap: var(--sp-4); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: var(--sp-4); }
 
   .card { background: none; border: none; padding: 0; cursor: pointer; text-align: left; }
   .card.anims:hover .cover-wrap { transform: translateY(-3px); border-color: var(--border-strong); box-shadow: 0 6px 20px rgba(0,0,0,0.35); }

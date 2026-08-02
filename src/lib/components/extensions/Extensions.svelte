@@ -13,7 +13,6 @@
   import ExtensionLibrary       from "$lib/components/extensions/ExtensionLibrary.svelte";
 
   const anims      = $derived(settingsState.settings.qolAnimations ?? true);
-  const cols        = $derived(settingsState.settings.libraryPageSize ?? 5);
   const cropCovers  = $derived(settingsState.settings.libraryCropCovers ?? true);
   const statsAlways = $derived(settingsState.settings.libraryStatsAlways ?? false);
 
@@ -249,7 +248,7 @@
     pkgName={libraryTarget.pkgName}
     extensionName={libraryTarget.extensionName}
     iconUrl={libraryTarget.iconUrl}
-    {cols} {cropCovers} {statsAlways} {anims}
+    {cropCovers} {statsAlways} {anims}
     sources={sourcesByPkg[libraryTarget.pkgName] ?? []}
     onBack={() => libraryTarget = null}
     onSettings={() => { settingsTarget = { extensionName: libraryTarget!.extensionName, iconUrl: libraryTarget!.iconUrl, sources: sourcesByPkg[libraryTarget!.pkgName] ?? [] }; }}
