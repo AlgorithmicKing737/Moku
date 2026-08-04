@@ -4,7 +4,7 @@
     <linearGradient id="bgGrad" x1="15%" y1="0%" x2="85%" y2="100%">
       <stop offset="0%" stop-color="#101f17"/>
       <stop offset="55%" stop-color="#0a150f"/>
-      <stop offset="100%" stop-color="#060c08"/>
+      <stop offset="100%" stop-color="#08110c"/>
     </linearGradient>
 
     <radialGradient id="heroGlow" cx="50%" cy="42%" r="50%">
@@ -32,8 +32,8 @@
 
     <linearGradient id="cardOutline" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#bdffdf" stop-opacity="0.85"/>
-      <stop offset="55%" stop-color="#5fbf94" stop-opacity="0.45"/>
-      <stop offset="100%" stop-color="#0a3324" stop-opacity="0.25"/>
+      <stop offset="55%" stop-color="#5fbf94" stop-opacity="0.7"/>
+      <stop offset="100%" stop-color="#4fa77e" stop-opacity="0.65"/>
     </linearGradient>
 
     <clipPath id="roundedBounds">
@@ -125,5 +125,5 @@
 
   <!-- nice inset outline, same treatment as the icon, extra edge padding -->
   <rect x="8" y="8" width="1264" height="304" rx="14" ry="14"
-        fill="none" stroke="url(#cardOutline)" stroke-width="3"/>
+        fill="none" stroke="url(#cardOutline)" stroke-width="4"/>
 </svg>
