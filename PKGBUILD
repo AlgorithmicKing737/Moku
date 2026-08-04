@@ -25,7 +25,7 @@ source=(
 )
 noextract=("Suwayomi-Server-v2.1.2087.jar")
 sha256sums=(
-    '7e3e54ccb7ae9e46aade8ae88ba37c8059e18c769f46c23b79f27482eb5ff45d'
+    '8977e670fbaf03fe899f7553993afec9c074bbd211cf3100982ed14beb7eea7b'
     'f589a422674252394c13b289a9c8be691905bf583efb7f4d5f1501ae5e91e6b3'
 )
 b2sums=(
