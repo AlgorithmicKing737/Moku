@@ -83,7 +83,7 @@
   const onLatestVersion = $derived((() => {
     if (!supportsUpdates || releasesLoading || releases.length === 0 || !appVersion || appVersion === '…') return false
     const sorted = releases.slice().sort((a, b) => compareSemver(a.tag_name, b.tag_name))
-    return compareSemver(appVersion, sorted[0].tag_name) >= 0
+    return compareSemver(appVersion, sorted[0].tag_name) <= 0
   })())
 
   function fmtDate(iso: string) {
