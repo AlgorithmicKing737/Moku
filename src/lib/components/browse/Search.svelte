@@ -77,8 +77,6 @@
         if (ctrl.signal.aborted) return;
         localSource = nodes.find((s: Source) => s.id === "0") ?? null;
         allSources  = nodes.filter((s: Source) => s.id !== "0");
-        startSourceCacheBuild();
-        popularStart(allSources);
       })
       .catch(console.error)
       .finally(() => { if (!ctrl.signal.aborted) loadingSources = false; });
@@ -216,6 +214,12 @@
         sourceCacheLoading = false;
       });
   }
+
+  $effect(() => {
+    if (!allSources.length) return;
+    if (urlTab === "keyword") popularStart(allSources);
+    else if (urlTab === "tag") startSourceCacheBuild();
+  });
 
   onDestroy(() => {
     sourcesAbort?.abort();

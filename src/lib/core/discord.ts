@@ -15,8 +15,6 @@ const APP_BUTTONS = [
 
 const FALLBACK_IMAGE = 'moku_logo'
 
-// TEMP, set true only if your Suwayomi server is publicly reachable by Discord,
-// so its own thumbnail URL can be used directly.
 const SUWAYOMI_COVERS_PUBLIC = false
 
 const ACTIVITY_TYPE          = 3

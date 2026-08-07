@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy }          from "svelte";
+  import { onDestroy, untrack } from "svelte";
   import { getAdapter }         from "$lib/request-manager";
   import { settingsState, updateSettings } from "$lib/state/settings.svelte";
   import { shouldHideNsfw, shouldHideSource } from "$lib/core/util";
@@ -47,14 +47,21 @@
     if (target) srcSelectSource(target);
   });
 
+  let src_langInitialized = false;
+
   $effect(() => {
     if (!allSources.length) return;
     const langs = new Set(allSources.map((s) => s.lang));
-    if (src_selectedLang === "all") {
-      if (langs.has(preferredLang)) src_selectedLang = preferredLang;
-    } else if (!langs.has(src_selectedLang)) {
-      src_selectedLang = langs.has(preferredLang) ? preferredLang : "all";
-    }
+    untrack(() => {
+      if (!src_langInitialized) {
+        src_langInitialized = true;
+        if (src_selectedLang === "all" && langs.has(preferredLang)) {
+          src_selectedLang = preferredLang;
+        }
+      } else if (src_selectedLang !== "all" && !langs.has(src_selectedLang)) {
+        src_selectedLang = langs.has(preferredLang) ? preferredLang : "all";
+      }
+    });
   });
 
   const src_visibleSources = $derived.by(() => {
