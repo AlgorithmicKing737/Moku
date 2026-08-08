@@ -35,7 +35,6 @@
     catsLoading:             boolean
     refreshing:              boolean
     onViewModeToggle:        () => void
-    onPageChange:            (page: number) => void
     onDownloadSelected:      () => void
     onDeleteSelected:        () => void
     onMarkSelectedRead:      (isRead: boolean) => void
@@ -60,7 +59,7 @@
     hasSelection, selectedCount, continueChapter,
     availableScanlators, scanlatorFilter, scanlatorBlacklist, scanlatorForce,
     allCategories, mangaCategories, catsLoading, refreshing,
-    onViewModeToggle, onPageChange, onDownloadSelected, onDeleteSelected,
+    onViewModeToggle, onDownloadSelected, onDeleteSelected,
     onMarkSelectedRead, onClearSelection, onEnqueueNext, onEnqueueMultiple,
     onDeleteAll, onRefresh, onToggleCategory, onCreateCategory,
     onSetScanlatorFilter, onSetScanlatorBlacklist, onSetScanlatorForce,
@@ -96,8 +95,7 @@
 
   function doJump() {
     if (!jumpChapter) return
-    const pageIdx = sortedChapters.indexOf(jumpChapter)
-    if (pageIdx >= 0) onPageChange(Math.floor(pageIdx / 25) + 1)
+    document.getElementById(`ch-${jumpChapter.id}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
     jumpOpen = false; jumpInput = ''
   }
 
@@ -166,11 +164,11 @@
               <button
                 class="sort-option"
                 class:active={sortMode === val}
-                onclick={() => { onSortModeChange(val as ChapterSortMode); onPageChange(1); sortMenuOpen = false }}
+                onclick={() => { onSortModeChange(val as ChapterSortMode); sortMenuOpen = false }}
               >{label}</button>
             {/each}
             <div class="sort-divider"></div>
-            <button class="sort-option" onclick={() => { onSortDirChange(sortDir === 'desc' ? 'asc' : 'desc'); onPageChange(1); sortMenuOpen = false }}>
+            <button class="sort-option" onclick={() => { onSortDirChange(sortDir === 'desc' ? 'asc' : 'desc'); sortMenuOpen = false }}>
               {sortDir === 'desc' ? '↑ Ascending' : '↓ Descending'}
             </button>
           </div>
@@ -224,16 +222,16 @@
                 <button class="scan-filter-tab" class:scan-filter-tab-active={scanTab === 'block'}  onclick={() => scanTab = 'block'}>Block</button>
               </div>
               {#if scanTab === 'prefer' && scanlatorFilter.length > 0}
-                <button class="scan-filter-clear" onclick={() => { onSetScanlatorFilter([]); onSetScanlatorForce(false); onPageChange(1) }}>Clear</button>
+                <button class="scan-filter-clear" onclick={() => { onSetScanlatorFilter([]); onSetScanlatorForce(false) }}>Clear</button>
               {:else if scanTab === 'block' && scanlatorBlacklist.length > 0}
-                <button class="scan-filter-clear" onclick={() => { onSetScanlatorBlacklist([]); onPageChange(1) }}>Clear</button>
+                <button class="scan-filter-clear" onclick={() => { onSetScanlatorBlacklist([]) }}>Clear</button>
               {/if}
             </div>
             <div class="scan-filter-divider"></div>
             {#if scanTab === 'prefer'}
               <div class="scan-filter-force-row">
                 <span class="scan-filter-force-label" title="Hide chapters with no preferred group match, rather than falling back to any available group.">Enforce</span>
-                <button class="scan-force-toggle" class:scan-force-on={scanlatorForce} onclick={() => { onSetScanlatorForce(!scanlatorForce); onPageChange(1) }}>
+                <button class="scan-force-toggle" class:scan-force-on={scanlatorForce} onclick={() => { onSetScanlatorForce(!scanlatorForce) }}>
                   {scanlatorForce ? 'On' : 'Off'}
                 </button>
               </div>
@@ -243,7 +241,7 @@
                   class="scan-filter-item"
                   class:scan-filter-item-active={scanlatorFilter.includes(s)}
                   role="menuitem"
-                  onclick={() => { onSetScanlatorFilter(scanlatorFilter.includes(s) ? scanlatorFilter.filter(x => x !== s) : [...scanlatorFilter, s]); onPageChange(1) }}
+                  onclick={() => { onSetScanlatorFilter(scanlatorFilter.includes(s) ? scanlatorFilter.filter(x => x !== s) : [...scanlatorFilter, s]) }}
                 >
                   <span class="scan-filter-check" class:scan-filter-check-on={scanlatorFilter.includes(s)}>
                     {#if scanlatorFilter.includes(s)}<Check size={9} weight="bold" />{/if}
@@ -258,7 +256,7 @@
                   class:scan-filter-item-active={scanlatorBlacklist.includes(s)}
                   class:scan-filter-item-block={scanlatorBlacklist.includes(s)}
                   role="menuitem"
-                  onclick={() => { onSetScanlatorBlacklist(scanlatorBlacklist.includes(s) ? scanlatorBlacklist.filter(x => x !== s) : [...scanlatorBlacklist, s]); onPageChange(1) }}
+                  onclick={() => { onSetScanlatorBlacklist(scanlatorBlacklist.includes(s) ? scanlatorBlacklist.filter(x => x !== s) : [...scanlatorBlacklist, s]) }}
                 >
                   <span class="scan-filter-check" class:scan-filter-check-block={scanlatorBlacklist.includes(s)}>
                     {#if scanlatorBlacklist.includes(s)}<X size={9} weight="bold" />{/if}
