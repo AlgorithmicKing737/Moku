@@ -6,46 +6,29 @@
   import type { Chapter } from '$lib/types'
 
   interface Props {
-    pageChapters:    Chapter[]
     sortedChapters:  Chapter[]
     viewMode:        'list' | 'grid'
     loadingChapters: boolean
     selectedIds:     Set<number>
     enqueueing:      Set<number>
-    chapterPage:     number
-    totalPages:      number
     onOpen:          (ch: Chapter, inProgress: boolean) => void
     onToggleSelect:  (id: number, e: MouseEvent | KeyboardEvent) => void
     onEnqueue:       (ch: Chapter, e: MouseEvent) => void
     onDeleteDownload:(id: number) => void
-    onPageChange:    (page: number) => void
-    onPageSizeChange:(n: number) => void
     buildCtxItems:   (ch: Chapter, idx: number) => MenuEntry[]
   }
 
   let {
-    pageChapters, sortedChapters, viewMode, loadingChapters,
-    selectedIds, enqueueing, chapterPage, totalPages,
+    sortedChapters, viewMode, loadingChapters,
+    selectedIds, enqueueing,
     onOpen, onToggleSelect, onEnqueue, onDeleteDownload,
-    onPageChange, onPageSizeChange, buildCtxItems,
+    buildCtxItems,
   }: Props = $props()
 
   let ctx: { x: number; y: number; chapter: Chapter; idx: number } | null = $state(null)
   let listEl: HTMLDivElement | null = $state(null)
 
   const hasSelection = $derived(selectedIds.size > 0)
-
-  $effect(() => {
-    if (!listEl || viewMode !== 'list') return
-    const ro = new ResizeObserver(([entry]) => {
-      const firstRow = listEl!.querySelector('.ch-row') as HTMLElement | null
-      const rowH = firstRow ? firstRow.offsetHeight : 37
-      const n = Math.max(1, Math.floor(entry.contentRect.height / rowH))
-      onPageSizeChange(n)
-    })
-    ro.observe(listEl)
-    return () => ro.disconnect()
-  })
 
   function chapterLongPress(node: HTMLElement, param: [Chapter, number]) {
     const [ch, idx] = param
@@ -79,6 +62,7 @@
     {#each sortedChapters as ch, i}
       {@const isGridSelected = selectedIds.has(ch.id)}
       <button
+        id={'ch-' + ch.id}
         class="grid-cell"
         class:read={ch.read}
         class:grid-selected={isGridSelected}
@@ -96,11 +80,11 @@
     {/each}
 
   {:else}
-    {#each pageChapters as ch}
-      {@const idxInSorted  = sortedChapters.indexOf(ch)}
+    {#each sortedChapters as ch, idxInSorted}
       {@const isSelected   = selectedIds.has(ch.id)}
       {@const chInProgress = !ch.read && (ch.lastPageRead ?? 0) > 0}
       <div
+        id={'ch-' + ch.id}
         role="button"
         tabindex="0"
         class="ch-row"
@@ -144,21 +128,18 @@
   {/if}
 </div>
 
-{#if totalPages > 1}
-  <div class="pagination-bottom">
-    <button class="page-btn" onclick={() => onPageChange(Math.max(1, chapterPage - 1))} disabled={chapterPage === 1}>← Prev</button>
-    <span class="page-num">{chapterPage} / {totalPages}</span>
-    <button class="page-btn" onclick={() => onPageChange(Math.min(totalPages, chapterPage + 1))} disabled={chapterPage === totalPages}>Next →</button>
-  </div>
-{/if}
-
 {#if ctx}
   <ContextMenu x={ctx.x} y={ctx.y} items={buildCtxItems(ctx.chapter, ctx.idx)} onClose={() => ctx = null} />
 {/if}
 
 <style>
-  .ch-list  { flex: 1; overflow: hidden; }
-  .ch-grid  { flex: 1; overflow: hidden; display: grid; grid-template-columns: repeat(auto-fill, minmax(42px, 1fr)); gap: 4px; padding: var(--sp-3); align-content: start; }
+  .ch-list  { flex: 1; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
+  .ch-grid  { flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(42px, 1fr)); gap: 4px; padding: var(--sp-3); align-content: start; scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
+
+  .ch-list::-webkit-scrollbar, .ch-grid::-webkit-scrollbar { width: 6px; height: 6px; }
+  .ch-list::-webkit-scrollbar-track, .ch-grid::-webkit-scrollbar-track { background: transparent; }
+  .ch-list::-webkit-scrollbar-thumb, .ch-grid::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 99px; }
+  .ch-list::-webkit-scrollbar-thumb:hover, .ch-grid::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
 
   .ch-row { display: flex; align-items: center; padding: 8px var(--sp-4); border-bottom: 1px solid var(--border-dim); cursor: pointer; transition: background var(--t-fast); gap: var(--sp-3); }
   .ch-row:hover { background: var(--bg-raised); }
@@ -206,10 +187,4 @@
   .grid-cell-skeleton { aspect-ratio: 1; border-radius: var(--radius-sm); }
   .grid-selected { background: var(--accent-muted) !important; border-color: var(--accent-dim) !important; }
   .grid-cell-check { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 14px; color: var(--accent-fg); pointer-events: none; }
-
-  .pagination-bottom { display: flex; align-items: center; justify-content: center; gap: var(--sp-2); padding: var(--sp-3); border-top: 1px solid var(--border-dim); flex-shrink: 0; }
-  .page-btn { font-family: var(--font-ui); font-size: var(--text-xs); letter-spacing: var(--tracking-wide); padding: 4px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border-dim); color: var(--text-faint); background: none; cursor: pointer; transition: color var(--t-base), border-color var(--t-base); }
-  .page-btn:hover:not(:disabled) { color: var(--text-muted); border-color: var(--border-strong); }
-  .page-btn:disabled { opacity: 0.3; cursor: default; }
-  .page-num { font-family: var(--font-ui); font-size: var(--text-xs); color: var(--text-faint); letter-spacing: var(--tracking-wide); }
 </style>

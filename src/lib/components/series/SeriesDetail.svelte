@@ -37,16 +37,13 @@
   interface Props { mangaId: number }
   let { mangaId }: Props = $props()
 
-  let chaptersPerPage: number = $state(25)
   const MANGA_TTL_MS  = 5 * 60 * 1000
-
   const mangaCache: Map<number, { data: Manga; fetchedAt: number }> = new Map()
 
   let manga:           Manga | null = $state(null)
   let loadingManga:    boolean      = $state(false)
   let enqueueing:      Set<number>  = $state(new Set())
   let togglingLibrary: boolean      = $state(false)
-  let chapterPage:     number       = $state(1)
   const viewMode = $derived(settingsState.settings.chapterViewMode ?? 'list')
   let deletingAll:     boolean      = $state(false)
   let refreshing:      boolean      = $state(false)
@@ -84,8 +81,6 @@
   const scanlatorBlacklist = $derived(get('scanlatorBlacklist') as string[])
   const scanlatorForce     = $derived(get('scanlatorForce')     as boolean)
 
-  const totalPages      = $derived(Math.ceil(sortedChapters.length / chaptersPerPage))
-  const pageChapters    = $derived(sortedChapters.slice((chapterPage - 1) * chaptersPerPage, chapterPage * chaptersPerPage))
   const readCount       = $derived(sortedChapters.filter(c => c.read).length)
   const totalCount      = $derived(sortedChapters.length)
   const progressPct     = $derived(totalCount > 0 ? (readCount / totalCount) * 100 : 0)
@@ -543,7 +538,6 @@
       {catsLoading}
       {refreshing}
       onViewModeToggle={() => updateSettings({ chapterViewMode: viewMode === 'list' ? 'grid' : 'list' })}
-      onPageChange={(p) => chapterPage = p}
       onDownloadSelected={downloadSelected}
       onDeleteSelected={deleteSelected}
       onMarkSelectedRead={markSelectedRead}
@@ -563,20 +557,15 @@
     />
 
     <ChapterList
-      {pageChapters}
       {sortedChapters}
       {viewMode}
       {loadingChapters}
       {selectedIds}
       {enqueueing}
-      {chapterPage}
-      {totalPages}
       onOpen={openReaderWithAhead}
       onToggleSelect={toggleSelect}
       onEnqueue={enqueue}
       onDeleteDownload={deleteDownloaded}
-      onPageChange={(p) => chapterPage = p}
-      onPageSizeChange={(n) => { chaptersPerPage = n; chapterPage = Math.min(chapterPage, Math.ceil(sortedChapters.length / n) || 1) }}
       {buildCtxItems}
     />
   </div>
