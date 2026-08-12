@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { Books, ClockCounterClockwise, Clock, BookOpen, Fire, TrendUp } from 'phosphor-svelte'
+  import { Books, ClockCounterClockwise, Clock, BookOpen, Fire, TrendUp, Trash, CaretDown, CaretRight } from 'phosphor-svelte'
   import Thumbnail from '$lib/components/shared/manga/Thumbnail.svelte'
   import { timeAgo, formatReadTime } from '$lib/core/util'
-  import type { HistoryGroup, ReadSession } from './lib/recentHistory'
+  import type { HistoryGroup, MangaHistoryEntry } from './lib/recentHistory'
 
   interface Stats {
     currentStreakDays:  number
@@ -12,15 +12,27 @@
   }
 
   interface Props {
-    groups:        HistoryGroup[]
-    hasHistory:    boolean
-    historySearch: string
-    stats:         Stats
-    thumbFor:      (mangaId: number, fallback: string) => string
-    onOpenSeries:  (session: ReadSession) => void
+    groups:               HistoryGroup[]
+    hasHistory:           boolean
+    historySearch:        string
+    stats:                Stats
+    thumbFor:             (mangaId: number, fallback: string) => string
+    onOpenChapter:        (mangaId: number, chapterId: number) => void
+    onDeleteMangaHistory: (mangaId: number) => void
   }
 
-  let { groups, hasHistory, historySearch, stats, thumbFor, onOpenSeries }: Props = $props()
+  let { groups, hasHistory, historySearch, stats, thumbFor, onOpenChapter, onDeleteMangaHistory }: Props = $props()
+
+  let confirmDelete: { id: number; title: string } | null = $state(null)
+  let expandedMangaIds: Set<number> = $state(new Set())
+
+  function toggleExpand(mangaId: number, e: MouseEvent) {
+    e.stopPropagation()
+    const next = new Set(expandedMangaIds)
+    if (next.has(mangaId)) next.delete(mangaId)
+    else next.add(mangaId)
+    expandedMangaIds = next
+  }
 
   function formatDuration(ms: number): string {
     const totalMin = Math.round(ms / 60_000)
@@ -88,36 +100,87 @@
             <div class="day-rule"></div>
           </div>
           <div class="session-list">
-            {#each items as session (session.id)}
-              <button class="session-row" onclick={() => onOpenSeries(session)}>
-                <div class="thumb-wrap">
-                  <Thumbnail
-                    src={thumbFor(session.mangaId, session.thumbnailUrl)}
-                    alt={session.mangaTitle}
-                    class="thumb"
-                  />
-                  {#if session.chaptersSpanned > 1}
-                    <span class="session-count">{session.chaptersSpanned}</span>
-                  {/if}
-                </div>
-                <div class="session-info">
-                  <span class="session-title">{session.mangaTitle}</span>
-                  <span class="session-chapter">
-                    {#if session.chaptersSpanned > 1}
-                      {session.startChapterName}<span class="ch-arrow">→</span>{session.endChapterName}
+            {#each items as item (item.mangaId)}
+              {@const isExpanded = expandedMangaIds.has(item.mangaId)}
+              <div class="manga-card-wrap">
+                <div
+                  class="session-row"
+                  role="button"
+                  tabindex="0"
+                  onclick={() => onOpenChapter(item.mangaId, item.latestChapterId)}
+                  onkeydown={(e) => e.key === 'Enter' && onOpenChapter(item.mangaId, item.latestChapterId)}
+                >
+                  <button
+                    class="expand-btn"
+                    class:expanded={isExpanded}
+                    onclick={(e) => toggleExpand(item.mangaId, e)}
+                    title={isExpanded ? 'Collapse chapters' : 'Expand chapters'}
+                  >
+                    {#if isExpanded}
+                      <CaretDown size={12} weight="bold" />
                     {:else}
-                      {session.endChapterName}
-                      {#if session.endPage > 1}
-                        <span class="ch-page">· p.{session.endPage}</span>
+                      <CaretRight size={12} weight="bold" />
+                    {/if}
+                  </button>
+                  <div class="thumb-wrap">
+                    <Thumbnail
+                      src={thumbFor(item.mangaId, item.thumbnailUrl)}
+                      alt={item.mangaTitle}
+                      class="thumb"
+                    />
+                    {#if item.chaptersSpanned > 1}
+                      <span class="session-count">{item.chaptersSpanned}</span>
+                    {/if}
+                  </div>
+                  <div class="session-info">
+                    <span class="session-title">{item.mangaTitle}</span>
+                    <span class="session-chapter">
+                      {item.latestChapterName}
+                      {#if item.chaptersSpanned > 1}
+                        <span class="ch-page">· {item.chaptersSpanned} chapters read</span>
                       {/if}
-                    {/if}
-                    {#if session.durationMs >= 60_000}
-                      <span class="ch-duration">· {formatDuration(session.durationMs)}</span>
-                    {/if}
-                  </span>
+                      {#if item.durationMs >= 60_000}
+                        <span class="ch-duration">· {formatDuration(item.durationMs)}</span>
+                      {/if}
+                    </span>
+                  </div>
+                  <span class="session-time">{timeAgo(item.endedAt)}</span>
+                  <button
+                    class="delete-btn"
+                    onclick={(e) => { e.stopPropagation(); confirmDelete = { id: item.mangaId, title: item.mangaTitle } }}
+                    title="Clear history for this series"
+                  >
+                    <Trash size={13} weight="light" />
+                  </button>
                 </div>
-                <span class="session-time">{timeAgo(session.endedAt)}</span>
-              </button>
+
+                {#if isExpanded}
+                  <div class="sub-chapter-list">
+                    {#each item.chapters as ch (ch.chapterId)}
+                      <div
+                        class="sub-chapter-row"
+                        role="button"
+                        tabindex="0"
+                        onclick={(e) => { e.stopPropagation(); onOpenChapter(item.mangaId, ch.chapterId) }}
+                        onkeydown={(e) => e.key === 'Enter' && (e.stopPropagation(), onOpenChapter(item.mangaId, ch.chapterId))}
+                      >
+                        <div class="sub-chapter-info">
+                          <span class="sub-chapter-name">
+                            {ch.chapterName}
+                            {#if ch.endPage > 1}
+                              <span class="ch-page">· p.{ch.endPage}</span>
+                            {/if}
+                          </span>
+                          {#if ch.durationMs >= 60_000}
+                            <span class="sub-chapter-meta">{formatDuration(ch.durationMs)}</span>
+                          {/if}
+                        </div>
+                        <span class="sub-chapter-time">{timeAgo(ch.endedAt)}</span>
+                      </div>
+                    {/each}
+                  </div>
+                {/if}
+              </div>
             {/each}
           </div>
         </div>
@@ -125,6 +188,36 @@
     </div>
   {/if}
 </div>
+
+{#if confirmDelete}
+  <div
+    class="modal-backdrop"
+    role="presentation"
+    onclick={() => confirmDelete = null}
+    onkeydown={(e) => e.key === 'Escape' && (confirmDelete = null)}
+  >
+    <div class="modal-card" role="dialog" aria-modal="true" onclick={(e) => e.stopPropagation()}>
+      <div class="modal-header">
+        <span class="modal-title">Clear history?</span>
+      </div>
+      <div class="modal-body">
+        <p class="modal-msg">Remove all reading history for <strong>{confirmDelete.title}</strong>?</p>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-cancel" onclick={() => confirmDelete = null}>Cancel</button>
+        <button
+          class="btn-danger"
+          onclick={() => {
+            if (confirmDelete) onDeleteMangaHistory(confirmDelete.id)
+            confirmDelete = null
+          }}
+        >
+          Clear
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <style>
   .root { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
@@ -162,7 +255,10 @@
   .day-rule   { flex: 1; height: 1px; background: var(--border-dim); }
   .session-list { display: flex; flex-direction: column; gap: var(--sp-2); }
 
+  .manga-card-wrap { display: flex; flex-direction: column; gap: 2px; }
+
   .session-row {
+    position: relative;
     display: flex; align-items: center; gap: var(--sp-3);
     width: 100%; padding: var(--sp-3); border-radius: var(--radius-md);
     border: 1px solid var(--border-dim); background: var(--bg-raised);
@@ -170,6 +266,17 @@
     transition: border-color var(--t-fast), background var(--t-fast);
   }
   .session-row:hover { border-color: var(--border-strong); background: var(--bg-elevated); }
+  .session-row:hover .delete-btn { opacity: 1; }
+
+  .expand-btn {
+    display: flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px; border-radius: var(--radius-sm);
+    border: none; background: none; color: var(--text-faint);
+    cursor: pointer; flex-shrink: 0;
+    transition: color var(--t-fast), background var(--t-fast);
+  }
+  .expand-btn:hover { color: var(--text-primary); background: var(--bg-overlay); }
+  .expand-btn.expanded { color: var(--accent-fg); }
 
   .thumb-wrap { position: relative; flex-shrink: 0; }
   :global(.thumb) { width: 38px; height: 54px; object-fit: cover; display: block; border-radius: var(--radius-sm); border: 1px solid var(--border-dim); }
@@ -188,13 +295,48 @@
     font-family: var(--font-ui); font-size: var(--text-xs); color: var(--text-muted);
     letter-spacing: var(--tracking-wide); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
   }
-  .ch-arrow    { color: var(--text-faint); opacity: 0.35; flex-shrink: 0; }
   .ch-page     { color: var(--text-faint); opacity: 0.5;  flex-shrink: 0; }
   .ch-duration { color: var(--text-faint); opacity: 0.5;  flex-shrink: 0; }
   .session-time {
     font-family: var(--font-ui); font-size: var(--text-2xs); color: var(--text-faint);
     letter-spacing: var(--tracking-wide); flex-shrink: 0; white-space: nowrap; opacity: 0.45;
   }
+
+  .delete-btn {
+    display: flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px; border-radius: var(--radius-sm);
+    border: none; background: none; color: var(--text-faint);
+    cursor: pointer; opacity: 0; flex-shrink: 0;
+    transition: opacity var(--t-fast), color var(--t-fast), background var(--t-fast);
+  }
+  .delete-btn:hover {
+    color: var(--color-error);
+    background: var(--color-error-bg);
+  }
+
+  .sub-chapter-list {
+    margin-left: 28px; margin-top: 2px;
+    padding-left: var(--sp-3); border-left: 2px solid var(--border-dim);
+    display: flex; flex-direction: column; gap: 2px;
+  }
+
+  .sub-chapter-row {
+    display: flex; align-items: center; gap: var(--sp-3);
+    padding: var(--sp-2) var(--sp-3); border-radius: var(--radius-sm);
+    background: var(--bg-surface); border: 1px solid var(--border-dim);
+    cursor: pointer; text-align: left;
+    transition: background var(--t-fast), border-color var(--t-fast);
+  }
+  .sub-chapter-row:hover { background: var(--bg-raised); border-color: var(--border-strong); }
+
+  .sub-chapter-info { flex: 1; display: flex; align-items: center; gap: var(--sp-2); min-width: 0; overflow: hidden; }
+  .sub-chapter-name {
+    font-family: var(--font-ui); font-size: var(--text-xs);
+    font-weight: var(--weight-medium); color: var(--text-secondary);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .sub-chapter-meta { font-family: var(--font-ui); font-size: var(--text-2xs); color: var(--text-faint); opacity: 0.5; flex-shrink: 0; }
+  .sub-chapter-time { font-family: var(--font-ui); font-size: var(--text-2xs); color: var(--text-faint); opacity: 0.45; flex-shrink: 0; }
 
   .empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--sp-2); }
   .empty-icon-wrap {
@@ -205,4 +347,41 @@
   }
   .empty-text { font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--text-muted); }
   .empty-hint { font-size: var(--text-xs); color: var(--text-faint); }
+
+  .modal-backdrop {
+    position: fixed; inset: 0; z-index: var(--z-settings, 1000);
+    background: rgba(0, 0, 0, 0.5);
+    display: flex; align-items: center; justify-content: center;
+    animation: fadeIn 0.12s ease both;
+  }
+  .modal-card {
+    background: var(--bg-surface); border: 1px solid var(--border-base);
+    border-radius: var(--radius-lg); width: 340px; max-width: 90vw;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5); overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .modal-header { padding: var(--sp-4) var(--sp-4) var(--sp-2); }
+  .modal-title  { font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--text-primary); }
+  .modal-body   { padding: 0 var(--sp-4) var(--sp-4); }
+  .modal-msg    { font-family: var(--font-ui); font-size: var(--text-xs); color: var(--text-muted); line-height: 1.4; margin: 0; }
+  .modal-actions {
+    display: flex; align-items: center; justify-content: flex-end; gap: var(--sp-2);
+    padding: var(--sp-3) var(--sp-4); border-top: 1px solid var(--border-dim); background: var(--bg-raised);
+  }
+  .btn-cancel, .btn-danger {
+    font-family: var(--font-ui); font-size: var(--text-xs); letter-spacing: var(--tracking-wide);
+    padding: 5px 12px; border-radius: var(--radius-sm); cursor: pointer;
+    transition: background var(--t-base), color var(--t-base), border-color var(--t-base);
+  }
+  .btn-cancel { border: 1px solid var(--border-dim); background: none; color: var(--text-muted); }
+  .btn-cancel:hover { color: var(--text-primary); border-color: var(--border-strong); }
+  .btn-danger {
+    border: 1px solid color-mix(in srgb, var(--color-error) 40%, transparent);
+    background: var(--color-error-bg); color: var(--color-error);
+  }
+  .btn-danger:hover {
+    background: color-mix(in srgb, var(--color-error) 20%, transparent);
+    border-color: var(--color-error);
+  }
+  @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
 </style>

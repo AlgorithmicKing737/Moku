@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte'
+  import { goto }               from '$app/navigation'
   import { getAdapter }         from '$lib/request-manager'
   import { cache, CACHE_KEYS, CACHE_GROUPS } from '$lib/core/cache/queryCache'
   import { homeState, clearHistory } from '$lib/state/home.svelte'
@@ -7,7 +8,7 @@
   import { setActiveManga, openReaderForChapter, setPreviewManga } from '$lib/state/series.svelte'
   import { addToast }           from '$lib/state/notifications.svelte'
   import { downloadStore }      from '$lib/state/downloads.svelte'
-  import { groupByDay }                                from './lib/recentHistory'
+  import { collapseAndGroupByDay }                     from './lib/recentHistory'
   import { fetchedAtMs, parseServerTimestamp, groupUpdatesByDay } from './lib/recentUpdates'
   import RecentToolbar  from './RecentToolbar.svelte'
   import UpdatesTab     from './UpdatesTab.svelte'
@@ -19,7 +20,7 @@
   const RECENT_UPDATES_TTL_MS = 60 * 1_000
   const UPDATE_STATUS_POLL_MS = 2_000
 
-  let tab:                 'updates' | 'history' = $state('updates')
+  let tab:                 'updates' | 'history' = $state('history')
   let historySearch:       string  = $state('')
   let updatesSearch:       string  = $state('')
   let historyConfirmClear: boolean = $state(false)
@@ -77,7 +78,7 @@
       )
     : historyState.sessions)
 
-  const historyGroups = $derived(groupByDay(filteredHistory))
+  const historyGroups = $derived(collapseAndGroupByDay(filteredHistory))
 
   function applyUpdateStatus(statusRes: { isRunning?: boolean; finishedJobs?: number; totalJobs?: number; lastUpdated?: unknown } | null) {
     if (!statusRes) return
@@ -276,11 +277,8 @@
         {historySearch}
         stats={historyState.stats}
         {thumbFor}
-        onOpenSeries={(session) => setPreviewManga({
-          id:           session.mangaId,
-          title:        session.mangaTitle,
-          thumbnailUrl: thumbFor(session.mangaId, session.thumbnailUrl),
-        } as any)}
+        onOpenChapter={(mangaId, chapterId) => goto(`/reader/${mangaId}/${chapterId}`)}
+        onDeleteMangaHistory={(mangaId) => historyState.clearMangaHistory(mangaId)}
       />
     {/if}
   </div>

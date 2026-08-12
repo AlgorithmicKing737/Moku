@@ -154,6 +154,12 @@ class HistoryStore {
     void this._persist()
   }
 
+  clearMangaHistory(mangaId: number) {
+    this.sessions = this.sessions.filter(s => s.mangaId !== mangaId)
+    this.stats    = computeStats(this.sessions)
+    void this._persist()
+  }
+
   private _commit(endedAt: number) {
     const a = this.active
     if (!a) return
