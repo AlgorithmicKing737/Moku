@@ -109,8 +109,12 @@
   }
 
   async function popular_fanOut(signal: AbortSignal) {
+    if (signal.aborted) return;
     const batch = popular_sourcePool.slice(popular_sourceCursor, popular_sourceCursor + SEARCH_BATCH);
-    if (!batch.length) return;
+    if (!batch.length) {
+      popular_sourceCursor = popular_sourcePool.length;
+      return;
+    }
     await runConcurrent(batch, async (src) => {
       for (let p = 1; p <= SEARCH_PAGES; p++) {
         if (signal.aborted) return;
@@ -216,9 +220,14 @@
   }
 
   $effect(() => {
-    if (!allSources.length) return;
-    if (urlTab === "keyword") popularStart(allSources);
-    else if (urlTab === "tag") startSourceCacheBuild();
+    if ($page.url.pathname !== "/browse") return;
+    const tab = urlTab;
+    const sources = allSources;
+    if (!sources.length) return;
+    untrack(() => {
+      if (tab === "keyword") popularStart(sources);
+      else if (tab === "tag") startSourceCacheBuild();
+    });
   });
 
   onDestroy(() => {
