@@ -1,8 +1,5 @@
 {
   "bundle": {
-    "resources": [
-      "binaries/suwayomi-bundle/bin/Suwayomi-Server.jar",
-      "binaries/suwayomi-bundle/jre/**/*"
-    ]
+    "resources": []
   }
 }
