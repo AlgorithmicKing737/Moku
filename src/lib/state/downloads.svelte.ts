@@ -320,6 +320,50 @@ class DownloadStore {
     finally { this.batchWorking = false; }
   }
 
+  async moveSeries(items: DownloadQueueItem[], direction: "up" | "down") {
+    if (this.batchWorking || !items.length) return;
+    const targetMangaId = items[0]?.chapter.manga?.id ?? 0;
+    const groupOrder: number[] = [];
+    for (const item of this.queue) {
+      const mId = item.chapter.manga?.id ?? 0;
+      if (!groupOrder.includes(mId)) groupOrder.push(mId);
+    }
+    const gIdx = groupOrder.indexOf(targetMangaId);
+    if (gIdx === -1) return;
+    const targetIdx = direction === "up" ? gIdx - 1 : gIdx + 1;
+    if (targetIdx < 0 || targetIdx >= groupOrder.length) return;
+
+    this.batchWorking = true;
+    [groupOrder[gIdx], groupOrder[targetIdx]] = [groupOrder[targetIdx], groupOrder[gIdx]];
+
+    const map = new Map<number, DownloadQueueItem[]>();
+    for (const item of this.queue) {
+      const mId = item.chapter.manga?.id ?? 0;
+      if (!map.has(mId)) map.set(mId, []);
+      map.get(mId)!.push(item);
+    }
+
+    const first = this.isRunning ? 1 : 0;
+    const active = this.queue.slice(0, first);
+    const reorderedMoveable: DownloadQueueItem[] = [];
+    for (const mId of groupOrder) {
+      const groupItems = map.get(mId) ?? [];
+      for (const item of groupItems) {
+        if (first === 1 && item.chapter.id === active[0]?.chapter.id) continue;
+        reorderedMoveable.push(item);
+      }
+    }
+    const newQueue = [...active, ...reorderedMoveable];
+    if (this.status) this.status = { ...this.status, queue: newQueue };
+    try {
+      for (let i = 0; i < reorderedMoveable.length; i++) {
+        await reorderDownload(reorderedMoveable[i].chapter.id, first + i);
+      }
+      await this.poll();
+    } catch { await this.poll(); }
+    finally { this.batchWorking = false; }
+  }
+
   async moveSeriesToTop(items: DownloadQueueItem[]) {
     if (this.batchWorking || !items.length) return;
     this.batchWorking = true;

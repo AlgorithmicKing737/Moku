@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { CircleNotchIcon, CaretDown, CaretRight, Trash, ArrowClockwise, X, ArrowLineUp, ArrowLineDown, ArrowsDownUp } from "phosphor-svelte";
+  import { CircleNotchIcon, CaretUp, CaretDown, CaretRight, Trash, ArrowClockwise, X, ArrowLineUp, ArrowLineDown, ArrowsDownUp } from "phosphor-svelte";
   import Thumbnail    from "$lib/components/shared/manga/Thumbnail.svelte";
   import DownloadItem    from "$lib/components/downloads/DownloadItem.svelte";
   import ContextMenu, { type MenuEntry } from "$lib/components/shared/ui/ContextMenu.svelte";
@@ -98,6 +98,17 @@
 
   function buildSeriesCtxItems(group: SeriesDownloadGroup): MenuEntry[] {
     return [
+      {
+        label: "Move up",
+        icon: CaretUp,
+        onClick: () => downloadStore.moveSeries(group.items, "up"),
+      },
+      {
+        label: "Move down",
+        icon: CaretDown,
+        onClick: () => downloadStore.moveSeries(group.items, "down"),
+      },
+      { separator: true },
       {
         label: "Move series to top",
         icon: ArrowLineUp,
