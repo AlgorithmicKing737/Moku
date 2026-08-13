@@ -9,7 +9,7 @@ export const GET_LIBRARY = `
         chapters { totalCount }
         latestFetchedChapter { id uploadDate }
         latestUploadedChapter { id uploadDate }
-        lastReadChapter { id chapterNumber }
+        lastReadChapter { id chapterNumber lastReadAt }
         firstUnreadChapter { id chapterNumber }
       }
     }

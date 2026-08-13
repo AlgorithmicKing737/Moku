@@ -186,6 +186,7 @@ class LibraryState {
     const prev   = this.tabSort[tab];
     const newDir = dir ?? prev?.dir ?? "asc";
     this.tabSort = { ...this.tabSort, [tab]: { mode, dir: newDir } };
+    updateSettings({ libraryTabSort: this.tabSort as any });
   }
 
   toggleTabSortDir(tab: string) {
@@ -197,16 +198,19 @@ class LibraryState {
 
   setTabStatus(tab: string, status: LibraryStatusFilter) {
     this.tabStatus = { ...this.tabStatus, [tab]: status };
+    updateSettings({ libraryTabStatus: this.tabStatus as any });
   }
 
   toggleTabFilter(tab: string, filter: LibraryContentFilter) {
     const current = this.tabFilters[tab] ?? {};
     this.tabFilters = { ...this.tabFilters, [tab]: { ...current, [filter]: !current[filter] } };
+    updateSettings({ libraryTabFilters: this.tabFilters as any });
   }
 
   clearTabFilters(tab: string) {
     this.tabStatus  = { ...this.tabStatus,  [tab]: "ALL" };
     this.tabFilters = { ...this.tabFilters, [tab]: {} };
+    updateSettings({ libraryTabStatus: this.tabStatus as any, libraryTabFilters: this.tabFilters as any });
   }
 
   syncFromSettings(s: {
@@ -216,6 +220,9 @@ class LibraryState {
     libraryShowAllInSaved?:      boolean;
     libraryHideCompletedInSaved?: boolean;
     libraryViewMode?:            LibraryViewMode;
+    libraryTabSort?:             Record<string, { mode: LibrarySortOption; dir: LibrarySortDir }>;
+    libraryTabStatus?:           Record<string, LibraryStatusFilter>;
+    libraryTabFilters?:          Record<string, Partial<Record<LibraryContentFilter, boolean>>>;
   }) {
     if (s.hiddenLibraryTabs)                        this.hiddenTabs          = new Set(s.hiddenLibraryTabs);
     if (s.libraryPinnedTabOrder)                    this.pinnedTabOrder      = s.libraryPinnedTabOrder;
@@ -223,6 +230,9 @@ class LibraryState {
     if (s.libraryShowAllInSaved !== undefined)       this.showAllInSaved      = s.libraryShowAllInSaved;
     if (s.libraryHideCompletedInSaved !== undefined) this.hideCompletedInSaved = s.libraryHideCompletedInSaved;
     if (s.libraryViewMode !== undefined)             this.viewMode            = s.libraryViewMode;
+    if (s.libraryTabSort)                            this.tabSort             = s.libraryTabSort;
+    if (s.libraryTabStatus)                          this.tabStatus           = s.libraryTabStatus;
+    if (s.libraryTabFilters)                         this.tabFilters          = s.libraryTabFilters;
   }
 
   setViewMode(mode: LibraryViewMode) {

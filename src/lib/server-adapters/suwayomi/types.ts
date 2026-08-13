@@ -25,7 +25,10 @@ export function mapManga(raw: Record<string, unknown>): Manga {
     lastReadChapter:    raw.lastReadChapter as Manga['lastReadChapter'],
     firstUnreadChapter: raw.firstUnreadChapter as Manga['firstUnreadChapter'],
     addedAt:  raw.inLibraryAt ? new Date(raw.inLibraryAt as string).getTime() : undefined,
-    lastReadAt: raw.lastReadChapter ? Date.now() : undefined,
+    lastReadAt: (() => {
+      const raw_ts = Number((raw.lastReadChapter as { lastReadAt?: string } | null)?.lastReadAt)
+      return raw_ts > 0 ? raw_ts * 1000 : undefined
+    })(),
   }
 }
 
