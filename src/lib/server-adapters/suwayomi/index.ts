@@ -581,7 +581,7 @@ export class SuwayomiAdapter implements ServerAdapter {
   }
 
   async unlinkTracker(recordId: string): Promise<void> {
-    await this.gql(UNLINK_TRACK, { trackRecordId: Number(recordId) })
+    await this.gql(UNLINK_TRACK, { recordId: Number(recordId) })
   }
 
   async updateTrackRecord(recordId: string, patch: TrackRecordPatch): Promise<TrackRecord> {

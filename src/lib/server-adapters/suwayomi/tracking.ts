@@ -99,8 +99,8 @@ export const UPDATE_TRACK = `
 `
 
 export const UNLINK_TRACK = `
-  mutation UnbindTrack($trackRecordId: Int!) {
-    unbindTrack(input: { trackRecordId: $trackRecordId }) {
+  mutation UnbindTrack($recordId: Int!) {
+    unbindTrack(input: { recordId: $recordId }) {
       trackRecord { id }
     }
   }
