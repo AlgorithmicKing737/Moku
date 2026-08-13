@@ -3,17 +3,96 @@ import type { ReadSession } from '$lib/types/history'
 
 export type { ReadSession }
 
-export interface HistoryGroup {
-  label: string
-  items: ReadSession[]
+export interface ChapterHistoryEntry {
+  chapterId:   number
+  chapterName: string
+  endPage:     number
+  durationMs:  number
+  endedAt:     number
+  readCount:   number
 }
 
-export function groupByDay(sessions: ReadSession[]): HistoryGroup[] {
-  const map = new Map<string, ReadSession[]>()
+export interface MangaHistoryEntry {
+  mangaId:           number
+  mangaTitle:        string
+  thumbnailUrl:      string
+  latestChapterId:   number
+  latestChapterName: string
+  chaptersSpanned:   number
+  durationMs:        number
+  endedAt:           number
+  chapters:          ChapterHistoryEntry[]
+}
+
+export interface HistoryGroup {
+  label: string
+  items: MangaHistoryEntry[]
+}
+
+export function collapseAndGroupByDay(sessions: ReadSession[]): HistoryGroup[] {
+  const mangaMap = new Map<number, ReadSession[]>()
   for (const s of sessions) {
-    const label = dayLabel(s.endedAt)
-    if (!map.has(label)) map.set(label, [])
-    map.get(label)!.push(s)
+    if (!mangaMap.has(s.mangaId)) mangaMap.set(s.mangaId, [])
+    mangaMap.get(s.mangaId)!.push(s)
   }
-  return Array.from(map.entries()).map(([label, items]) => ({ label, items }))
+
+  const entries: MangaHistoryEntry[] = []
+  for (const [mangaId, mSessions] of mangaMap.entries()) {
+    const latest = mSessions[0]
+    let totalDurationMs = 0
+    const uniqueChapters = new Set<number>()
+    const chapterMap = new Map<number, ReadSession[]>()
+
+    for (const s of mSessions) {
+      totalDurationMs += s.durationMs
+      uniqueChapters.add(s.endChapterId)
+      if (s.chaptersSpanned > 1) uniqueChapters.add(s.startChapterId)
+
+      if (!chapterMap.has(s.endChapterId)) chapterMap.set(s.endChapterId, [])
+      chapterMap.get(s.endChapterId)!.push(s)
+    }
+
+    const chapters: ChapterHistoryEntry[] = []
+    for (const [chapterId, cSessions] of chapterMap.entries()) {
+      const latestCS = cSessions[0]
+      let cDur = 0
+      let maxPage = 0
+      for (const cs of cSessions) {
+        cDur += cs.durationMs
+        maxPage = Math.max(maxPage, cs.endPage)
+      }
+      chapters.push({
+        chapterId,
+        chapterName: latestCS.endChapterName,
+        endPage:     maxPage,
+        durationMs:  cDur,
+        endedAt:     latestCS.endedAt,
+        readCount:   cSessions.length,
+      })
+    }
+    chapters.sort((a, b) => b.endedAt - a.endedAt)
+
+    entries.push({
+      mangaId,
+      mangaTitle:        latest.mangaTitle,
+      thumbnailUrl:      latest.thumbnailUrl,
+      latestChapterId:   latest.endChapterId,
+      latestChapterName: latest.endChapterName,
+      chaptersSpanned:   uniqueChapters.size,
+      durationMs:        totalDurationMs,
+      endedAt:           latest.endedAt,
+      chapters,
+    })
+  }
+
+  entries.sort((a, b) => b.endedAt - a.endedAt)
+
+  const groupMap = new Map<string, MangaHistoryEntry[]>()
+  for (const entry of entries) {
+    const label = dayLabel(entry.endedAt)
+    if (!groupMap.has(label)) groupMap.set(label, [])
+    groupMap.get(label)!.push(entry)
+  }
+
+  return Array.from(groupMap.entries()).map(([label, items]) => ({ label, items }))
 }

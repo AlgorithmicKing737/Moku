@@ -32,13 +32,13 @@
   <span class="heading">Recent</span>
 
   <div class="tabs">
-    <button class="tab" class:active={tab === 'updates'} onclick={() => onTabChange('updates')}>
-      <NewspaperClipping size={11} weight="bold" />
-      Updates
-    </button>
     <button class="tab" class:active={tab === 'history'} onclick={() => onTabChange('history')}>
       <BookOpen size={11} weight="bold" />
       History
+    </button>
+    <button class="tab" class:active={tab === 'updates'} onclick={() => onTabChange('updates')}>
+      <NewspaperClipping size={11} weight="bold" />
+      Updates
     </button>
   </div>
 
