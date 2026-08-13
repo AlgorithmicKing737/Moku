@@ -84,30 +84,13 @@ export function shouldHideNsfw(
   return genreMatchesBlocklist(manga.genre ?? [], blockedTagsForSettings(settings));
 }
 
-export function shouldHideSource(
-  source: Pick<Source, "id" | "isNsfw">,
-  settings: ContentFilterSettings,
-): boolean {
-  if (settings.contentLevel === "unrestricted") return false;
-
-  if (settings.sourceOverridesEnabled) {
-    if ((settings.nsfwBlockedSourceIds ?? []).includes(source.id)) return true;
-    if ((settings.nsfwAllowedSourceIds ?? []).includes(source.id)) return false;
-  }
-
-  return source.isNsfw;
-}
-
 export function dedupeSourcesByLang(
   sources:       Source[],
   preferredLang: string,
-  settings:      ContentFilterSettings,
-  applyHide      = false,
 ): Source[] {
   const map = new Map<string, Source>();
   for (const s of sources) {
     if (s.id === "0") continue;
-    if (applyHide && shouldHideSource(s, settings)) continue;
     const existing = map.get(s.name);
     if (!existing) { map.set(s.name, s); continue; }
     const existingPref = existing.lang === preferredLang;

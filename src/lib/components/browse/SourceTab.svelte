@@ -2,7 +2,7 @@
   import { onDestroy, untrack } from "svelte";
   import { getAdapter }         from "$lib/request-manager";
   import { settingsState, updateSettings } from "$lib/state/settings.svelte";
-  import { shouldHideNsfw, shouldHideSource } from "$lib/core/util";
+  import { shouldHideNsfw } from "$lib/core/util";
   import Thumbnail              from "$lib/components/shared/manga/Thumbnail.svelte";
   import ContextMenu            from "$lib/components/shared/ui/ContextMenu.svelte";
   import { PushPin, PushPinSlash, ArrowRight } from "phosphor-svelte";
@@ -65,13 +65,11 @@
   });
 
   const src_visibleSources = $derived.by(() => {
-    const hide = (s: Source) => shouldHideSource(s, settingsState.settings);
     if (src_selectedLang !== "all") {
-      return allSources.filter((s) => s.lang === src_selectedLang && !hide(s));
+      return allSources.filter((s) => s.lang === src_selectedLang);
     }
     const map = new Map<string, Source>();
     for (const s of allSources) {
-      if (hide(s)) continue;
       const existing = map.get(s.name);
       if (!existing) { map.set(s.name, s); continue; }
       const existingPref = existing.lang === preferredLang;

@@ -2,7 +2,7 @@
   import { onDestroy }          from "svelte";
   import { getAdapter }         from "$lib/request-manager";
   import { settingsState }      from "$lib/state/settings.svelte";
-  import { shouldHideNsfw, shouldHideSource, dedupeMangaById, dedupeMangaByTitle } from "$lib/core/util";
+  import { shouldHideNsfw, dedupeMangaById, dedupeMangaByTitle } from "$lib/core/util";
   import Thumbnail              from "$lib/components/shared/manga/Thumbnail.svelte";
   import type { Manga, Source } from "$lib/types";
   import type { CachedManga }   from "$lib/components/browse/lib/searchFilter";
@@ -81,8 +81,6 @@
     let srcs = allSources;
     if (kw_selectedLangs.size > 0)
       srcs = srcs.filter((s) => kw_selectedLangs.has(s.lang));
-    if (settingsState.settings.contentLevel !== "unrestricted")
-      srcs = srcs.filter((s) => !shouldHideSource(s, settingsState.settings));
     return srcs;
   });
 
