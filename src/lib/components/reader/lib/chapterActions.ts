@@ -2,6 +2,7 @@ import { readerState } from "$lib/state/reader.svelte";
 import { DEFAULT_MANGA_PREFS } from "$lib/types/settings";;
 import { seriesState }                      from "$lib/state/series.svelte";
 import { settingsState }                    from "$lib/state/settings.svelte";
+import { trackingState }                    from "$lib/state/tracking.svelte";
 import { getAdapter }                       from "$lib/request-manager";
 import type { MangaPrefs }                  from "$lib/types/settings";
 import type { MarkerColor }                 from "$lib/types/history";
@@ -42,6 +43,19 @@ export function markChapterRead(id: number, markedRead: Set<number>) {
       );
 
       const prefs = getMangaPrefs(mangaId);
+
+      const trackedChapters = seriesState.chaptersFor(mangaId);
+      const trackedChapter  = trackedChapters.find(c => c.id === id);
+      if (trackedChapter) {
+        trackingState.updateFromRead(mangaId, trackedChapter, trackedChapters, {
+          sortMode:           settingsState.settings.chapterSortMode,
+          sortDir:            settingsState.settings.chapterSortDir,
+          preferredScanlator: prefs.preferredScanlator,
+          scanlatorFilter:    prefs.scanlatorFilter,
+          scanlatorBlacklist: prefs.scanlatorBlacklist,
+          scanlatorForce:     prefs.scanlatorForce,
+        }).catch(console.error);
+      }
 
       if (prefs.deleteOnRead) {
         const ch = readerState.activeChapterList.find(c => c.id === id);
