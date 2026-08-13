@@ -413,13 +413,17 @@
               {:else if allCategories.length === 0 && !creatingFolder}
                 <p class="folder-empty">No folders yet</p>
               {/if}
-              {#each allCategories as cat}
-                {@const isIn = mangaCategories.some((c) => c.id === cat.id)}
-                <button class="folder-item" class:folder-item-on={isIn} onclick={() => toggleCategory(cat)}>
-                  <Folder size={12} weight={isIn ? "fill" : "light"} />
-                  {isIn ? "✓ " : ""}{cat.name}
-                </button>
-              {/each}
+              {#if allCategories.length > 0}
+                <div class="folder-list">
+                  {#each allCategories as cat}
+                    {@const isIn = mangaCategories.some((c) => c.id === cat.id)}
+                    <button class="folder-item" class:folder-item-on={isIn} onclick={() => toggleCategory(cat)}>
+                      <Folder size={12} weight={isIn ? "fill" : "light"} />
+                      {isIn ? "✓ " : ""}{cat.name}
+                    </button>
+                  {/each}
+                </div>
+              {/if}
               <div class="folder-divider"></div>
               {#if creatingFolder}
                 <div class="folder-create-row">
@@ -730,6 +734,11 @@
     transform-origin: top center;
   }
   .folder-empty { font-family: var(--font-ui); font-size: var(--text-xs); color: var(--text-faint); padding: var(--sp-2) var(--sp-3); }
+  .folder-list {
+    display: flex; flex-direction: column; gap: 1px;
+    max-height: 220px; overflow-y: auto;
+    scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent;
+  }
   .folder-item {
     display: flex; align-items: center; gap: var(--sp-2);
     padding: 6px var(--sp-3); border-radius: var(--radius-sm);
