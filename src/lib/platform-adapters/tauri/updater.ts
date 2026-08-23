@@ -1,6 +1,7 @@
 import { invoke }     from '@tauri-apps/api/core'
 import { getVersion } from '@tauri-apps/api/app'
 import { toast }      from '$lib/state/notifications.svelte'
+import { isBackendMigrationBlocked, getBackendMigrationMessage } from '$lib/core/versionGate'
 
 function parse(tag: string): number[] {
   return tag.replace(/^v/, '').split('.').map(Number)
@@ -33,11 +34,19 @@ export async function checkForUpdateSilently(): Promise<void> {
       })[0]
 
     if (isNewer(parse(latest), parse(currentVersion))) {
-      toast({
-        kind:    'info',
-        message: `Update available — ${latest}`,
-        detail:  'Open Settings → About to install.',
-      })
+      if (isBackendMigrationBlocked(currentVersion, latest)) {
+        toast({
+          kind:    'warning',
+          message: `Update ${latest} available`,
+          detail:  getBackendMigrationMessage(currentVersion, latest),
+        })
+      } else {
+        toast({
+          kind:    'info',
+          message: `Update available — ${latest}`,
+          detail:  'Open Settings → About to install.',
+        })
+      }
     }
   } catch {}
 }

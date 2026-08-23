@@ -1,5 +1,33 @@
 use serde::{Deserialize, Serialize};
 
+fn parse_version(s: &str) -> (u32, u32, u32) {
+    let s = s.trim_start_matches('v');
+    let mut parts = s.split('.').map(|p| p.parse::<u32>().unwrap_or(0));
+    (
+        parts.next().unwrap_or(0),
+        parts.next().unwrap_or(0),
+        parts.next().unwrap_or(0),
+    )
+}
+
+const SUWAYOMI_MAX_VERSION: (u32, u32, u32) = (0, 10, 4);
+const TSUNAGU_MIN_VERSION: (u32, u32, u32) = (0, 10, 5);
+
+fn is_backend_migration_blocked(current: &str, target: &str) -> bool {
+    let current_is_suwayomi = parse_version(current) <= SUWAYOMI_MAX_VERSION;
+    let target_is_suwayomi = parse_version(target) <= SUWAYOMI_MAX_VERSION;
+    current_is_suwayomi != target_is_suwayomi
+}
+
+fn backend_migration_message(target: &str) -> String {
+    let target_is_suwayomi = parse_version(target) <= SUWAYOMI_MAX_VERSION;
+    if target_is_suwayomi {
+        "Downgrading past v0.10.5 isn't supported. Moku's Tsunagu backend isn't compatible with the older Suwayomi-based builds.".to_string()
+    } else {
+        "Suwayomi support ended after v0.10.4. Moku now uses its own Tsunagu backend starting in v0.10.5 - updating in place isn't supported. See the migration guide before moving to the new backend.".to_string()
+    }
+}
+
 #[derive(Serialize, Clone)]
 pub struct ReleaseInfo {
     pub tag_name: String,
@@ -68,6 +96,11 @@ pub async fn download_and_install_update(app: tauri::AppHandle, tag: String) -> 
 
     #[cfg(target_os = "windows")]
     {
+        let current_version = app.package_info().version.to_string();
+        if is_backend_migration_blocked(&current_version, &tag) {
+            return Err(backend_migration_message(&tag));
+        }
+
         use std::io::Write;
         use tauri::Emitter;
         use tauri_plugin_http::reqwest;

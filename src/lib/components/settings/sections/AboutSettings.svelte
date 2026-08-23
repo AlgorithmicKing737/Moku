@@ -3,6 +3,7 @@
   import { autoBackupAppData } from '$lib/core/backup'
   import { requestManager } from '$lib/request-manager'
   import type { ReleaseInfo } from '$lib/platform-adapters/types'
+  import { isBackendMigrationBlocked, getBackendMigrationMessage } from '$lib/core/versionGate'
 
   type UpdatePhase = 'idle' | 'downloading' | 'launching' | 'ready' | 'error'
 
@@ -111,6 +112,12 @@
 
   async function installUpdate(release: ReleaseInfo) {
     if (updatePhase === 'downloading') return
+    if (isBackendMigrationBlocked(appVersion, release.tag_name)) {
+      targetTag = release.tag_name
+      updatePhase = 'error'
+      updateError = getBackendMigrationMessage(appVersion, release.tag_name)
+      return
+    }
     targetTag = release.tag_name; updatePhase = 'downloading'; updateError = null; dlBytes = 0; dlTotal = null
     try {
       if (IS_WINDOWS) {
@@ -247,11 +254,13 @@
               {@const isExpanded   = expandedTag === release.tag_name}
               {@const isTarget     = targetTag === release.tag_name}
               {@const isInstalling = isTarget && updatePhase === 'downloading'}
+              {@const isBlocked    = isBackendMigrationBlocked(appVersion, release.tag_name)}
               <div class="s-release-row" class:current={isCurrent}>
                 <div class="s-release-header">
                   <div class="s-release-meta">
                     <span class="s-release-tag">{release.tag_name}</span>
                     {#if isCurrent}<span class="s-release-badge">installed</span>{/if}
+                    {#if isBlocked}<span class="s-release-badge" style="color:var(--color-error)">backend change</span>{/if}
                     {#if release.published_at}<span class="s-release-date">{fmtDate(release.published_at)}</span>{/if}
                   </div>
                   <div class="s-btn-row">
@@ -261,7 +270,9 @@
                       </button>
                     {/if}
                     {#if !isCurrent}
-                      {#if IS_WINDOWS}
+                      {#if isBlocked}
+                        <button class="s-btn" disabled title={getBackendMigrationMessage(appVersion, release.tag_name)}>Migration required</button>
+                      {:else if IS_WINDOWS}
                         <button class="s-btn" class:s-btn-accent={!isInstalling}
                           disabled={updatePhase === 'downloading'} onclick={() => installUpdate(release)}>
                           {isInstalling ? 'Downloading…' : 'Install'}
