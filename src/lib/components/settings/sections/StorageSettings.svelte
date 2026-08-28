@@ -558,6 +558,56 @@
   </div>
 
   <div class="s-section">
+    <p class="s-section-title">Warming</p>
+    <div class="s-section-body">
+      <label class="s-row">
+        <div class="s-row-info">
+          <span class="s-label">Pre-cache queued chapters</span>
+          <span class="s-desc">Fetches queued pages ahead so the downloader skips them — speeds up downloads</span>
+        </div>
+        <button role="switch" aria-checked={settingsState.settings.warmingEnabled ?? true} aria-label="Pre-cache queued chapters"
+          class="s-toggle" class:on={settingsState.settings.warmingEnabled ?? true}
+          onclick={() => updateSettings({ warmingEnabled: !(settingsState.settings.warmingEnabled ?? true) })}>
+          <span class="s-toggle-thumb"></span>
+        </button>
+      </label>
+      <div class="s-row">
+        <div class="s-row-info">
+          <span class="s-label">Parallel page fetches</span>
+          <span class="s-desc">Simultaneous page images fetched while pre-caching</span>
+        </div>
+        <div class="s-stepper">
+          <button class="s-step-btn" onclick={() => updateSettings({ warmingConcurrency: Math.max(1, (settingsState.settings.warmingConcurrency ?? 8) - 1) })} disabled={(settingsState.settings.warmingConcurrency ?? 8) <= 1}>−</button>
+          <span class="s-step-val">{settingsState.settings.warmingConcurrency ?? 8}</span>
+          <button class="s-step-btn" onclick={() => updateSettings({ warmingConcurrency: Math.min(32, (settingsState.settings.warmingConcurrency ?? 8) + 1) })} disabled={(settingsState.settings.warmingConcurrency ?? 8) >= 32}>+</button>
+        </div>
+      </div>
+      <div class="s-row">
+        <div class="s-row-info">
+          <span class="s-label">Chapters in pipeline</span>
+          <span class="s-desc">How many queued chapters pre-cache at once</span>
+        </div>
+        <div class="s-stepper">
+          <button class="s-step-btn" onclick={() => updateSettings({ warmingChaptersMax: Math.max(1, (settingsState.settings.warmingChaptersMax ?? 5) - 1) })} disabled={(settingsState.settings.warmingChaptersMax ?? 5) <= 1}>−</button>
+          <span class="s-step-val">{settingsState.settings.warmingChaptersMax ?? 5}</span>
+          <button class="s-step-btn" onclick={() => updateSettings({ warmingChaptersMax: Math.min(20, (settingsState.settings.warmingChaptersMax ?? 5) + 1) })} disabled={(settingsState.settings.warmingChaptersMax ?? 5) >= 20}>+</button>
+        </div>
+      </div>
+      <div class="s-row">
+        <div class="s-row-info">
+          <span class="s-label">Cold buffer</span>
+          <span class="s-desc">Chapters ahead of the warm frontier kept unwarmed to avoid racing the downloader</span>
+        </div>
+        <div class="s-stepper">
+          <button class="s-step-btn" onclick={() => updateSettings({ warmingColdBuffer: Math.max(0, (settingsState.settings.warmingColdBuffer ?? 2) - 1) })} disabled={(settingsState.settings.warmingColdBuffer ?? 2) <= 0}>−</button>
+          <span class="s-step-val">{settingsState.settings.warmingColdBuffer ?? 2}</span>
+          <button class="s-step-btn" onclick={() => updateSettings({ warmingColdBuffer: Math.min(10, (settingsState.settings.warmingColdBuffer ?? 2) + 1) })} disabled={(settingsState.settings.warmingColdBuffer ?? 2) >= 10}>+</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="s-section">
     <button class="s-collapsible-trigger" onclick={() => advStorageOpen = !advStorageOpen}>
       <span class="s-label">Advanced</span>
       <svg class="s-collapsible-caret" class:open={advStorageOpen} width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6" fill="currentColor"/></svg>

@@ -7,6 +7,7 @@
 
   let selectAnchor = $state<number | null>(null);
   let moveBy       = $state(1);
+  let confirmClear = $state(false);
 
   const selectedErrorCount = $derived(
     downloadStore.queue.filter(i => downloadStore.selected.has(i.chapter.id) && i.state === "ERROR").length,
@@ -92,7 +93,7 @@
       <button
         class="icon-btn"
         class:loading={downloadStore.clearing}
-        onclick={() => downloadStore.clear()}
+        onclick={() => confirmClear = true}
         disabled={downloadStore.clearing || downloadStore.queue.length === 0}
         title="Clear queue"
       >
@@ -166,11 +167,52 @@
       dequeueing={downloadStore.dequeueing}
       selected={downloadStore.selected}
       onRemove={(id: number) => downloadStore.dequeue(id)}
+      onRemoveMany={(ids: number[]) => downloadStore.dequeueMany(ids)}
       onRetry={(id: number) => downloadStore.retryOne(id)}
       onSelect={handleSelect}
     />
   </div>
 </div>
+
+{#if confirmClear}
+  <div
+    class="modal-backdrop"
+    role="presentation"
+    onclick={() => confirmClear = false}
+    onkeydown={(e) => e.key === 'Escape' && (confirmClear = false)}
+  >
+    <div class="modal-card" role="dialog" aria-modal="true" onclick={(e) => e.stopPropagation()}>
+      <div class="modal-header">
+        <span class="modal-title">Clear download queue?</span>
+      </div>
+      <div class="modal-body">
+        <p class="modal-msg">Remove all <strong>{downloadStore.queue.length}</strong> queued downloads? Chapters that are already downloaded on the server are not affected.</p>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-cancel" onclick={() => confirmClear = false}>Cancel</button>
+        <button
+          class="btn-danger"
+          onclick={() => { confirmClear = false; downloadStore.clear(); }}
+        >
+          Clear queue
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if downloadStore.reorderProgress}
+  <div class="reorder-toast" role="status" aria-live="polite">
+    <CircleNotch size={14} weight="light" class="anim-spin" />
+    <span class="reorder-text">
+      Reordering {downloadStore.reorderProgress.current + 1}/{downloadStore.reorderProgress.total}
+      <span class="reorder-chapter">{downloadStore.reorderProgress.chapterName}</span>
+    </span>
+    <button class="reorder-cancel" onclick={() => downloadStore.cancelReorder()} title="Cancel reorder">
+      <X size={12} weight="bold" />
+    </button>
+  </div>
+{/if}
 
 <style>
   .root { display: flex; flex-direction: column; height: 100%; overflow: hidden; animation: fadeIn 0.14s ease both; }
@@ -221,6 +263,69 @@
   .move-input::-webkit-outer-spin-button, .move-input::-webkit-inner-spin-button { -webkit-appearance: none; }
   .move-input:focus { color: var(--text-primary); }
 
+  .modal-backdrop {
+    position: fixed; inset: 0; z-index: 1000;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex; align-items: center; justify-content: center;
+    animation: fadeIn 0.12s ease both;
+  }
+  .modal-card {
+    background: var(--bg-surface); border: 1px solid var(--border-base);
+    border-radius: var(--radius-lg); width: 340px; max-width: 90vw;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5); overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .modal-header { padding: var(--sp-4) var(--sp-4) var(--sp-2); }
+  .modal-title  { font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--text-primary); }
+  .modal-body   { padding: 0 var(--sp-4) var(--sp-4); }
+  .modal-msg    { font-family: var(--font-ui); font-size: var(--text-xs); color: var(--text-muted); line-height: 1.4; margin: 0; }
+  .modal-actions {
+    display: flex; align-items: center; justify-content: flex-end; gap: var(--sp-2);
+    padding: var(--sp-3) var(--sp-4); border-top: 1px solid var(--border-dim); background: var(--bg-raised);
+  }
+  .btn-cancel, .btn-danger {
+    font-family: var(--font-ui); font-size: var(--text-xs); letter-spacing: var(--tracking-wide);
+    padding: 5px 12px; border-radius: var(--radius-sm); cursor: pointer;
+    transition: background var(--t-base), color var(--t-base), border-color var(--t-base);
+  }
+  .btn-cancel { border: 1px solid var(--border-dim); background: none; color: var(--text-muted); }
+  .btn-cancel:hover { color: var(--text-primary); border-color: var(--border-strong); }
+  .btn-danger {
+    border: 1px solid color-mix(in srgb, var(--color-error) 40%, transparent);
+    background: var(--color-error-bg); color: var(--color-error);
+  }
+  .btn-danger:hover {
+    background: color-mix(in srgb, var(--color-error) 20%, transparent);
+    border-color: var(--color-error);
+  }
+
   @keyframes pulse  { 0%, 100% { opacity: 1 } 50% { opacity: 0.4 } }
   @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+
+  .reorder-toast {
+    position: fixed; bottom: var(--sp-6); right: var(--sp-6); z-index: 900;
+    display: flex; align-items: center; gap: var(--sp-2);
+    padding: var(--sp-2) var(--sp-4);
+    background: var(--bg-surface); border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md); box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    animation: fadeIn 0.12s ease both;
+    color: var(--text-muted);
+  }
+  .reorder-text {
+    font-family: var(--font-ui); font-size: var(--text-xs);
+    letter-spacing: var(--tracking-wide); white-space: nowrap;
+    display: inline-flex; align-items: center; gap: var(--sp-2);
+  }
+  .reorder-chapter {
+    color: var(--text-faint); max-width: 200px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .reorder-cancel {
+    display: flex; align-items: center; justify-content: center;
+    width: 20px; height: 20px; border-radius: var(--radius-sm);
+    border: 1px solid var(--border-dim); background: none;
+    color: var(--text-faint); cursor: pointer; flex-shrink: 0;
+    transition: color var(--t-base), border-color var(--t-base), background var(--t-base);
+  }
+  .reorder-cancel:hover { color: var(--color-error); border-color: color-mix(in srgb, var(--color-error) 40%, transparent); background: color-mix(in srgb, var(--color-error) 8%, transparent); }
 </style>

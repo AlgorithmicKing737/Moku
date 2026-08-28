@@ -267,10 +267,8 @@
 
   async function enqueueMultiple(chapterIds: number[]) {
     if (!chapterIds.length) return
-    for (const id of chapterIds) {
-      const allowed = await downloadStore.enqueue(id)
-      if (!allowed) return
-    }
+    const allowed = await downloadStore.enqueueMany(chapterIds)
+    if (!allowed) return
     addToast({ kind: 'download', title: 'Download queued', body: `${chapterIds.length} chapter${chapterIds.length !== 1 ? 's' : ''} added` })
     seriesState.loadChapters(mangaId, { force: true })
   }

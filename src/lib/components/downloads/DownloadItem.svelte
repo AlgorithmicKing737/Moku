@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { CircleNotchIcon, ArrowClockwiseIcon, XIcon } from "phosphor-svelte";
+  import { CircleNotchIcon, ArrowClockwiseIcon, XIcon, LightningIcon } from "phosphor-svelte";
   import Thumbnail    from "$lib/components/shared/manga/Thumbnail.svelte";
   import { longPress } from "$lib/core/ui/touchscreen";
   import type { DownloadQueueItem } from "$lib/types/api";
   import { pageProgress } from "$lib/components/downloads/lib/downloadQueue";
+  import { warmProgress } from "$lib/components/downloads/lib/warmPages";
 
   interface Props {
     item:       DownloadQueueItem;
@@ -24,6 +25,8 @@
   const pages   = $derived(item.chapter.pageCount ?? 0);
   const prog    = $derived(pageProgress(item.progress, pages));
   const isError = $derived(item.state === "ERROR");
+  const warmPct = $derived(item.state === "QUEUED" && !isActive ? Math.round(warmProgress(item.chapter.id) * 100) : 0);
+  const isWarm  = $derived(warmProgress(item.chapter.id) > 0);
   const pct     = $derived(Math.round(item.progress * 100));
 
   function rowLongPress(node: HTMLElement) {
@@ -58,14 +61,20 @@
     {#if pages > 0}
       <div class="progress-row">
         <div class="progress-wrap">
-          <div class="progress-bar" class:progress-error={isError} style="width:{pct}%"></div>
+          {#if warmPct > 0}
+            <div class="progress-bar warm-bar" style="width:{warmPct}%"></div>
+          {:else}
+            <div class="progress-bar" class:progress-error={isError} style="width:{pct}%"></div>
+          {/if}
         </div>
         <span class="pages-label">
           {#if isActive}
+            {#if isWarm}<span class="warm-wrap" title="Pre-cached — finishing quickly"><LightningIcon size={9} weight="fill" class="warm-icon" /></span>{/if}
             {prog.done}/{prog.total}
           {:else if isError}
             failed · {item.tries} {item.tries === 1 ? "try" : "tries"}
           {:else}
+            {#if isWarm}<span class="warm-wrap" title="Pre-cached — will finish quickly"><LightningIcon size={9} weight="fill" class="warm-icon" /></span>{/if}
             {prog.total}p
           {/if}
         </span>
@@ -113,9 +122,12 @@
   .progress-row  { display: flex; align-items: center; gap: var(--sp-2); }
   .progress-wrap { flex: 1; height: 2px; background: var(--border-base); border-radius: var(--radius-full); overflow: hidden; }
   .progress-bar  { height: 100%; background: var(--accent); border-radius: var(--radius-full); transition: width 0.4s ease; opacity: 0.35; }
+  .progress-bar.warm-bar { background: var(--color-info); opacity: 0.8; }
   .row-active .progress-bar { opacity: 1; }
   .progress-bar.progress-error { background: var(--color-error); opacity: 0.7; }
-  .pages-label { font-family: var(--font-ui); font-size: var(--text-2xs); color: var(--text-faint); letter-spacing: var(--tracking-wide); flex-shrink: 0; white-space: nowrap; }
+  .pages-label { font-family: var(--font-ui); font-size: var(--text-2xs); color: var(--text-faint); letter-spacing: var(--tracking-wide); flex-shrink: 0; white-space: nowrap; display: inline-flex; align-items: center; gap: 3px; }
+  .warm-wrap { display: inline-flex; }
+  .warm-icon { color: var(--color-info); }
   .row-active .pages-label { color: var(--accent-fg); opacity: 0.8; }
 
   .row-right  { display: flex; flex-direction: column; align-items: flex-end; gap: var(--sp-1); flex-shrink: 0; }

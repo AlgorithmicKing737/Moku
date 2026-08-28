@@ -34,6 +34,10 @@ export async function reorderDownload(chapterId: number, to: number): Promise<Do
   }
 }
 
+export async function reorderDownloadLight(chapterId: number, to: number, signal?: AbortSignal): Promise<void> {
+  await getAdapter().reorderDownloadLight(String(chapterId), to, signal);
+}
+
 export async function clearDownloads(): Promise<void> {
   await getAdapter().clearDownloads();
 }

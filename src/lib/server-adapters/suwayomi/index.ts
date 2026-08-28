@@ -67,6 +67,7 @@ import {
   DEQUEUE_DOWNLOAD,
   DEQUEUE_CHAPTERS_DOWNLOAD,
   REORDER_DOWNLOAD,
+  REORDER_DOWNLOAD_LIGHT,
   START_DOWNLOADER,
   STOP_DOWNLOADER,
   CLEAR_DOWNLOADER,
@@ -128,6 +129,11 @@ import {
 import { initPageCache, clearPageCache as _clearPageCache } from './pageCache'
 
 type RawQueueItem = Record<string, unknown>
+
+// download queue mutations can stall while the server's WebView pool is saturated; bound them so the client can retry instead of hanging
+function mutationTimeout(): AbortSignal | undefined {
+  return typeof AbortSignal !== "undefined" && "timeout" in AbortSignal ? AbortSignal.timeout(10_000) : undefined
+}
 
 function mapDownloadStatus(raw: { state: string; queue: RawQueueItem[] }): DownloadStatus {
   return {
@@ -389,11 +395,11 @@ export class SuwayomiAdapter implements ServerAdapter {
   }
 
   async dequeueDownload(chapterId: string): Promise<void> {
-    await this.gql(DEQUEUE_DOWNLOAD, { chapterId: Number(chapterId) })
+    await this.gql(DEQUEUE_DOWNLOAD, { chapterId: Number(chapterId) }, mutationTimeout())
   }
 
   async dequeueDownloads(chapterIds: string[]): Promise<void> {
-    await this.gql(DEQUEUE_CHAPTERS_DOWNLOAD, { chapterIds: chapterIds.map(Number) })
+    await this.gql(DEQUEUE_CHAPTERS_DOWNLOAD, { chapterIds: chapterIds.map(Number) }, mutationTimeout())
   }
 
   async reorderDownload(chapterId: string, to: number): Promise<DownloadStatus | null> {
@@ -405,8 +411,13 @@ export class SuwayomiAdapter implements ServerAdapter {
     } catch { return null }
   }
 
+  // Lightweight batch reorder: returns only state (not full queue), cancelled via AbortSignal.
+  async reorderDownloadLight(chapterId: string, to: number, signal?: AbortSignal): Promise<void> {
+    await this.gql(REORDER_DOWNLOAD_LIGHT, { chapterId: Number(chapterId), to }, signal)
+  }
+
   async clearDownloads(): Promise<void> {
-    await this.gql(CLEAR_DOWNLOADER)
+    await this.gql(CLEAR_DOWNLOADER, undefined, mutationTimeout())
   }
 
   async startDownloader(): Promise<DownloadStatus | null> {

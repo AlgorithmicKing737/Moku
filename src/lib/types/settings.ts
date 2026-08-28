@@ -119,6 +119,7 @@ export interface Settings {
   trackerSyncBack: boolean; trackerSyncBackThreshold: number | null; trackerRespectScanlatorFilter: boolean
   pinchZoom?: boolean; autoLinkOnOpen: boolean
   downloadToastsEnabled: boolean; downloadAutoRetry: boolean
+  warmingEnabled: boolean; warmingConcurrency: number; warmingChaptersMax: number; warmingColdBuffer: number
   hiddenLibraryTabs: string[]; libraryPinnedTabOrder: string[]
   autoScroll?: boolean; autoScrollSpeed?: number; disableAutoComplete: boolean
   systemThemeSync?: boolean; systemThemeDark?: string; systemThemeLight?: string
@@ -166,6 +167,7 @@ export const DEFAULT_SETTINGS: Settings = {
   trackerSyncBack: false, trackerSyncBackThreshold: 20, trackerRespectScanlatorFilter: true,
   pinchZoom: false, autoLinkOnOpen: false,
   downloadToastsEnabled: true, downloadAutoRetry: false,
+  warmingEnabled: true, warmingConcurrency: 8, warmingChaptersMax: 5, warmingColdBuffer: 2,
   hiddenLibraryTabs: [], libraryPinnedTabOrder: [],
   autoScroll: false, autoScrollSpeed: 5, disableAutoComplete: false,
   windowControls: true,

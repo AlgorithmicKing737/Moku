@@ -179,6 +179,7 @@ export interface ServerAdapter {
   dequeueDownload(chapterId: string): Promise<void>
   dequeueDownloads(chapterIds: string[]): Promise<void>
   reorderDownload(chapterId: string, to: number): Promise<DownloadStatus | null>
+  reorderDownloadLight(chapterId: string, to: number, signal?: AbortSignal): Promise<void>
   clearDownloads(): Promise<void>
   startDownloader(): Promise<DownloadStatus | null>
   stopDownloader(): Promise<DownloadStatus | null>

@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { CircleNotchIcon, CaretUp, CaretDown, CaretRight, Trash, ArrowClockwise, X, ArrowLineUp, ArrowLineDown, ArrowsDownUp } from "phosphor-svelte";
+  import { CircleNotchIcon, CaretUp, CaretDown, CaretRight, Trash, ArrowClockwise, X, ArrowLineUp, ArrowLineDown, ArrowsDownUp, LightningIcon } from "phosphor-svelte";
   import Thumbnail    from "$lib/components/shared/manga/Thumbnail.svelte";
   import DownloadItem    from "$lib/components/downloads/DownloadItem.svelte";
   import ContextMenu, { type MenuEntry } from "$lib/components/shared/ui/ContextMenu.svelte";
   import { downloadStore } from "$lib/state/downloads.svelte";
+  import { warmProgress }  from "$lib/components/downloads/lib/warmPages";
   import type { DownloadQueueItem } from "$lib/types/api";
 
   interface Props {
@@ -13,13 +14,14 @@
     dequeueing: Set<number>;
     selected:   Set<number>;
     onRemove: (chapterId: number) => void;
+    onRemoveMany: (chapterIds: number[]) => void;
     onRetry:  (chapterId: number) => void;
     onSelect: (chapterId: number, e: MouseEvent) => void;
   }
 
   const {
     queue, loading, isRunning, dequeueing, selected,
-    onRemove, onRetry, onSelect,
+    onRemove, onRemoveMany, onRetry, onSelect,
   }: Props = $props();
 
   let expandedSeriesIds: Set<number> = $state(new Set());
@@ -34,6 +36,8 @@
     seriesPct:         number;
     activeChapter:     DownloadQueueItem | null;
     activeChapterPct:  number;
+    activeIsWarm:      boolean;
+    activeWarmBar:     boolean;
     activeChapterName: string;
     isDownloading:     boolean;
     hasError:          boolean;
@@ -58,7 +62,14 @@
 
       const downloading = items.find(i => i.state === "DOWNLOADING");
       const active = downloading ?? items.find(i => (i.progress ?? 0) > 0) ?? items[0];
-      const activePct = active ? Math.round((active.progress ?? 0) * 100) : 0;
+      const activeWarm = !!active && warmProgress(active.chapter.id) > 0;
+      // blue precache bar only while still queued; once downloading show real progress but keep the bolt
+      const activeWarmBar = activeWarm && active!.state === "QUEUED" && !downloading;
+      const activePct = active
+        ? (activeWarmBar
+            ? Math.round(warmProgress(active.chapter.id) * 100)
+            : Math.round((active.progress ?? 0) * 100))
+        : 0;
 
       groups.push({
         mangaId,
@@ -68,6 +79,8 @@
         seriesPct,
         activeChapter:     active,
         activeChapterPct:  activePct,
+        activeIsWarm:      activeWarm,
+        activeWarmBar,
         activeChapterName: active ? active.chapter.name : "",
         isDownloading:     items.some(i => i.state === "DOWNLOADING"),
         hasError:          items.some(i => i.state === "ERROR"),
@@ -185,6 +198,9 @@
           <div class="series-info">
             <div class="series-title-row">
               <span class="series-title">{group.mangaTitle}</span>
+              {#if group.activeIsWarm}
+                <span class="warm-wrap" title="Next chapter pre-cached — will finish quickly"><LightningIcon size={9} weight="fill" class="warm-icon" /></span>
+              {/if}
               <span class="series-count-badge">{group.items.length} {group.items.length === 1 ? "chapter" : "chapters"}</span>
             </div>
 
@@ -195,7 +211,7 @@
                     Current ({group.activeChapterName}):
                   </span>
                   <div class="prog-track">
-                    <div class="prog-fill" style="width: {group.activeChapterPct}%"></div>
+                    <div class="prog-fill" class:is-warm={group.activeWarmBar} style="width: {group.activeChapterPct}%"></div>
                   </div>
                   <span class="prog-pct">{group.activeChapterPct}%</span>
                 </div>
@@ -260,7 +276,7 @@
           class="btn-danger"
           onclick={() => {
             if (confirmDeleteSeries) {
-              confirmDeleteSeries.items.forEach(i => onRemove(i.chapter.id));
+              onRemoveMany(confirmDeleteSeries.items.map(i => i.chapter.id));
             }
             confirmDeleteSeries = null;
           }}
@@ -312,12 +328,15 @@
   .series-title-row { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
   .series-title { font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .series-count-badge { font-family: var(--font-ui); font-size: var(--text-2xs); color: var(--text-faint); opacity: 0.7; flex-shrink: 0; white-space: nowrap; }
+  .warm-icon { color: var(--color-info); flex-shrink: 0; }
+  .warm-wrap { display: inline-flex; flex-shrink: 0; }
 
   .series-prog-container { display: flex; flex-direction: column; gap: 3px; margin-top: 2px; }
   .prog-item { display: flex; align-items: center; gap: var(--sp-2); }
   .prog-label { font-family: var(--font-ui); font-size: 10px; color: var(--text-muted); min-width: 85px; max-width: 160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; }
   .prog-track { flex: 1; height: 3px; background: var(--border-base); border-radius: var(--radius-full); overflow: hidden; }
   .prog-fill { height: 100%; background: var(--accent); border-radius: var(--radius-full); transition: width 0.3s ease; }
+  .prog-fill.is-warm { background: var(--color-info); }
   .prog-fill.series-fill { background: color-mix(in srgb, var(--accent) 70%, #3b82f6); }
   .prog-pct { font-family: var(--font-ui); font-size: 10px; font-weight: 600; color: var(--accent-fg); min-width: 28px; text-align: right; flex-shrink: 0; }
 

@@ -4,7 +4,7 @@ const QUEUE_FRAGMENT = `
     progress state tries
     chapter {
       id name pageCount mangaId
-      manga { id title thumbnailUrl }
+      manga { id title thumbnailUrl sourceId }
     }
   }
 `
@@ -51,6 +51,15 @@ export const REORDER_DOWNLOAD = `
   mutation ReorderDownload($chapterId: Int!, $to: Int!) {
     reorderChapterDownload(input: { chapterId: $chapterId, to: $to }) {
       downloadStatus { ${QUEUE_FRAGMENT} }
+    }
+  }
+`
+
+// Lightweight version: returns only state, not the full queue, for batch reorders where the response is discarded (final poll fetches state). Avoids downloading the whole queue per call.
+export const REORDER_DOWNLOAD_LIGHT = `
+  mutation ReorderDownload($chapterId: Int!, $to: Int!) {
+    reorderChapterDownload(input: { chapterId: $chapterId, to: $to }) {
+      downloadStatus { state }
     }
   }
 `

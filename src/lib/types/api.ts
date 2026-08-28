@@ -7,7 +7,7 @@ export interface DownloadQueueItem {
     name: string
     mangaId: number
     pageCount: number
-    manga: { id: number; title: string; thumbnailUrl: string } | null
+    manga: { id: number; title: string; thumbnailUrl: string; sourceId?: string } | null
   }
 }
 

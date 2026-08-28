@@ -1,7 +1,7 @@
 import type { DownloadStatus, DownloadQueueItem } from "$lib/types/api";
 import {
   loadDownloadStatus, dequeueDownload, dequeueDownloads,
-  reorderDownload, clearDownloads, startDownloader, stopDownloader, enqueueDownload,
+  reorderDownload, reorderDownloadLight, clearDownloads, startDownloader, stopDownloader, enqueueDownload, enqueueDownloads,
   getStorageInfo,
 } from "$lib/request-manager/downloads";
 import { settingsState, updateSettings } from "$lib/state/settings.svelte";
@@ -11,6 +11,7 @@ import {
   type SpeedSample,
 } from "$lib/components/downloads/lib/downloadQueue";
 import { startAutoRetry, type AutoRetryHandle } from "$lib/components/downloads/lib/autoRetry";
+import { warmDownloads, pauseWarming, resumeWarming } from "$lib/components/downloads/lib/warmPages";
 import { mount, unmount }                        from "svelte";
 import StorageWarningDialog                       from "$lib/components/downloads/StorageWarningDialog.svelte";
 
@@ -22,6 +23,8 @@ class DownloadStore {
   dequeueing                           = $state(new Set<number>());
   selected                             = $state(new Set<number>());
   batchWorking                         = $state(false);
+  reorderProgress: { current: number; total: number; chapterName: string } | null = $state(null);
+  private reorderAbort: AbortController | null = null;
   pagesPerSec:   number | null         = $state(null);
   eta:           number | null         = $state(null);
   storageWarning                       = $state(false);
@@ -30,9 +33,35 @@ class DownloadStore {
   private lastSample:   SpeedSample | null = null;
   private prevQueue:    DownloadQueueItem[] = [];
   private autoRetryHnd: AutoRetryHandle | null = null;
+  private forceStop = false;
+  private stopping  = false;
 
   get queue()            { return this.status?.queue ?? []; }
   get isRunning()        { return isRunning(this.status?.state); }
+
+  // Run a batch of sequential reorderDownload calls, updating reorderProgress for a live UI popup; uses the lightweight mutation (state only) and is cancellable via cancelReorder().
+  private async batchReorder(
+    ops: { chapterId: number; to: number; chapterName: string }[],
+  ): Promise<void> {
+    this.reorderAbort = new AbortController();
+    this.reorderProgress = { current: 0, total: ops.length, chapterName: ops[0]?.chapterName ?? "" };
+    try {
+      for (let i = 0; i < ops.length; i++) {
+        if (this.reorderAbort.signal.aborted) break;
+        this.reorderProgress = { current: i, total: ops.length, chapterName: ops[i].chapterName };
+        await reorderDownloadLight(ops[i].chapterId, ops[i].to, this.reorderAbort.signal);
+      }
+    } catch {
+      // aborted or network error — stop gracefully
+    } finally {
+      this.reorderAbort = null;
+      this.reorderProgress = null;
+    }
+  }
+
+  cancelReorder() {
+    this.reorderAbort?.abort();
+  }
   get erroredIds()       { return new Set(getErrored(this.queue).map(i => i.chapter.id)); }
   get hasErrored()       { return this.erroredIds.size > 0; }
   get toastsEnabled()    { return settingsState.settings.downloadToastsEnabled ?? true; }
@@ -43,6 +72,13 @@ class DownloadStore {
     this.status = ds;
     this.updateSpeed(ds);
     this.syncFreeBytes(ds);
+    warmDownloads(ds.state, ds.queue);
+    if (this.forceStop && ds.state === "STARTED" && !this.stopping) {
+      this.stopping = true;
+      stopDownloader()
+        .catch(() => {})
+        .finally(() => { this.stopping = false; });
+    }
   }
 
   private updateSpeed(ds: DownloadStatus) {
@@ -118,6 +154,20 @@ class DownloadStore {
     return true;
   }
 
+  async enqueueMany(chapterIds: number[]): Promise<boolean> {
+    if (!chapterIds.length) return true;
+    const projected = [
+      ...this.queue,
+      ...chapterIds.map(id => ({ chapter: { id, pageCount: 0 }, progress: 0, state: "QUEUED" } as DownloadQueueItem)),
+    ];
+    if (!(await this.guardStorage(projected))) return false;
+    try {
+      await enqueueDownloads(chapterIds.map(String));
+      await this.poll();
+    } catch { }
+    return true;
+  }
+
   toggleToasts() {
     const next = !this.toastsEnabled;
     updateSettings({ downloadToastsEnabled: next });
@@ -145,12 +195,26 @@ class DownloadStore {
     if (this.togglingPlay) return;
     this.togglingPlay = true;
     const wasRunning = this.isRunning;
+    this.forceStop = wasRunning;
     if (this.status) this.status = { ...this.status, state: wasRunning ? "STOPPED" : "STARTED" };
     try {
       const ds = wasRunning ? await stopDownloader() : await startDownloader();
+      if (!wasRunning) resumeWarming();
       if (ds) this.applyStatus(ds); else await this.poll();
     } catch { await this.poll(); }
     finally { this.togglingPlay = false; }
+  }
+
+  private async withRetry<T>(fn: () => Promise<T>): Promise<T> {
+    try { return await fn(); }
+    catch {
+      await new Promise(r => setTimeout(r, 1000));
+      return await fn();
+    }
+  }
+
+  private busyToast(title: string) {
+    addToast({ kind: "error", title, body: "The server is busy; try again in a moment.", duration: 4000 });
   }
 
   async clear() {
@@ -158,11 +222,15 @@ class DownloadStore {
     this.clearing = true;
     this.selected = new Set();
     if (this.status) this.status = { ...this.status, queue: [] };
+    pauseWarming();
     try {
-      await clearDownloads();
+      await this.withRetry(() => clearDownloads());
       addToast({ kind: "info", title: "Queue cleared", duration: 2500 });
-    } catch { await this.poll(); }
-    finally { this.clearing = false; }
+    } catch {
+      await this.poll();
+      this.busyToast("Failed to clear queue");
+    }
+    finally { this.clearing = false; if (this.isRunning) resumeWarming(); }
   }
 
   async dequeue(chapterId: number) {
@@ -170,24 +238,43 @@ class DownloadStore {
     this.dequeueing = new Set(this.dequeueing).add(chapterId);
     if (this.status) this.status = { ...this.status, queue: this.queue.filter(i => i.chapter.id !== chapterId) };
     const next = new Set(this.selected); next.delete(chapterId); this.selected = next;
-    try { await dequeueDownload(String(chapterId)); await this.poll(); }
-    catch { await this.poll(); }
-    finally { const s = new Set(this.dequeueing); s.delete(chapterId); this.dequeueing = s; }
+    pauseWarming();
+    try {
+      await this.withRetry(() => dequeueDownload(String(chapterId)));
+      await this.poll();
+    } catch {
+      await this.poll();
+      this.busyToast("Failed to remove download");
+    }
+    finally {
+      const s = new Set(this.dequeueing); s.delete(chapterId); this.dequeueing = s;
+      if (this.isRunning) resumeWarming();
+    }
+  }
+
+  async dequeueMany(chapterIds: number[]) {
+    if (this.batchWorking || !chapterIds.length) return;
+    this.batchWorking = true;
+    const idSet = new Set(chapterIds);
+    if (this.status) this.status = { ...this.status, queue: this.queue.filter(i => !idSet.has(i.chapter.id)) };
+    this.selected = new Set([...this.selected].filter(id => !idSet.has(id)));
+    pauseWarming();
+    try {
+      await this.withRetry(() => dequeueDownloads(chapterIds.map(String)));
+      await this.poll();
+      addToast({ kind: "info", title: `Removed ${chapterIds.length} download${chapterIds.length !== 1 ? "s" : ""}`, duration: 2500 });
+    } catch {
+      await this.poll();
+      this.busyToast("Failed to remove downloads");
+    }
+    finally { this.batchWorking = false; if (this.isRunning) resumeWarming(); }
   }
 
   async dequeueSelected() {
     if (this.batchWorking || !this.selected.size) return;
-    this.batchWorking = true;
-    const ids   = [...this.selected];
-    const idSet = new Set(ids);
+    const ids  = [...this.selected];
     this.selected = new Set();
-    if (this.status) this.status = { ...this.status, queue: this.queue.filter(i => !idSet.has(i.chapter.id)) };
-    try {
-      await dequeueDownloads(ids.map(String));
-      addToast({ kind: "info", title: `Removed ${ids.length} download${ids.length !== 1 ? "s" : ""}`, duration: 2500 });
-      await this.poll();
-    } catch { await this.poll(); }
-    finally { this.batchWorking = false; }
+    await this.dequeueMany(ids);
   }
 
   async retryOne(chapterId: number) {
@@ -270,10 +357,12 @@ class DownloadStore {
     }
     if (this.status) this.status = { ...this.status, queue: newQueue };
     try {
-      for (const idx of selectedIndices) {
-        const to = direction === "up" ? Math.max(0, idx - step) : Math.min(queue.length - 1, idx + step);
-        await reorderDownload(queue[idx].chapter.id, to);
-      }
+      const ops = selectedIndices.map(idx => ({
+        chapterId: queue[idx].chapter.id,
+        to: direction === "up" ? Math.max(0, idx - step) : Math.min(queue.length - 1, idx + step),
+        chapterName: queue[idx].chapter.name,
+      }));
+      await this.batchReorder(ops);
       await this.poll();
     } catch { await this.poll(); }
     finally { this.batchWorking = false; }
@@ -308,13 +397,12 @@ class DownloadStore {
     if (this.status) this.status = { ...this.status, queue: newQueue };
     const last = this.queue.length - 1;
     try {
-      if (edge === "top") {
-        for (let i = 0; i < pinned.length; i++)
-          await reorderDownload(pinned[i].chapter.id, first + i);
-      } else {
-        for (let i = 0; i < pinned.length; i++)
-          await reorderDownload(pinned[i].chapter.id, last - (pinned.length - 1 - i));
-      }
+      const ops = pinned.map((item, i) => ({
+        chapterId: item.chapter.id,
+        to: edge === "top" ? first + i : last - (pinned.length - 1 - i),
+        chapterName: item.chapter.name,
+      }));
+      await this.batchReorder(ops);
       await this.poll();
     } catch { await this.poll(); }
     finally { this.batchWorking = false; }
@@ -356,9 +444,12 @@ class DownloadStore {
     const newQueue = [...active, ...reorderedMoveable];
     if (this.status) this.status = { ...this.status, queue: newQueue };
     try {
-      for (let i = 0; i < reorderedMoveable.length; i++) {
-        await reorderDownload(reorderedMoveable[i].chapter.id, first + i);
-      }
+      const ops = reorderedMoveable.map((item, i) => ({
+        chapterId: item.chapter.id,
+        to: first + i,
+        chapterName: item.chapter.name,
+      }));
+      await this.batchReorder(ops);
       await this.poll();
     } catch { await this.poll(); }
     finally { this.batchWorking = false; }
@@ -376,9 +467,12 @@ class DownloadStore {
     const newQueue    = [...active, ...seriesItems, ...rest];
     if (this.status) this.status = { ...this.status, queue: newQueue };
     try {
-      for (let i = 0; i < seriesItems.length; i++) {
-        await reorderDownload(seriesItems[i].chapter.id, first + i);
-      }
+      const ops = seriesItems.map((item, i) => ({
+        chapterId: item.chapter.id,
+        to: first + i,
+        chapterName: item.chapter.name,
+      }));
+      await this.batchReorder(ops);
       await this.poll();
     } catch { await this.poll(); }
     finally { this.batchWorking = false; }
@@ -397,9 +491,12 @@ class DownloadStore {
     if (this.status) this.status = { ...this.status, queue: newQueue };
     const last = this.queue.length - 1;
     try {
-      for (let i = 0; i < seriesItems.length; i++) {
-        await reorderDownload(seriesItems[i].chapter.id, last - (seriesItems.length - 1 - i));
-      }
+      const ops = seriesItems.map((item, i) => ({
+        chapterId: item.chapter.id,
+        to: last - (seriesItems.length - 1 - i),
+        chapterName: item.chapter.name,
+      }));
+      await this.batchReorder(ops);
       await this.poll();
     } catch { await this.poll(); }
     finally { this.batchWorking = false; }
@@ -421,9 +518,12 @@ class DownloadStore {
     }
     if (this.status) this.status = { ...this.status, queue: newQueue };
     try {
-      for (let k = 0; k < seriesIndices.length; k++) {
-        await reorderDownload(reversedItems[k].chapter.id, seriesIndices[k]);
-      }
+      const ops = seriesIndices.map((si, k) => ({
+        chapterId: reversedItems[k].chapter.id,
+        to: si,
+        chapterName: reversedItems[k].chapter.name,
+      }));
+      await this.batchReorder(ops);
       await this.poll();
     } catch { await this.poll(); }
     finally { this.batchWorking = false; }
